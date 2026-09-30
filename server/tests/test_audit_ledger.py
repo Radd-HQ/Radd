@@ -95,6 +95,30 @@ async def test_changed_field_project_and_text_filters(db, admin, project, item):
     assert await audit.audit_log(db, actor=admin, project_id=project.id, source=EventSource.AUTOMATIONS) == []
 
 
+async def test_a_machine_account_is_system_never_people(db, admin, project, item):
+    """RADD-1499: a connector writes as the built-in Automation account with
+    `automated` false. That row is a SERVICE account, so the ledger files the
+    write under System — People is attributed to a person's account only."""
+    from radd.modules.auth.types import SYSTEM_ACTOR_ID
+
+    marker = f"connector-{uuid.uuid4().hex[:8]}"
+    await events.emit(
+        db,
+        event_type=ItemEvent.UPDATED,
+        entity_type="item",
+        entity_id=item.id,
+        actor_id=SYSTEM_ACTOR_ID,
+        payload={"key": item.key, "note": marker},
+        changes=[{"field": "title", "from": marker, "to": marker}],
+    )
+    people = await audit.audit_log(db, actor=admin, project_id=project.id, q=marker, source=EventSource.PEOPLE)
+    assert people == []
+    system = await audit.audit_log(db, actor=admin, project_id=project.id, q=marker, source=EventSource.SYSTEM)
+    assert [h.actor.id for h in system if h.actor] == [SYSTEM_ACTOR_ID]
+    assert system[0].actor is not None and system[0].actor.machine and not system[0].automated
+    assert await audit.audit_log(db, actor=admin, project_id=project.id, q=marker, source=EventSource.AUTOMATIONS) == []
+
+
 async def test_noise_is_hidden_unless_asked_for(db, admin):
     assert registries.event_types["notification.created"].audited is False
     marker = f"noise-{uuid.uuid4().hex[:8]}"

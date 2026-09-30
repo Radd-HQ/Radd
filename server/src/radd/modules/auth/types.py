@@ -1,3 +1,4 @@
+import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -5,6 +6,16 @@ from enum import StrEnum
 SESSION_COOKIE_NAME = "radd_session"
 PAT_PREFIX = "radd_pat_"
 PAT_PREFIX_DISPLAY_CHARS = 12  # how much of a token the UI may keep showing
+
+#: The Automation account (RADD-1499): a REAL users row that integrations write as
+#: and author-less automations run as — a built-in SERVICE account (key-only, no
+#: login, no mail, badged in pickers) that is instance-admin so authz never blocks
+#: it. Defined here, where users are defined, and imported by automations, notify
+#: and the throttle; the migrations carry the uuid as a literal on purpose. NOT
+#: the loop guard (that is `Event.automated`). `principals.BUILTIN_ROWS` seeds it.
+SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000a70a70")
+SYSTEM_ACTOR_EMAIL = "automation@radd.system"
+SYSTEM_ACTOR_NAME = "Automation"
 
 
 class InstanceRole(StrEnum):
@@ -29,6 +40,13 @@ class UserSource(StrEnum):
 #: requesters (RADD-1034) and the spec-121 principals share every exclusion;
 #: service accounts are excluded case by case (a byline may need them).
 NON_PERSON_SOURCES: tuple[UserSource, ...] = (UserSource.EMAIL, UserSource.PRINCIPAL)
+
+#: Sources with no PERSON behind the credential (RADD-1499): key-only service
+#: accounts — the built-in Automation account among them — and the grant
+#: principals. What the ledger's People/System split and the mailer's "is there
+#: a mailbox" read. Distinct from NON_PERSON_SOURCES: an email requester is a
+#: person, just not one to pick.
+MACHINE_SOURCES: tuple[UserSource, ...] = (UserSource.SERVICE, UserSource.PRINCIPAL)
 
 
 class DuplicateKind(StrEnum):

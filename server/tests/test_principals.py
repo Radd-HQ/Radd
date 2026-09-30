@@ -36,7 +36,7 @@ async def db():
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with maker() as session:
         await roles.ensure_builtin_roles(session)
-        await principals.ensure_principals(session)
+        await principals.ensure_builtin_accounts(session)
         yield session
         await session.rollback()
     await engine.dispose()
@@ -109,6 +109,32 @@ async def test_a_contributor_grant_reaches_accounts_but_never_the_world(db):
     anyone = await db.get(User, principals.ANYONE_ID)
     assert Permission.ITEM_CREATE in await authz.effective_permissions(db, person, project=project)
     assert Permission.ITEM_CREATE not in await authz.effective_permissions(db, anyone, project=project)
+
+
+async def test_the_automation_account_is_a_builtin_service_account(db):
+    """RADD-1499: the row integrations write as is a SERVICE account (so every
+    picker badges it and the mailer skips it), instance-admin (so authz never
+    blocks it), and nothing an admin does can change or remove it — a
+    deactivated Automation fails every connector write at authz."""
+    from radd.modules.auth.schemas import UserAdminUpdate
+    from radd.modules.auth.types import SYSTEM_ACTOR_ID
+    from radd.modules.notify.service import mailable_user
+
+    automation = await db.get(User, SYSTEM_ACTOR_ID)
+    assert automation is not None and automation.active
+    assert automation.source == UserSource.SERVICE.value
+    assert automation.instance_role == InstanceRole.ADMIN.value
+    assert principals.is_builtin(automation) and not principals.is_principal(automation)
+    assert not mailable_user(automation)
+    admin = await _person(db, role=InstanceRole.ADMIN)
+    for patch in (UserAdminUpdate(active=False), UserAdminUpdate(instance_role=InstanceRole.MEMBER)):
+        with pytest.raises(ConflictError, match="built-in"):
+            await auth.update_user_admin(db, SYSTEM_ACTOR_ID, patch, actor=admin)
+    with pytest.raises(ConflictError, match="built-in"):
+        await auth.delete_user(db, SYSTEM_ACTOR_ID, admin.id, actor=admin)
+    with pytest.raises(ConflictError, match="built-in"):
+        await auth.merge_users(db, admin.id, SYSTEM_ACTOR_ID, actor_id=admin.id)
+    assert automation.active and automation.source == UserSource.SERVICE.value
 
 
 async def test_principals_are_not_people(db):

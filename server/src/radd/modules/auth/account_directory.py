@@ -10,8 +10,12 @@ from radd.db import ilike_term
 
 from . import service_accounts
 from .models import ApiToken, User
+from .principals import BUILTIN_IDS
 from .schemas import ServiceAccountRead, ServiceKeySummaryRead
 from .types import UserSource
+
+#: `ServiceAccountRead` fields that are not `users` columns.
+_DERIVED = frozenset({"token_count", "builtin"})
 
 
 def _accounts(q: str):
@@ -30,14 +34,19 @@ async def accounts(
     offset: int = 0,
 ) -> list[ServiceAccountRead]:
     statement = select(
-        *(getattr(User, key) for key in ServiceAccountRead.model_fields if key != "token_count")
+        *(getattr(User, key) for key in ServiceAccountRead.model_fields if key not in _DERIVED)
     )
     statement = statement.where(_accounts(q)).order_by(User.name, User.id).offset(offset)
     if limit is not None:
         statement = statement.limit(limit)
     rows = (await session.execute(statement)).mappings().all()
     counts = await service_accounts.token_counts(session, [row["id"] for row in rows])
-    return [ServiceAccountRead(**row, token_count=counts.get(row["id"], 0)) for row in rows]
+    return [
+        ServiceAccountRead(
+            **row, token_count=counts.get(row["id"], 0), builtin=row["id"] in BUILTIN_IDS
+        )
+        for row in rows
+    ]
 
 
 async def account_total(session: AsyncSession, q: str) -> int:
@@ -49,6 +58,7 @@ async def by_id(session: AsyncSession, account_id: uuid.UUID) -> ServiceAccountR
     return ServiceAccountRead.model_validate(account).model_copy(
         update={
             "token_count": await service_accounts.token_count(session, account_id),
+            "builtin": account.id in BUILTIN_IDS,
         }
     )
 

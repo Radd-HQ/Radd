@@ -1,4 +1,5 @@
-"""Credential-aware principal checks, and the two PRINCIPAL rows (spec 121).
+"""Credential-aware principal checks, and the BUILT-IN account rows: the two
+PRINCIPALS (spec 121) and the Automation account (RADD-1499).
 
 Anyone and Signed-in users are seeded `users` rows (fixed ids,
 `UserSource.PRINCIPAL`) that act as grant SUBJECTS: a role granted to Anyone
@@ -7,14 +8,31 @@ contribute. The union with an actor's own subjects happens in exactly two
 places — `grants._subject_condition` and `SubjectContext.subject_user_ids`.
 They are real rows because every resolver takes a User; they can never sign
 in, receive mail, be picked, assigned or report.
+
+The Automation account (`types.SYSTEM_ACTOR_ID`) is the row integrations write
+as and author-less automations run as: a SERVICE account (key-only, no login,
+no mail, badged in pickers) that is instance-admin so authz never blocks it.
+
+All three are converged at startup and by `radd.seed`
+(`ensure_builtin_accounts`), and none can be edited, deleted or merged
+(`require_not_builtin`): a deactivated or demoted Automation fails every
+connector write at authz with nothing saying why.
 """
 
 import uuid
 
-from radd.exceptions import ForbiddenError
+from radd.exceptions import ConflictError, ForbiddenError
 
 from .models import User
-from .types import InstanceRole, Permission, UserSource
+from .types import (
+    SYSTEM_ACTOR_EMAIL,
+    SYSTEM_ACTOR_ID,
+    SYSTEM_ACTOR_NAME,
+    AuthEntity,
+    InstanceRole,
+    Permission,
+    UserSource,
+)
 
 #: The world: every request holds this subject's grants, signed in or not.
 ANYONE_ID = uuid.UUID("00000000-0000-0000-0000-000000a4104e")
@@ -23,17 +41,43 @@ SIGNED_IN_ID = uuid.UUID("00000000-0000-0000-0000-0000005160ed")
 
 PRINCIPAL_IDS: frozenset[uuid.UUID] = frozenset({ANYONE_ID, SIGNED_IN_ID})
 
-#: Seed shape for the two rows: (id, email, name). The addresses are in the
-#: reserved `.invalid` TLD (RFC 2606) — nothing can ever deliver to them.
-PRINCIPAL_ROWS: tuple[tuple[uuid.UUID, str, str], ...] = (
-    (ANYONE_ID, "anyone@principals.invalid", "Anyone"),
-    (SIGNED_IN_ID, "signed-in@principals.invalid", "Signed-in users"),
+#: Seed shape of every built-in row: (id, email, name, source, instance role).
+#: The principals' addresses are in the reserved `.invalid` TLD (RFC 2606) —
+#: nothing can ever deliver to them; the Automation account is a service
+#: account, which the mailer never writes to either.
+BUILTIN_ROWS: tuple[tuple[uuid.UUID, str, str, UserSource, InstanceRole], ...] = (
+    (ANYONE_ID, "anyone@principals.invalid", "Anyone", UserSource.PRINCIPAL, InstanceRole.MEMBER),
+    (
+        SIGNED_IN_ID,
+        "signed-in@principals.invalid",
+        "Signed-in users",
+        UserSource.PRINCIPAL,
+        InstanceRole.MEMBER,
+    ),
+    (SYSTEM_ACTOR_ID, SYSTEM_ACTOR_EMAIL, SYSTEM_ACTOR_NAME, UserSource.SERVICE, InstanceRole.ADMIN),
 )
+
+BUILTIN_IDS: frozenset[uuid.UUID] = frozenset(row[0] for row in BUILTIN_ROWS)
 
 
 def is_principal(user: User | None) -> bool:
     """One of the two principal rows (never a person)."""
     return user is not None and user.id in PRINCIPAL_IDS
+
+
+def is_builtin(user: User | None) -> bool:
+    """A seeded row — a principal or the Automation account (RADD-1499)."""
+    return user is not None and user.id in BUILTIN_IDS
+
+
+def require_not_builtin(user: User, *, what: str) -> None:
+    """Refuse (409) to edit, delete or merge a built-in account: its meaning is
+    seeded and converged at startup, so the change would not last — and a
+    deactivated Automation fails every connector write at authz."""
+    if is_builtin(user):
+        raise ConflictError(
+            AuthEntity.USER, reason=f"{user.name} is a built-in account and cannot be {what}"
+        )
 
 
 def is_anonymous(user: User | None) -> bool:
@@ -82,11 +126,13 @@ def require_person(user: User, *, what: str) -> None:
         raise ForbiddenError(f"{user.name} is a principal, not a person — it cannot be {what}")
 
 
-async def ensure_principals(session) -> None:
-    """Idempotently seed the two rows (startup ensure + `radd.seed` both call
-    this, the `ensure_builtin_roles` shape). Converges name/source/active so a
-    row edited by hand returns to its seeded meaning."""
-    for row_id, email, name in PRINCIPAL_ROWS:
+async def ensure_builtin_accounts(session) -> None:
+    """Idempotently seed the built-in rows (startup ensure + `radd.seed` both
+    call this, the `ensure_builtin_roles` shape). Converges name, source,
+    active and role so a row edited by hand — or seeded by an older migration
+    with the column default, as the Automation account was (RADD-1499) —
+    returns to its seeded meaning."""
+    for row_id, email, name, source, role in BUILTIN_ROWS:
         row = await session.get(User, row_id)
         if row is None:
             session.add(
@@ -95,16 +141,16 @@ async def ensure_principals(session) -> None:
                     email=email,
                     name=name,
                     password_hash=None,
-                    instance_role=InstanceRole.MEMBER.value,
+                    instance_role=role.value,
                     active=True,
-                    source=UserSource.PRINCIPAL.value,
+                    source=source.value,
                 )
             )
             continue
         row.name = name
         row.active = True
-        row.source = UserSource.PRINCIPAL.value
-        row.instance_role = InstanceRole.MEMBER.value
+        row.source = source.value
+        row.instance_role = role.value
     await session.flush()
 
 

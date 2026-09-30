@@ -178,7 +178,7 @@ async def test_capability_detail_travels_to_instance_admins_only(db):
     from radd.modules.auth.deps import anyone_user
     from radd.modules.capabilities.router import get_capabilities
 
-    await principals.ensure_principals(db)
+    await principals.ensure_builtin_accounts(db)
     member = await make_user(db)
     admin = await make_user(db, role=InstanceRole.ADMIN)
     admin_view = {c.key: c for c in (await get_capabilities(admin)).capabilities}

@@ -1,4 +1,3 @@
-import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -6,6 +5,11 @@ from radd.kernel.specs import (  # the spec's own vocabulary (RADD-1467); re-exp
     AutomationNodeKind as AutomationNodeKind,
     NodeArity as NodeArity,
     NodePort as NodePort,
+)
+from radd.modules.auth.types import (  # the built-in Automation account (RADD-1499); re-exported
+    SYSTEM_ACTOR_EMAIL as SYSTEM_ACTOR_EMAIL,
+    SYSTEM_ACTOR_ID as SYSTEM_ACTOR_ID,
+    SYSTEM_ACTOR_NAME as SYSTEM_ACTOR_NAME,
 )
 from radd.schedule import ScheduleKind
 
@@ -357,12 +361,10 @@ class PlanKind(StrEnum):
     SKIP = "skip"
 
 
-# The system actor: a REAL users row (seeded by migration) that integrations write
-# as and author-less automations run as. NOT the loop guard (that is `automated`).
-# Instance-admin so authz never blocks it.
-SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000a70a70")
-SYSTEM_ACTOR_EMAIL = "automation@radd.system"
-SYSTEM_ACTOR_NAME = "Automation"
+# The system actor — the built-in Automation SERVICE account that integrations
+# write as and author-less automations run as — is defined with the other
+# built-in accounts in `auth.types` (RADD-1499) and re-exported above for the
+# module's callers. NOT the loop guard (that is `automated`).
 
 # Literal accepted by the clearing actions (set_assignee/team/cycle/release) to unset.
 CLEAR_VALUE = "none"

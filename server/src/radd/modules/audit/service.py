@@ -19,6 +19,7 @@ from radd.modules.auth import authz, service as auth
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.auth.principals import is_instance_admin
+from radd.modules.auth.types import MACHINE_SOURCES
 from radd.modules.events import service as events
 from radd.modules.events.types import EventSource
 from radd.modules.items import history as item_history
@@ -127,7 +128,16 @@ async def audit_log(
             AuditEntry(
                 id=row.id,
                 at=row.created_at,
-                actor=AuditActor(id=user.id, name=user.name, email=user.email) if user else None,
+                actor=(
+                    AuditActor(
+                        id=user.id,
+                        name=user.name,
+                        email=user.email,
+                        machine=user.source in MACHINE_SOURCES,
+                    )
+                    if user
+                    else None
+                ),
                 event_type=str(row.event_type),
                 event_label=spec.label if spec else humanize(row.event_type),
                 event_group=spec.group if spec else "Other",

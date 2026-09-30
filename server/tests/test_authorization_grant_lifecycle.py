@@ -15,7 +15,7 @@ from radd.modules.access.types import GrantSubject
 from radd.modules.attachments import acl
 from radd.modules.auth import service as auth, grants, authz
 from radd.modules.auth.schemas import TokenCreate, GlobalGrantEntry, GlobalGrantsUpdate
-from radd.modules.auth.principals import SIGNED_IN_ID, ensure_principals
+from radd.modules.auth.principals import SIGNED_IN_ID, ensure_builtin_accounts
 from radd.modules.auth.types import InstanceRole
 from radd.modules.views import service as views
 from radd.modules.views.schemas import ViewCreate
@@ -97,7 +97,7 @@ def test_global_editor_accepts_group_subject():
 
 
 async def test_resource_inspector_includes_signed_in_principal(db):
-    await ensure_principals(db)
+    await ensure_builtin_accounts(db)
     person = await _member(db, "Inspect me")
     rid = str(uuid.uuid4())
     await access.add_grant(

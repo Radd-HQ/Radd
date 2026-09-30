@@ -11,7 +11,7 @@ from . import authz
 from .authz import _BASELINE_CACHE_KEY, _PROJECT_MAP_CACHE_KEY, _READABLE_CACHE_KEY
 from .models import User
 from .schemas import BaselinePreflightRead, BaselinePreflightRow
-from .types import InstanceRole, Permission, UserSource, split_permission
+from .types import MACHINE_SOURCES, InstanceRole, Permission, UserSource, split_permission
 
 #: Detail rows are capped; the COUNTS always cover everyone (no silent caps —
 #: `truncated` says the list is a sample, never that the numbers are).
@@ -49,9 +49,8 @@ async def baseline_preflight(
                 select(User)
                 .where(
                     User.active,
-                    User.source.notin_(
-                        [UserSource.SERVICE.value, UserSource.EMAIL.value, UserSource.PRINCIPAL.value]
-                    ),
+                    # Everyone who could sign in: no machine account, no mail-only requester.
+                    User.source.notin_([*(s.value for s in MACHINE_SOURCES), UserSource.EMAIL.value]),
                 )
                 .order_by(User.name)
             )

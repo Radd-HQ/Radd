@@ -31,7 +31,7 @@ Each package under `server/src/radd/modules/` is a plugin: it exposes `plugin: R
 
 ### events
 
-Owns `events`, the append-only outbox and audit log (never pruned, every row `actor_id`-attributed), and `consumer_offsets`, one cursor per consumer. The seam is `events.service.emit`, inside the writer's transaction: pass `subjects={"item": id}` and the kernel writes the owner's canonical ref; a type declaring `has_changes` needs `changes=`, or `emit` raises `ChangesRequired`. Consumers read with `read_after` and `get_offset`/`set_offset`; a delivery consumer uses `runner.run_head_seeded` so it never replays the backlog. `events.quiet()` marks a bulk import silent. Trap: skip silent rows inside the loop and still advance the cursor — filtering them in SQL makes an all-silent batch read as an empty stream and wedges the consumer.
+Owns `events`, the append-only outbox and audit log (never pruned), and `consumer_offsets`. The seam is `events.service.emit`, in the writer's transaction: `subjects={"item": id}` writes the owner's canonical ref; a `has_changes` type needs `changes=` or `emit` raises `ChangesRequired`. Consumers read with `read_after` and `get_offset`/`set_offset`; `runner.run_head_seeded` never replays the backlog. `events.quiet()` marks a bulk import silent. `EventSource` splits the ledger: people, automations (`automated`), system (actor-less or a `MACHINE_SOURCES` account; connectors write as Automation). Trap: skip silent rows in the loop but advance the cursor — filtering in SQL makes an all-silent batch an empty stream and wedges the consumer.
 
 ### projects
 
@@ -39,7 +39,7 @@ Owns `projects`: a global container with a unique, immutable `key` (item keys de
 
 ### auth
 
-Owns `users`, `sessions`, `api_tokens`, `roles` and `global_role_grants` (a user, team or group × a role × a project, a wiki space, or neither). The seam is `authz.require(session, user, Permission.X, project=…|space_id=…)`: 403, or the effective set — roles granted directly, via a team or via a group, plus the editable Baseline floor; an API key's `scopes` intersect inside it, so a key never exceeds its account. `permissions_for_projects` is the batched form; routes take `CurrentUser` or, on the frozen anonymous surface, `Actor`. Every login mints through `create_session`. Trap: a new column storing a user id must be handled by `merge_users` (`_MERGE_REPOINT`), or `tests/test_merge_coverage.py` fails.
+Owns `users`, `sessions`, `api_tokens`, `roles` and `global_role_grants` (subject × role × scope). The seam is `authz.require(session, user, Permission.X, project=…|space_id=…)`: 403 or the effective set (direct, team and group grants plus the Baseline floor; a key's `scopes` intersect inside it). Routes take `CurrentUser` or, anonymously, `Actor`; logins mint through `create_session`. `principals.BUILTIN_ROWS` (converged at boot) seeds the two principals and the Automation SERVICE account (`SYSTEM_ACTOR_ID`) integrations write as; `require_not_builtin` guards them; `MACHINE_SOURCES` = no person behind the credential. Trap: a new user-id column must be handled by `merge_users` (`_MERGE_REPOINT`), or `tests/test_merge_coverage.py` fails.
 
 ### capabilities
 
@@ -139,7 +139,7 @@ Owns `item_vcs_links` (one row per ref per item per connection), the author iden
 
 ### audit
 
-Owns no tables: a read-only projection of the event log through `events.query_events`, labelled from the kernel registries, so `GET /audit/catalog` is the SPA's whole vocabulary. `service.require_audit_scope` is the one gate for the ledger, `GET /audit/access` and the MCP tool: an instance admin reads the instance; anyone else names a project they hold `project.manage` on, with item diffs redacted through `items.history.redaction_for`. `audited=False` event types stay hidden unless asked for. Trap: an entry links to its entity only through the OWNER's `EntityLinkSpec` (`kernel/entity_links.py` refuses a foreign one), so a link for another module's entity belongs on that module's manifest.
+Owns no tables: a read-only projection of the event log through `events.query_events`, labelled from the registries (`GET /audit/catalog` is the SPA's vocabulary). `service.require_audit_scope` is the one gate for the ledger, `GET /audit/access` and the MCP tool: an instance admin reads the instance; anyone else names a project they hold `project.manage` on, item diffs redacted through `items.history.redaction_for`. `audited=False` event types stay hidden unless asked for. `AuditActor.machine` marks a service account or principal: a system row, no avatar. Trap: an entry links to its entity only through the OWNER's `EntityLinkSpec` (`kernel/entity_links.py` refuses a foreign one): a link for another module's entity goes on that manifest.
 
 ### backup
 

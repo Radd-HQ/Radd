@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from radd.kernel import NotificationChannel
+from radd.modules.auth.types import SYSTEM_ACTOR_ID as _SYSTEM_ACTOR_ID
 
 
 class NotificationType(StrEnum):
@@ -101,9 +102,9 @@ class SubjectRef:
 # purpose: nobody needs telling they stopped being copied in.
 PARTICIPANT_ADDED_EVENT = "item.participant_added"
 
-#: The engine's system actor, as a literal so `planner.py` stays import-free;
-#: `test_notify.py` pins it equal to `automations.types.SYSTEM_ACTOR_ID`.
-SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000a70a70")
+#: The built-in Automation account, re-exported from auth (a declared dependency)
+#: so `planner.py` keeps importing only its own module's types (RADD-1499).
+SYSTEM_ACTOR_ID = _SYSTEM_ACTOR_ID
 
 
 class NotificationDelivery(StrEnum):

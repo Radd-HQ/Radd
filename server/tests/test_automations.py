@@ -337,7 +337,8 @@ def test_item_actions_registry_covers_exactly_the_item_bound_types():
 
 
 def test_system_actor_id_is_stable():
-    # The loop-guard marker must equal the id the migration seeds; changing it would
-    # both orphan the seeded user and silently break the guard.
+    # The id must equal what the migrations seed as a literal (d49968ce89b4,
+    # d1499svcauto); changing it would orphan the seeded user. One definition
+    # since RADD-1499 (`auth.types`), re-exported here for the engine's callers.
     assert str(SYSTEM_ACTOR_ID) == "00000000-0000-0000-0000-000000a70a70"
     assert engine.SYSTEM_ACTOR_ID == SYSTEM_ACTOR_ID

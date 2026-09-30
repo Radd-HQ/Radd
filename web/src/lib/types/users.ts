@@ -257,6 +257,8 @@ export type ServiceAccount = {
   active: boolean;
   created_at: string;
   token_count: number;
+  /** RADD-1499 — the Automation account: seeded, converged at startup, never edited or deleted. */
+  builtin: boolean;
 };
 
 /** Raw permission atoms, per scope. `null` on a key means unscoped. */

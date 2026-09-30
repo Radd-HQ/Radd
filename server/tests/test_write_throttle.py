@@ -121,11 +121,3 @@ def test_a_scoped_admin_key_without_global_manage_is_not_exempt(tight, monkeypat
     admin.token_scope = Scope()
     check_write(admin, WriteBucket.ITEM_CREATE)
     assert len(limiter.buckets) == 1
-
-
-def test_the_system_actor_literal_matches_automations():
-    """auth loads before automations, so the uuid is a literal — this pin is
-    what makes that safe (the notify idiom, `test_notify.py`)."""
-    from radd.modules.automations.types import SYSTEM_ACTOR_ID
-
-    assert throttle.SYSTEM_ACTOR_ID == SYSTEM_ACTOR_ID

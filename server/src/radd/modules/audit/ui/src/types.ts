@@ -3,6 +3,9 @@ export interface AuditActor {
   id: string;
   name: string;
   email?: string | null;
+  /** No person behind the account (a service account — the built-in Automation among
+   *  them — or a principal): drawn as a system row, never with an avatar (RADD-1499). */
+  machine: boolean;
 }
 
 export interface AuditProject {

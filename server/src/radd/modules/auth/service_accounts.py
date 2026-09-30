@@ -14,6 +14,7 @@ from radd.modules.events import service as events
 
 from . import scopes as scopes_mod
 from .models import ApiToken, User
+from .principals import require_not_builtin
 from .schemas import ServiceAccountCreate, ServiceAccountUpdate, TokenCreate
 from .service_tokens import _mint_token, _naive_utc
 from .types import AuthEntity, AuthEvent, InstanceRole, UserSource
@@ -89,6 +90,9 @@ async def update_account(
     session: AsyncSession, account_id: uuid.UUID, data: ServiceAccountUpdate, actor_id: uuid.UUID
 ) -> User:
     account = await get_account(session, account_id)
+    # RADD-1499: the built-in Automation account keeps its seeded meaning — a
+    # deactivated one fails every connector write at authz with nothing saying why.
+    require_not_builtin(account, what="edited")
     before = changes.snapshot(account, ("name", "active"))
     if data.name is not None:
         account.name = data.name

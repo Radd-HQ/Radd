@@ -12,16 +12,17 @@ Rolled-back transactions on the compose DB.
 import uuid
 
 import pytest
-from sqlalchemy import select
 
-from radd.modules.auth.models import User
+from radd.modules.auth.types import InstanceRole
 from radd.modules.pages import service, spaces
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate, PageUpdate
+
+from _factories import make_user
 
 
 @pytest.fixture
 async def space(db):
-    actor = (await db.execute(select(User.id))).scalars().first()
+    actor = (await make_user(db, role=InstanceRole.ADMIN, name="Slug Admin")).id
     row = await spaces.create_space(
         db,
         PageSpaceCreate(name=f"su-{uuid.uuid4().hex[:8]}", slug=f"su-{uuid.uuid4().hex[:8]}"),

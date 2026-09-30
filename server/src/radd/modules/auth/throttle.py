@@ -21,13 +21,9 @@ from radd.config import settings
 
 from .models import User
 from .principals import is_instance_admin
+from .types import SYSTEM_ACTOR_ID
 
 logger = logging.getLogger(__name__)
-
-#: The automation engine's actor (`automations.types.SYSTEM_ACTOR_ID`). auth
-#: loads before automations, so the uuid is a literal here — the notify idiom —
-#: and `test_write_throttle.py` pins the two together so it cannot drift.
-SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000a70a70")
 
 
 class WriteBucket(StrEnum):

@@ -14,16 +14,18 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from radd.modules.auth.models import User
+from radd.modules.auth.types import InstanceRole
 from radd.modules.pages import backlinks, service, spaces
 from radd.modules.pages.models import PageLink
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate, PageUpdate
+
+from _factories import make_user
 
 
 @pytest.fixture
 async def wiki(db):
     """A space with two pages: `source` and `target`."""
-    actor = (await db.execute(select(User.id))).scalars().first()
+    actor = (await make_user(db, role=InstanceRole.ADMIN, name="Backlinks Admin")).id
     space = await spaces.create_space(
         db, PageSpaceCreate(name=f"bl-{uuid.uuid4().hex[:8]}", slug=f"bl-{uuid.uuid4().hex[:8]}"), actor
     )

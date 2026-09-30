@@ -26,6 +26,8 @@ from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey, SettingScope
 
+from _factories import make_user
+
 
 @pytest.fixture
 async def world(db):
@@ -464,7 +466,7 @@ async def test_a_reply_never_reaches_the_routing_chain(db, world):
     from radd.modules.mailintake.types import MailDirection
 
     source, default, dev = world
-    actor = (await db.execute(__import__("sqlalchemy").select(User).limit(1))).scalars().first()
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Routing Admin")
     item = await items_service.create_item(
         db, ItemCreate(project_id=default.id, title="Open ticket"), actor
     )

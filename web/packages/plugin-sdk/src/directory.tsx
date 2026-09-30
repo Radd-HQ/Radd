@@ -5,8 +5,10 @@ import { Button, Modal, Spinner } from "./primitives";
 import { QueryError, DirectoryPager, ListSearchInput } from "./host";
 import { usePagedDirectory, type PagedDirectoryQuery } from "./paged-directory";
 
-/** A generic directory value. The provider owns its meaning and authorization. */
-export interface DirectoryChoice { id: string; name: string }
+/** A generic directory value. The provider owns its meaning and authorization. `hint` is a
+ *  short qualifier the list shows after the name ("Service account", "Inactive") so a row
+ *  that is not what its name suggests is never mistaken for one that is (RADD-1499). */
+export interface DirectoryChoice { id: string; name: string; hint?: string }
 export interface DirectorySelectProps {
   value: DirectoryChoice | null;
   onChange: (choice: DirectoryChoice | null) => void;
@@ -57,7 +59,10 @@ function DirectoryChoices({ label, emptyLabel, clearLabel, noun, searchPlacehold
       {result.isError ? <div className="space-y-2"><QueryError label={noun} error={result.error} /><Button variant="secondary" onClick={() => void result.refetch()}>Retry choices</Button></div>
         : result.isPending ? <Spinner label={`Loading ${noun}…`} />
         : !rows.length ? <p className="py-4 text-sm text-fg-muted">No matches.</p>
-        : <ul>{rows.map(row => <li key={row.id}><Button variant="ghost" className="w-full justify-start" onClick={() => onChange(row)}>{row.name}</Button></li>)}</ul>}
+        : <ul>{rows.map(row => <li key={row.id}><Button variant="ghost" className="w-full justify-start gap-2" onClick={() => onChange(row)}>
+            <span className="truncate">{row.name}</span>
+            {row.hint && <span className="shrink-0 rounded bg-elevated px-1 py-px text-[10px] font-medium leading-3 text-fg-muted" data-directory-hint>{row.hint}</span>}
+          </Button></li>)}</ul>}
     </div>
     <DirectoryPager page={page} pageSize={pageSize} total={total} busy={busy} onPage={setPage} label={noun} />
   </Modal>;

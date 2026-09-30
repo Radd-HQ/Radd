@@ -28,7 +28,7 @@ async def seed(email: str, password: str, name: str) -> None:
         # Idempotent: mirrors the startup-ensure paths (the retired
         # workspace.created hook seeded these) so a fresh DB is usable at once.
         await roles.ensure_builtin_roles(session)
-        await principals.ensure_principals(session)
+        await principals.ensure_builtin_accounts(session)
         await categories.ensure_default_categories(session)
         await session.commit()
 

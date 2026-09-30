@@ -140,7 +140,7 @@ async def test_anonymous_reply_reads_follow_public_space_and_root_visibility(wor
 
     db, author, reader, page, root = world
     await roles.ensure_builtin_roles(db)
-    await principals.ensure_principals(db)
+    await principals.ensure_builtin_accounts(db)
     await threads.create_reply(db, root.id, CommentReplyCreate(body="Public answer"), author)
     private = await service.create_comment(db, page.id, CommentCreate(body="Private annotation",
         anchor=CommentAnchor(quote="passage"), visibility=CommentVisibility.INTERNAL), author, entity_type="page")

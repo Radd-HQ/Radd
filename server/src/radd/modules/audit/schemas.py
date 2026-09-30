@@ -6,11 +6,17 @@ from radd.apitypes import UtcDatetime
 
 
 class AuditActor(BaseModel):
-    """Who caused the change (resolved from the event's actor_id)."""
+    """Who caused the change (resolved from the event's actor_id). `machine` says
+    no person is behind the account (`auth.types.MACHINE_SOURCES`: a service
+    account, the built-in Automation among them, or a principal), so the row
+    draws it as a system row, never as a person with an avatar (RADD-1499). A
+    verdict rather than the raw `source`, so the SPA carries no copy of the
+    source vocabulary."""
 
     id: uuid.UUID
     name: str
     email: str | None = None
+    machine: bool = False
 
 
 class AuditProject(BaseModel):

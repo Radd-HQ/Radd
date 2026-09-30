@@ -39,7 +39,7 @@ export function ServiceAccountsSettingsPage() {
         : <ul aria-label="Service accounts" className="rounded-lg border border-subtle">{accounts.rows.map(account => <li key={account.id} className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
           <Bot size={14} className="shrink-0 text-fg-muted" aria-hidden />
           <div className="min-w-0 flex-1"><div className="truncate text-[13px] font-medium text-heading">{account.name}</div><div className="truncate text-[11px] text-fg-muted">{account.email}</div>
-            {!account.active && <span className="text-[11px] text-fg-muted">Inactive · </span>}<span className="text-[11px] text-fg-muted">{account.token_count} {account.token_count === 1 ? "key" : "keys"}</span></div>
+            {account.builtin && <span className="text-[11px] text-fg-muted" title="Seeded with the instance: what integrations write as and author-less automations run as. It cannot be renamed, deactivated or deleted.">Built-in · </span>}{!account.active && <span className="text-[11px] text-fg-muted">Inactive · </span>}<span className="text-[11px] text-fg-muted">{account.token_count} {account.token_count === 1 ? "key" : "keys"}</span></div>
           <Button size="sm" variant="ghost" onClick={() => setKeyingFor(account.id)}><KeyRound size={13} aria-hidden /> Keys</Button>
         </li>)}</ul>}
     </div>

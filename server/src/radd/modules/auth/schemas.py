@@ -381,6 +381,9 @@ class ServiceAccountRead(BaseModel):
     active: bool
     created_at: UtcDatetime
     token_count: int = 0
+    #: RADD-1499 — the Automation account: seeded, converged at startup, and never
+    #: renamed, deactivated or deleted (the page says so instead of offering it).
+    builtin: bool = False
 
 
 # --- roles as data (spec 06) ---

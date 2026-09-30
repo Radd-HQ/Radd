@@ -240,7 +240,7 @@ function AuditRow({ entry, showProject, availablePlugins }: { entry: AuditEntry;
         </time>
       </Td>
       <Td className="whitespace-nowrap align-top">
-        {entry.actor ? (
+        {entry.actor && !entry.actor.machine ? (
           <span className="flex items-center gap-2">
             <Avatar user={entry.actor} size="sm" />
             {who}
@@ -251,7 +251,8 @@ function AuditRow({ entry, showProject, availablePlugins }: { entry: AuditEntry;
             )}
           </span>
         ) : (
-          <span className="flex items-center gap-2 text-fg-faint">
+          // Actor-less, or a machine account (RADD-1499): a system row, not a person.
+          <span className="flex items-center gap-2 text-fg-faint" data-audit-machine-actor={entry.actor?.id}>
             {entry.automated ? <Bot size={13} aria-hidden /> : <Server size={13} aria-hidden />}
             {who}
           </span>

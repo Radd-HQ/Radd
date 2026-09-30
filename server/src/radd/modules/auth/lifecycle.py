@@ -16,6 +16,7 @@ from radd.exceptions import ConflictError
 from radd.modules.events import service as events
 
 from .models import User
+from .principals import require_not_builtin
 from .types import AuthEntity, AuthEvent, InstanceRole, UserSource
 
 # What a delete would hand to the successor, in the words the dialog uses. Counted
@@ -217,6 +218,8 @@ async def merge_users(
         raise ConflictError(AuthEntity.USER, reason="cannot merge a user into itself")
     source = await get_user(session, source_id)
     target = await get_user(session, target_id)
+    require_not_builtin(source, what="merged away")
+    require_not_builtin(target, what="merged into")
     for table, entity_cols, user_col in _MERGE_DEDUPE:
         await session.execute(sql(_dedupe_sql(table, entity_cols, user_col)),
                               {"src": source_id, "dst": target_id})
@@ -415,6 +418,7 @@ async def delete_user(
     from .service import get_user
 
     user = await get_user(session, user_id)
+    require_not_builtin(user, what="deleted")
     successor = await get_user(session, successor_id) if successor_id else None
     summary = await user_content_summary(session, user_id)
     # owned_teams doesn't force a successor (RADD-784): team ownership goes

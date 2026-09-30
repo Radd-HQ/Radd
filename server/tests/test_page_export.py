@@ -12,16 +12,17 @@ import zipfile
 
 import pytest
 
-from radd.modules.auth.models import User
+from radd.modules.auth.types import InstanceRole
 from radd.modules.pages import export, service, spaces
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
-from sqlalchemy import select
+
+from _factories import make_user
 
 
 @pytest.fixture
 async def wiki(db):
     """A space shaped like a real one: a root with children, and cross-links."""
-    actor = (await db.execute(select(User.id))).scalars().first()
+    actor = (await make_user(db, role=InstanceRole.ADMIN, name="Export Admin")).id
     slug = f"ex-{uuid.uuid4().hex[:6]}"
     space = await spaces.create_space(db, PageSpaceCreate(name=slug, slug=slug), actor)
     handbook = await service.create_page(

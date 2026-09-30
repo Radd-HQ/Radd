@@ -35,7 +35,7 @@ async def db():
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with maker() as session:
         await roles.ensure_builtin_roles(session)
-        await principals.ensure_principals(session)
+        await principals.ensure_builtin_accounts(session)
         yield session
         await session.rollback()
     await engine.dispose()

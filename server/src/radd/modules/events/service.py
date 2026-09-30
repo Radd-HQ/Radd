@@ -204,6 +204,25 @@ async def latest_ref(session: AsyncSession, entity_type: str) -> dict[str, Any] 
     return row if isinstance(row, dict) and row.get("id") else None
 
 
+def _source_condition(source: EventSource):
+    """`EventSource` as SQL (see the enum's docstring). A machine account —
+    `auth.types.MACHINE_SOURCES`: service accounts, the built-in Automation
+    account among them, and the principals — is never "people" whoever wrote
+    the row (RADD-1499). auth is a weak dependency of events, so the reach is
+    deferred to the call."""
+    from radd.modules.auth.models import User
+    from radd.modules.auth.types import MACHINE_SOURCES
+
+    machines = select(User.id).where(User.source.in_([s.value for s in MACHINE_SOURCES]))
+    if source is EventSource.AUTOMATIONS:
+        return Event.automated.is_(True)
+    if source is EventSource.PEOPLE:
+        return and_(
+            Event.automated.is_(False), Event.actor_id.is_not(None), Event.actor_id.not_in(machines)
+        )
+    return and_(Event.automated.is_(False), or_(Event.actor_id.is_(None), Event.actor_id.in_(machines)))
+
+
 async def query_events(
     session: AsyncSession,
     *,
@@ -252,13 +271,8 @@ async def query_events(
         conditions.append(Event.project_id == project_id)
     if changed_field:
         conditions.append(Event.payload[kchanges.CHANGES_KEY].contains([{"field": changed_field}]))
-    if source is EventSource.PEOPLE:
-        conditions.append(Event.actor_id.is_not(None))
-        conditions.append(Event.automated.is_(False))
-    elif source is EventSource.AUTOMATIONS:
-        conditions.append(Event.automated.is_(True))
-    elif source is EventSource.SYSTEM:
-        conditions.append(Event.actor_id.is_(None))
+    if source is not None:
+        conditions.append(_source_condition(source))
     if start is not None:
         conditions.append(Event.created_at >= start)
     if end is not None:

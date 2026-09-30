@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.auth.models import User
-from radd.modules.auth.types import UserSource
+from radd.modules.auth.types import MACHINE_SOURCES
 from radd.modules.events import service as events
 
 from . import rules as rules_policy
@@ -101,16 +101,15 @@ async def watcher_ids(session: AsyncSession, item_id: uuid.UUID) -> list[uuid.UU
 def mailable_user(user: User | None) -> TypeGuard[User]:
     """Is there a PERSON's mailbox behind this account? (RADD-996)
 
-    No for inactive, address-less, `UserSource.SERVICE`/`PRINCIPAL` accounts and
-    the system actor. A property of the ACCOUNT, so both loops stamp and move on
+    No for inactive, address-less and machine accounts (`MACHINE_SOURCES`: service
+    accounts — the built-in Automation among them since RADD-1499 — and the
+    principals). A property of the ACCOUNT, so both loops stamp and move on
     rather than retry (a delivery failure is the retrying case, `retry.py`).
     Inbox rows for service accounts are left alone.
     """
     if user is None or not user.active or not user.email:
         return False
-    if user.id == SYSTEM_ACTOR_ID:
-        return False
-    return user.source not in (UserSource.SERVICE.value, UserSource.PRINCIPAL.value)
+    return user.source not in MACHINE_SOURCES
 
 
 # --- notifications ---

@@ -15,7 +15,7 @@ from radd.exceptions import ConflictError, NotFoundError, UnauthorizedError
 from radd.kernel import changes
 from radd.modules.events import service as events
 
-from . import security, totp
+from . import principals, security, totp
 from .lifecycle import (
     _MERGE_DEDUPE as _MERGE_DEDUPE,
     _MERGE_PURGE as _MERGE_PURGE,
@@ -233,8 +233,11 @@ async def update_user_admin(
     """PATCH /users/{id} (spec 84, instance admin): rename and (de)activate.
     Deactivating REVOKES the user's sessions immediately (tokens are already
     dead while inactive — every auth lookup checks User.active) and blocks all
-    three login paths. Deactivating yourself is refused (409)."""
+    three login paths. Deactivating yourself is refused (409), and so is editing
+    a built-in account (RADD-1499): a deactivated or demoted Automation fails
+    every connector write at authz with nothing saying why."""
     user = await get_user(session, user_id)
+    principals.require_not_builtin(user, what="edited")
     before = changes.snapshot(user, ("name", "active", "instance_role"))
     patch: dict[str, object] = {}
     if data.name is not None and data.name != user.name:

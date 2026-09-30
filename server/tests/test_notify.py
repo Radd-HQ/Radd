@@ -20,7 +20,6 @@ from radd.modules.notify import (
     consumer,
     planner,
     service as notify_service,
-    types as notify_types,
 )
 from radd.modules.notify.models import Notification
 from radd.modules.participants import service as participants
@@ -177,14 +176,6 @@ def test_update_untouched_reporter_is_not_rewatched():
 
 
 # --- the system actor is not a person (RADD-996) ---
-
-
-def test_the_notify_copy_of_the_system_actor_id_matches_the_engines():
-    """`notify.types` keeps its own literal so `planner.py` imports no module at
-    all (and notify's dependency list stays the spine). This is the pin that
-    makes that safe — the whole risk of the wire-constant idiom is drift, and it
-    is the risk the four constants above carry with nothing checking them."""
-    assert notify_types.SYSTEM_ACTOR_ID == SYSTEM_ACTOR_ID
 
 
 def test_an_item_created_by_the_system_actor_watches_nobody():
