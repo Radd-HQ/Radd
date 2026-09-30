@@ -1,7 +1,7 @@
 /** Forms for the named condition nodes. `from`/`to` carry an explicit MODE: an empty list is also what a
  * half-filled form produces, and reading it as "any" fires on changes nobody meant. */
 import type React from "react";
-import { OptionNameValues } from "@radd/plugin-sdk";
+import { OptionNameValues, OptionSelect } from "@radd/plugin-sdk";
 import { OptionResource, type OptionResourceValue } from "./options";
 import { CheckField } from "./controls";
 import type { OperatorInfo } from "./types";
@@ -158,6 +158,39 @@ export function ChangedByFields({
           value={(params.users as string[]) ?? []} onChange={users => onChange({ ...params, users })} />
       </Labelled>
       <CheckField label="Invert — true when it was NOT one of them" checked={Boolean(params.negate)} onChange={(checked) => onChange({ ...params, negate: checked })} />
+    </div>
+  );
+}
+
+/** Who a membership gate asks about (the server's `GatePerson`): a role on the issue, the event's
+ *  actor, or — typed or browsed — an email. */
+export const GATE_PERSON_PRESETS = [
+  { value: "reporter", label: "Its reporter", hint: "" },
+  { value: "assignee", label: "Its assignee", hint: "" },
+  { value: "actor", label: "Whoever made the change", hint: "" },
+];
+
+/** "Person is in team" (RADD-1498): the person, the teams (names), and the invert. */
+export function PersonInTeamFields({
+  params,
+  canChoosePeople,
+  onChange,
+}: {
+  params: Params;
+  canChoosePeople: boolean;
+  onChange: (params: Params) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2" data-person-in-team>
+      <OptionSelect resource={OptionResource.user} label="Person" value={String(params.person ?? "reporter")}
+        canBrowse={canChoosePeople} presets={GATE_PERSON_PRESETS}
+        onChange={(person) => onChange({ ...params, person })} />
+      <Labelled label="Is on one of these teams">
+        <OptionNameValues resource={OptionResource.team} label="Teams"
+          value={(params.teams as string[]) ?? []} onChange={(teams) => onChange({ ...params, teams })} />
+      </Labelled>
+      <p className="text-xs text-fg-muted">Team membership counts the people a directory group carries into the team.</p>
+      <CheckField label="Invert — true when they are NOT on any of them" checked={Boolean(params.negate)} onChange={(checked) => onChange({ ...params, negate: checked })} />
     </div>
   );
 }

@@ -155,10 +155,10 @@ Owns the scalar cascade: `scoped_settings` rows (scope `instance` or `project`) 
 
 Directory groups mirrored from Active Directory or LDAP, for granting access to whole groups.
 
-Owns the read-only mirror of directory groups: `groups`, `group_parents` (the nesting graph) and `group_members`, written only by the `ldap` sync. A group is never local; a team is never mirrored. Two closures serve other modules: `user_group_ids` (a user's groups plus every ancestor, memoised) and `group_user_ids` (everyone a grant on the group reaches); the SLQ fields `reporter_group`/`assignee_group` take a name or a DN. Both walks guard against cycles and stop at `group_nesting_max_depth`, failing closed; groups are subjects on both grant tables, so every permission path inherits nesting. Trap: a group whose DN stops resolving is flagged missing and keeps its members and grants — a directory outage must never become a permission outage.
+Owns the read-only mirror of directory groups: `groups`, `group_parents` (the nesting graph) and `group_members`, written only by the `ldap` sync. A group is never local; a team is never mirrored. Two closures: `user_group_ids` (a user's groups plus every ancestor, memoised) and `group_user_ids` (everyone a grant on the group reaches); the SLQ fields and the membership gate take a name, a DN or an id. Both walks guard against cycles and stop at `group_nesting_max_depth`, failing closed; groups are subjects on both grant tables, so every permission path inherits nesting. Trap: a group whose DN stops resolving is flagged missing and keeps its members and grants — a directory outage must never become a permission outage.
 
 - **Events:** `group.synced`, `group.missing`, `group.restored`
-- **Contributes:** SLQ fields `reporter_group`, `assignee_group`
+- **Contributes:** automation nodes `gate.person_in_group`; SLQ fields `reporter_group`, `assignee_group`
 - **Data:** audit links `group`
 
 ### teams
@@ -387,7 +387,7 @@ Owns `automations` (a graph in `nodes`/`edges`), the `automation_triggers` index
 - **Permissions:** `automation.manage (global)`, `automation.act_as (global)`
 - **Nav:** `Automations → /settings/automations (settings/Server)`
 - **Access:** CRUD resources `automation (global, automation.manage)`
-- **Contributes:** automation nodes `trigger.event`, `gate.entered_state_category`, `gate.payload`, `gate.project`, `gate.field_changed`, `gate.changed_by`, `gate.state_category`, `filter.slq`, `search.slq`, `action.set_state`, `action.set_priority`, `action.set_assignee`, `action.assign_round_robin`, `action.set_team`, `action.add_label`, `action.remove_label`, `action.set_cycle`, `action.set_release`, `action.set_custom_field`, `action.add_comment`, `action.set_parent`, `action.set_type`, `action.set_reporter`, `action.set_dates`, `action.set_estimate`, `action.set_flag`, `action.set_visibility`, `action.link_item`, `action.archive_item`, `action.add_watcher`, `action.move_to_project`, `action.create_item`, `action.send_webhook`, `action.post_chat`, `action.notify_user`, `verdict.block`, `verdict.warn`; trigger kinds `manual`, `schedule`, `validate`; automation templates `automations.post_to_chat`
+- **Contributes:** automation nodes `trigger.event`, `gate.entered_state_category`, `gate.payload`, `gate.project`, `gate.field_changed`, `gate.changed_by`, `gate.person_in_team`, `gate.state_category`, `filter.slq`, `search.slq`, `action.set_state`, `action.set_priority`, `action.set_assignee`, `action.assign_round_robin`, `action.set_team`, `action.add_label`, `action.remove_label`, `action.set_cycle`, `action.set_release`, `action.set_custom_field`, `action.add_comment`, `action.set_parent`, `action.set_type`, `action.set_reporter`, `action.set_dates`, `action.set_estimate`, `action.set_flag`, `action.set_visibility`, `action.link_item`, `action.archive_item`, `action.add_watcher`, `action.move_to_project`, `action.create_item`, `action.send_webhook`, `action.post_chat`, `action.notify_user`, `verdict.block`, `verdict.warn`; trigger kinds `manual`, `schedule`, `validate`; automation templates `automations.post_to_chat`
 - **Runs:** event consumers `automations.engine`
 - **Data:** audit links `automation_rule`
 

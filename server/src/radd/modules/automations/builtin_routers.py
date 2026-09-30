@@ -16,6 +16,8 @@ from .types import (
     TYPE_TRIGGER_EVENT,
     AutomationNodeKind,
     TYPE_GATE_CHANGED_BY,
+    TYPE_GATE_PERSON_IN_TEAM,
+    GatePerson,
     TYPE_GATE_FIELD_CHANGED,
     TYPE_GATE_PAYLOAD,
     TYPE_GATE_PROJECT,
@@ -43,6 +45,38 @@ async def _state_categories(ctx: Any) -> dict[uuid.UUID, str]:
 async def _all_state_categories(ctx: Any) -> str:
     answers = await _state_categories(ctx)
     return NodePort.TRUE if ctx.packet.item_ids and all(answers.get(i) == NodePort.TRUE for i in ctx.packet.item_ids) else NodePort.FALSE
+
+
+async def gate_person_user_id(ctx: Any, who: str) -> uuid.UUID | None:
+    """The user a membership gate's `person` param names (RADD-1498): the actor
+    off the event, a role off the TARGET item (None when the packet speaks for
+    several — at item arity the executor hands one at a time), else an email.
+    Shared with contributed membership gates by duck typing on `ctx`."""
+    person = str(who or "").strip().lower()
+    if person == GatePerson.ACTOR:
+        raw = ctx.packet.facts.actor_id
+        try:
+            return uuid.UUID(str(raw)) if raw else None
+        except ValueError:
+            return None
+    resolved = await ctx.person(person)
+    return resolved.user_id if resolved is not None else None
+
+
+async def _person_in_team(ctx: Any) -> str:
+    from sqlalchemy import select
+    from radd.modules.teams import service as teams_service
+    from radd.modules.teams.models import Team
+
+    params = ctx.node.params
+    names = {str(v).strip() for v in (params.get("teams") or []) if str(v).strip()}
+    user_id = await gate_person_user_id(ctx, params.get("person"))
+    hit = False
+    if names and user_id is not None:
+        wanted = set((await ctx.session.execute(select(Team.id).where(Team.name.in_(names)))).scalars())
+        hit = bool(wanted & await teams_service.user_team_ids(ctx.session, user_id))
+    passed = not hit if params.get("negate") else hit
+    return (NodePort.TRUE if passed else NodePort.FALSE).value
 
 
 async def _entered_category(ctx: Any) -> str:
@@ -124,6 +158,20 @@ GATE_NODES: tuple[AutomationNodeSpec, ...] = (
         keywords="who actor person user did it made the change author",
         default_params={"users": [], "negate": False},
         reads_event=True,
+    ),
+    # RADD-1498: membership. Reads the event for the actor, the item for a role;
+    # per item it partitions, so "the reporter is on Lighting" routes each issue.
+    AutomationNodeSpec(
+        key=TYPE_GATE_PERSON_IN_TEAM, kind=AutomationNodeKind.GATE.value, label="Person is in team", group="Gates",
+        description="The person — the issue's reporter or assignee, whoever made the change, or an email — is on one of these teams, directory groups included.",
+        keywords="team member membership reporter assignee actor person belongs department group",
+        default_params={"person": GatePerson.REPORTER.value, "teams": [], "negate": False},
+        params_schema={"type": "object", "required": ["person", "teams"], "properties": {
+            "person": {"type": "string", "title": "Person"},
+            "teams": {"type": "array", "title": "Teams", "items": {"type": "string"}, "minItems": 1},
+            "negate": {"type": "boolean", "title": "Invert"}}},
+        ports=_TRUE_FALSE, arity=NodeArity.SET.value, arity_options=(NodeArity.SET.value, NodeArity.ITEM.value),
+        needs_items=False, reads_event=True, plan=_person_in_team,
     ),
     # Not event-reading: a draft being validated has a state, and asking about
     # its category is a real question.

@@ -9,6 +9,7 @@ from radd.kernel.specs import (  # the spec's own vocabulary (RADD-1467); re-exp
 )
 from radd.schedule import ScheduleKind
 
+
 # A rule's trigger is an EVENT TYPE from the catalog, or one of these sentinels —
 # no event names them, so the outbox consumer never starts a run from them.
 class AutomationTrigger(StrEnum):
@@ -118,6 +119,16 @@ class ActionType(StrEnum):
     # unchanged, and disabling either plugin takes its action with it.
 
 
+class GatePerson(StrEnum):
+    """Who a membership gate asks about (RADD-1498): a role on the target item
+    (`PersonRole`), or the ACTOR — whoever caused the event, which is the only
+    person a non-item event carries. Anything else in the param is an email."""
+
+    REPORTER = "reporter"
+    ASSIGNEE = "assignee"
+    ACTOR = "actor"
+
+
 class PersonRole(StrEnum):
     """A person named RELATIVE TO the target item rather than by address — what
     a person param (`notify_user`'s `user`, `add_watcher`'s, a contributed
@@ -145,8 +156,6 @@ class ArityRule:
     @property
     def configurable(self) -> bool:
         return len(self.options) > 1
-
-
 
 
 #: Every action's DEFAULT arity; a stored node with no `arity` param runs as this.
@@ -204,7 +213,6 @@ ACTION_ARITY_CONFIGURABLE = frozenset(
 )
 
 
-
 #: Which ports each kind emits by default. FILTER splits the item set; GATE
 #: routes by a boolean; TRIGGER, SOURCE and ACTION pass one way — an action
 #: returns its input unchanged so chains continue past it.
@@ -234,6 +242,10 @@ TYPE_GATE_PROJECT = "gate.project"
 TYPE_GATE_FIELD_CHANGED = "gate.field_changed"
 TYPE_GATE_CHANGED_BY = "gate.changed_by"
 TYPE_GATE_STATE_CATEGORY = "gate.state_category"
+#: RADD-1498: "Person is in team" — a person named relative to the item (its
+#: reporter, its assignee), the event's actor, or an email; true when they are
+#: on one of the named teams, directory groups included.
+TYPE_GATE_PERSON_IN_TEAM = "gate.person_in_team"
 #: RADD-1322: "Entered state category" — reads the transition off the event.
 TYPE_GATE_ENTERED_STATE_CATEGORY = "gate.entered_state_category"
 TYPE_FILTER_SLQ = "filter.slq"

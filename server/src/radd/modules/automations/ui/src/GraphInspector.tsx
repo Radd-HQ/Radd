@@ -35,15 +35,7 @@ import { EventSamples } from "./EventSamples";
 import { SearchFields } from "./SearchFields";
 import { ValidateTriggerFields, VerdictFields } from "./ValidationFields";
 import { TokenReference } from "./TokenReference";
-import {
-  ChangedByFields,
-  FieldChangedFields,
-  StateCategoryFields,
-  CommentGateFields,
-  PageSpaceFields,
-  PayloadGateFields,
-  ProjectGateFields,
-} from "./GateFields";
+import { ChangedByFields, FieldChangedFields, StateCategoryFields, CommentGateFields, PageSpaceFields, PayloadGateFields, ProjectGateFields, PersonInTeamFields } from "./GateFields";
 import type { PickerData } from "./ActionsBuilder";
 import { Button, ButtonVariant } from "@radd/plugin-sdk";
 import { TextField } from "@radd/plugin-sdk";
@@ -320,6 +312,9 @@ export function GraphInspector({
       )}
       {node.type === "gate.changed_by" && (
         <ChangedByFields params={node.params} canChoosePeople={pickers.canChoosePeople} onChange={setParams} />
+      )}
+      {node.type === "gate.person_in_team" && (
+        <PersonInTeamFields params={node.params} canChoosePeople={pickers.canChoosePeople} onChange={setParams} />
       )}
       {node.type === "gate.state_category" && (
         <StateCategoryFields params={node.params} onChange={setParams} />

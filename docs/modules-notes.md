@@ -55,7 +55,7 @@ Owns the scalar cascade: `scoped_settings` rows (scope `instance` or `project`) 
 
 ### groups
 
-Owns the read-only mirror of directory groups: `groups`, `group_parents` (the nesting graph) and `group_members`, written only by the `ldap` sync. A group is never local; a team is never mirrored. Two closures serve other modules: `user_group_ids` (a user's groups plus every ancestor, memoised) and `group_user_ids` (everyone a grant on the group reaches); the SLQ fields `reporter_group`/`assignee_group` take a name or a DN. Both walks guard against cycles and stop at `group_nesting_max_depth`, failing closed; groups are subjects on both grant tables, so every permission path inherits nesting. Trap: a group whose DN stops resolving is flagged missing and keeps its members and grants — a directory outage must never become a permission outage.
+Owns the read-only mirror of directory groups: `groups`, `group_parents` (the nesting graph) and `group_members`, written only by the `ldap` sync. A group is never local; a team is never mirrored. Two closures: `user_group_ids` (a user's groups plus every ancestor, memoised) and `group_user_ids` (everyone a grant on the group reaches); the SLQ fields and the membership gate take a name, a DN or an id. Both walks guard against cycles and stop at `group_nesting_max_depth`, failing closed; groups are subjects on both grant tables, so every permission path inherits nesting. Trap: a group whose DN stops resolving is flagged missing and keeps its members and grants — a directory outage must never become a permission outage.
 
 ### teams
 

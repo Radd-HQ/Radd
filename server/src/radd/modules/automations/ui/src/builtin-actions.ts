@@ -28,6 +28,7 @@ const CORE_EDITED_TYPES: ReadonlySet<string> = new Set([
   "gate.project",
   "gate.field_changed",
   "gate.changed_by",
+  "gate.person_in_team",
   "gate.state_category",
   "gate.comment",
   "gate.page_space",

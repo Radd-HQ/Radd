@@ -240,6 +240,11 @@ function summarise(node: AutomationNode): string {
     const users = (params.users as string[]) ?? [];
     return `${params.negate ? "not " : ""}${users.join(", ") || "anyone"}`;
   }
+  if (node.type === "gate.person_in_team" || node.type === "gate.person_in_group") {
+    const who = String(params.person ?? "reporter");
+    const targets = ((params.teams ?? params.groups) as string[] | undefined) ?? [];
+    return `${who} ${params.negate ? "not " : ""}in ${targets.join(", ") || "…"}`;
+  }
   if (node.type === "gate.state_category") {
     return ((params.categories as string[]) ?? []).join(", ") || "any category";
   }

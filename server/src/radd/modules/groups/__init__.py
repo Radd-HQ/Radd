@@ -2,6 +2,7 @@ from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec, RaddPlugin
 
 from .router import router
+from .automation import PERSON_IN_GROUP_GATE
 from .slq import SLQ_FIELDS
 from .types import GroupEvent
 
@@ -16,6 +17,7 @@ plugin = RaddPlugin(
     depends_on=("events", "auth"),
     weak_depends=("teams", "items"),
     slq_fields=SLQ_FIELDS,
+    automation_nodes=(PERSON_IN_GROUP_GATE,),
     routers=(router,),
     event_types=(
         EventTypeSpec(GroupEvent.SYNCED, "Directory group synced", "Admin"),
