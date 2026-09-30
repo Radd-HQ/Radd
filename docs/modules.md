@@ -25,7 +25,7 @@ In load order (`Settings.modules`), then the installable plugins. **Depends on**
 | [capabilities](#capabilities) | core | host | auth | — |
 | [pluginmgr](#pluginmgr) | core | host | auth, events | access |
 | [settings](#settings) | core | host | events, projects, auth | — |
-| [groups](#groups) | core | bundled | events, auth | teams |
+| [groups](#groups) | core | bundled | events, auth | teams, items |
 | [teams](#teams) | core | bundled | events, projects, auth, groups | access, items |
 | [access](#access) | core | host | projects, events, auth, teams, groups | — |
 | [workflow](#workflow) | core | bundled | projects, events, auth, settings, teams | comments, fields, items, timelogging |
@@ -155,9 +155,10 @@ Owns the scalar cascade: `scoped_settings` rows (scope `instance` or `project`) 
 
 Directory groups mirrored from Active Directory or LDAP, for granting access to whole groups.
 
-Owns the read-only mirror of directory groups: `groups`, `group_parents` (the nesting graph) and `group_members`, written only by the `ldap` sync. A group is never local; a team is never mirrored. Other modules resolve through two closures: `user_group_ids` (a user's groups plus every ancestor, memoised per request) and `group_user_ids` (everyone a grant on the group reaches). Both walks guard against cycles and stop at `group_nesting_max_depth`, failing closed; groups are subjects on both grant tables, so every permission path inherits nesting from them. Trap: a group whose DN stops resolving is flagged missing and keeps its members and grants — a directory outage must never become a permission outage.
+Owns the read-only mirror of directory groups: `groups`, `group_parents` (the nesting graph) and `group_members`, written only by the `ldap` sync. A group is never local; a team is never mirrored. Two closures serve other modules: `user_group_ids` (a user's groups plus every ancestor, memoised) and `group_user_ids` (everyone a grant on the group reaches); the SLQ fields `reporter_group`/`assignee_group` take a name or a DN. Both walks guard against cycles and stop at `group_nesting_max_depth`, failing closed; groups are subjects on both grant tables, so every permission path inherits nesting. Trap: a group whose DN stops resolving is flagged missing and keeps its members and grants — a directory outage must never become a permission outage.
 
 - **Events:** `group.synced`, `group.missing`, `group.restored`
+- **Contributes:** SLQ fields `reporter_group`, `assignee_group`
 - **Data:** audit links `group`
 
 ### teams
@@ -166,10 +167,11 @@ Owns the read-only mirror of directory groups: `groups`, `group_parents` (the ne
 
 Teams: groups of people you can give access to projects.
 
-Owns `teams` (global, unique name, an `owner_id`), `team_managers` and `team_members`, where a member is a user or a directory group; a team's access to a project is a role grant in `global_role_grants`, not a column here. The seam is `user_team_ids` (the teams a person is on, directly or through any group transitively) and `users_for_teams` (groups expanded); every membership query goes through `_membership_filter`. The owner or a manager may run a team (`is_team_steward`). Trap: `user_team_ids` is memoised on `session.info`, so a write to `team_members` must call `forget_user_teams`, or the same request keeps answering with the membership it read before the write.
+Owns `teams` (unique names, an `owner_id`), `team_managers` and `team_members`, where a member is a user or a directory group; a team's access to a project is a role grant in `global_role_grants`, not a column here. The seam is `user_team_ids` (the teams a person is on, directly or through any group transitively) and `users_for_teams` (groups expanded); every membership query goes through `_membership_filter`, and the SLQ fields `reporter_team`/`assignee_team` through `reading.member_projection`. The owner or a manager may run a team (`is_team_steward`). Trap: `user_team_ids` is memoised on `session.info`, so a write to `team_members` must call `forget_user_teams`, or the request keeps the membership it read before the write.
 
 - **Events:** `team.created`, `team.updated`, `team.deleted`
 - **Access:** CRUD resources `team (global, global.manage)`
+- **Contributes:** SLQ fields `reporter_team`, `assignee_team`
 - **Data:** entity refs `team`; audit links `team`
 
 ### access

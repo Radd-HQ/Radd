@@ -621,7 +621,13 @@ same `register_*` registries. A plugin can add a **searchable SLQ field** by dec
 returns a SQLAlchemy `Select` of matching work-item ids (over the plugin's OWN table), and the items
 query engine wraps it as `work_item.id IN (…)`. Then `note ~ "text"` works everywhere SLQ runs —
 saved views, the query bar, `useItemsQuery` — and composes with builtins (`note ~ "x" AND state =
-todo`). Supported operators: `=`, `!=`, `~` (contains). The example registers `note` in `slq.py`.
+todo`). Supported operators: `=`, `!=`, `~` (contains), `IN` and `NOT IN` (one resolver call per
+value, OR-ed). Three optional fields make it a first-class citizen of the editors: `values` (the
+human hint the cheat sheet shows, "team name"), `suggest(session, partial)` (value candidates for
+autocomplete), and `reveals` (the builtin fields it would disclose by bisection — `reporter_team`
+reveals `reporter`, so a read restriction on the builtin denies the plugin field too). The example
+registers `note` in `slq.py`; `teams` and `groups` register the membership fields `reporter_team`,
+`assignee_team`, `reporter_group` and `assignee_group` the same way.
 
 Likewise a plugin adds a whole **saved-view type** (`view_types=(ViewTypeSpec(key, label),)`) or a
 **dashboard widget type** (`widget_types=(WidgetTypeSpec(key, label),)`). The backend accepts the new

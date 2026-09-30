@@ -94,6 +94,8 @@ export const apiItemLinkPath = (itemId: string, linkId: string) =>
 export const apiItemHistoryPath = (itemId: string) => `${ApiPath.items}/${itemId}/history`;
 /** Dependency-link typeahead (query: project_id, q, exclude_id?). */
 export const apiItemLinkSearchPath = () => `${ApiPath.items}/link-search`;
+/** RADD-1497: the SLQ fields plugins contribute right now, for the cheat sheet. */
+export const apiItemSlqFieldsPath = () => `${ApiPath.items}/slq/fields`;
 /** Related/external links (weblinks module). */
 export const apiItemWebLinksPath = (itemId: string) => `${ApiPath.items}/${itemId}/web-links`;
 export const apiWebLinkPath = (linkId: string) => `/web-links/${linkId}`;

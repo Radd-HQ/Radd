@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { slqPluginFieldsQuery } from "../../lib/queries";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { FIELD_TYPE_LABELS } from "../../lib/meta";
 import {
@@ -28,6 +30,8 @@ const codeClasses = "font-mono text-[11px] text-accent-text";
 export function SlqCheatSheet({ fields, projectId }: SlqCheatSheetProps) {
   const [open, setOpen] = useState(false);
   const customFields = cheatSheetFields(fields, projectId);
+  // RADD-1497: what plugins contribute (`logged_by`, `reporter_group`, …), read live.
+  const pluginFields = useQuery({ ...slqPluginFieldsQuery(), enabled: open });
   const Chevron = open ? ChevronDown : ChevronRight;
 
   return (
@@ -53,6 +57,13 @@ export function SlqCheatSheet({ fields, projectId }: SlqCheatSheetProps) {
                     <td className={`w-24 py-0.5 pr-2 ${codeClasses}`}>{help.field}</td>
                     <td className="py-0.5 pr-2 text-xs text-fg-secondary">{help.values}</td>
                     <td className="py-0.5 font-mono text-[11px] text-fg-muted">{help.example}</td>
+                  </tr>
+                ))}
+                {(pluginFields.data ?? []).map((field) => (
+                  <tr key={field.name} className="align-top" data-slq-plugin-field={field.name}>
+                    <td className={`w-24 py-0.5 pr-2 ${codeClasses}`}>{field.name}</td>
+                    <td className="py-0.5 pr-2 text-xs text-fg-secondary">{field.values || field.label}</td>
+                    <td className="py-0.5 font-mono text-[11px] text-fg-muted">{field.label}</td>
                   </tr>
                 ))}
               </tbody>

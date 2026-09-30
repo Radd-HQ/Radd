@@ -14,6 +14,7 @@ import uuid
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.kernel import registries
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
@@ -82,9 +83,7 @@ async def suggest(
         # RADD-839: unscoped completions carry issue keys+titles — bound them
         # to the projects this actor can actually read.
         clause = await relation_read_clause(session, actor, readable)
-        scope = SuggestScope(
-            readable_project_ids=frozenset(readable), relation_clause=clause
-        )
+        scope = SuggestScope(readable_project_ids=frozenset(readable), relation_clause=clause)
         definitions = await fields_service.list_fields(session)
     definitions_by_key: dict[str, FieldDefinition] = {}
     for definition in definitions:
@@ -164,6 +163,12 @@ def _field_candidates(
         candidates.append(
             Candidate(key, detail=f"{definition.name} ({field_type.value})", literal=False)
         )
+    if not sortable_only:
+        # RADD-1497: plugin fields (`logged_by`, `reporter_group`) — filterable, never sortable.
+        candidates += [
+            Candidate(spec.name, detail=spec.label, literal=False)
+            for spec in registries.slq_fields.values()
+        ]
     return candidates
 
 
@@ -176,10 +181,18 @@ def _reachable_key(key: str) -> bool:
     )
 
 
+#: What every plugin field accepts (`compiler._plugin_condition`): compare + membership.
+PLUGIN_FIELD_OPS = FieldOps(
+    compare=frozenset({CompareOp.EQ, CompareOp.NE, CompareOp.CONTAINS}), membership=True
+)
+
+
 def _ops_for(field: str, definitions_by_key: dict[str, FieldDefinition]) -> FieldOps | None:
     try:
         return BUILTIN_OPS[SlqField(field)]
     except ValueError:
+        if field in registries.slq_fields:
+            return PLUGIN_FIELD_OPS
         definition = definitions_by_key.get(field)
         return None if definition is None else CF_OPS[FieldType(definition.type)]
 
@@ -208,7 +221,9 @@ def _keyword_candidates(detection: Detection) -> list[Candidate]:
         if detection.context is SuggestContext.OPERATOR
         else SuggestDetail.KEYWORD
     )
-    return [Candidate(keyword.value, detail=detail, literal=False) for keyword in detection.keywords]
+    return [
+        Candidate(keyword.value, detail=detail, literal=False) for keyword in detection.keywords
+    ]
 
 
 # --- filtering, ranking, quoting ---

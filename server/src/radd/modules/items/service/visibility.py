@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import false, select
 
 from radd.exceptions import ForbiddenError
+from radd.kernel import registries
 from radd.kernel.registry import register_relation, register_row_guard
 from radd.kernel.specs import RelationSpec, RowGuardSpec
 from radd.modules.access import resolution as access_res, service as access_service
@@ -59,9 +60,7 @@ ITEM_RELATIONS: tuple[RelationSpec, ...] = (
         key="team",
         label="on their team",
         # An actor with no teams matches nothing — false(), never IN (empty).
-        where=lambda actor: (
-            WorkItem.team_id.in_(actor.team_ids) if actor.team_ids else false()
-        ),
+        where=lambda actor: WorkItem.team_id.in_(actor.team_ids) if actor.team_ids else false(),
         holds=lambda actor, item: item.team_id is not None and item.team_id in actor.team_ids,
     ),
     # Spec 121: `@public` is a property of the ROW, not of who the actor is —
@@ -194,9 +193,7 @@ async def attach_capabilities(
         by_relations: dict[frozenset, list[WorkItem]] = {}
         for row in constrained_rows:
             permissions = permissions_by_project[row.project_id]
-            by_relations.setdefault(
-                authz.relations_held(permissions, permission), []
-            ).append(row)
+            by_relations.setdefault(authz.relations_held(permissions, permission), []).append(row)
         for relations, rows in by_relations.items():
             held = await authz.relation_row_ids_holding(
                 session, "item", relations, relation_actor, rows
@@ -259,9 +256,8 @@ async def ensure_item_relation(
 
         raise NotFoundError(ItemEntity.ITEM, item.id)
     held = ", ".join(sorted(f"@{r}" for r in relations))
-    raise ForbiddenError(
-        f"'{permission}' is limited to {held} here, and this is not such an item"
-    )
+    raise ForbiddenError(f"'{permission}' is limited to {held} here, and this is not such an item")
+
 
 # --- field-level visibility (spec 07: per-role/team grants) ---
 
@@ -447,9 +443,10 @@ async def denied_slq_fields(
         definitions = await fields.definitions_for_project(session, project)
         ctx = await _field_ctx(session, actor, project, permissions, definitions)
         denied |= {d.key for d in definitions} - fields.readable_keys(definitions, ctx)
-        for name in await _builtin_read_denied(session, project, ctx):
+        restricted = set(await _builtin_read_denied(session, project, ctx))
+        for name in restricted:
             denied |= set(_BUILTIN_TO_SLQ_FIELDS.get(name, ()))
-        return frozenset(denied)
+        return frozenset(denied | plugin_fields_revealing(restricted))
 
     definitions = await fields.list_fields(session)
     field_grants = await access_service.grants_for_resources(
@@ -457,17 +454,33 @@ async def denied_slq_fields(
     )
     for definition in definitions:
         if any(
-            g.access == fields.Access.READ.value
-            for g in field_grants.get(str(definition.id), ())
+            g.access == fields.Access.READ.value for g in field_grants.get(str(definition.id), ())
         ):
             denied.add(definition.key)
     builtin_grants = await access_service.grants_for_resources(
         session, fields.BUILTIN_RESOURCE, sorted(_BUILTIN_TO_SLQ_FIELDS)
     )
-    for name, grants in builtin_grants.items():
-        if any(g.access == fields.Access.READ.value for g in grants):
-            denied |= set(_BUILTIN_TO_SLQ_FIELDS.get(name, ()))
-    return frozenset(denied)
+    restricted = {
+        name
+        for name, grants in builtin_grants.items()
+        if any(g.access == fields.Access.READ.value for g in grants)
+    }
+    for name in restricted:
+        denied |= set(_BUILTIN_TO_SLQ_FIELDS.get(name, ()))
+    return frozenset(denied | plugin_fields_revealing(restricted))
+
+
+def plugin_fields_revealing(restricted_builtins: set[str]) -> set[str]:
+    """RADD-1497: plugin SLQ fields that would disclose a read-restricted builtin
+    by bisection (`reporter_team` says who the reporter is, team by team) — denied
+    exactly as the builtin's own SLQ names are. A spec declares what it reveals."""
+    if not restricted_builtins:
+        return set()
+    return {
+        spec.name
+        for spec in registries.slq_fields.values()
+        if restricted_builtins.intersection(spec.reveals)
+    }
 
 
 # --- project visibility (RADD-937) --------------------------------------------
@@ -507,6 +520,7 @@ async def projects_with_team_items(session: AsyncSession, user) -> set[uuid.UUID
 async def require_key_item_permission(session, actor, item, permission):
     """Intrinsic issue actions still obey a key's atom, scope and row qualifier."""
     from radd.modules.auth.principals import require_key_permission
+
     require_key_permission(actor, permission, item.project_id)
     scope = getattr(actor, "token_scope", None)
     if scope is not None:

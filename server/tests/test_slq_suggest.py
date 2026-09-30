@@ -376,10 +376,13 @@ async def test_free_form_fields_report_context_without_suggestions(q):
 
 
 async def test_prefix_ranks_before_contains_then_alphabetical():
+    # RADD-1497: plugin fields (`assignee_team`, `commented_by`, `reporter_*`) are
+    # candidates too, ranked by the same rule.
     assert values(await respond("te")) == [
         "team",  # prefix match leads; contains-matches follow alphabetically
-        "category", "created", "epic.category", "epic.state", "notes",
-        "parent.category", "parent.state", "reporter", "state", "updated",
+        "assignee_team", "category", "commented_by", "created", "epic.category", "epic.state",
+        "notes", "parent.category", "parent.state", "reporter", "reporter_group",
+        "reporter_team", "state", "updated",
     ]
 
 

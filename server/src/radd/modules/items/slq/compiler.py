@@ -83,9 +83,7 @@ _CONDITION_COMPILERS = {**BUILTIN_COMPILERS, **ANCESTOR_COMPILERS}
 def _condition(ctx: Context, node: Condition) -> ColumnElement[bool]:
     if node.field in ctx.denied_fields:
         # RADD-840: a filter on a field the actor can't read is a value oracle.
-        raise SlqError(
-            f"field '{node.field}' is read-restricted for you", node.field_position
-        )
+        raise SlqError(f"field '{node.field}' is read-restricted for you", node.field_position)
     try:
         builtin = SlqField(node.field)
     except ValueError:
@@ -100,24 +98,36 @@ def _condition(ctx: Context, node: Condition) -> ColumnElement[bool]:
 
 def _plugin_condition(ctx: Context, node: Condition, spec: Any) -> ColumnElement[bool]:
     """Compile a plugin SLQ field (spec 94). The plugin's `item_ids(contains, value)` returns a
-    Select of matching work-item ids; we wrap it as `work_item.id IN (…)` and apply negation. Only
-    `=`, `!=`, `~` are supported for plugin fields."""
-    if not isinstance(node, Comparison):
-        raise SlqError(f"field '{node.field}' supports only = / != / ~", node.field_position)
-    if node.op not in (CompareOp.EQ, CompareOp.NE, CompareOp.CONTAINS):
+    Select of matching work-item ids; we wrap it as `work_item.id IN (…)` and apply negation.
+    `=`, `!=`, `~`, and (RADD-1497) `IN` / `NOT IN` — a membership is the OR of one resolver
+    call per value, which is what `IN` means and keeps the resolver's contract one value wide."""
+    if isinstance(node, Comparison):
+        if node.op not in (CompareOp.EQ, CompareOp.NE, CompareOp.CONTAINS):
+            raise SlqError(
+                f"operator '{node.op.value}' is not valid for field '{node.field}'",
+                node.op_position,
+            )
+        contains = node.op is CompareOp.CONTAINS
+        values = (node.value,)
+    elif isinstance(node, Membership):
+        contains = False
+        values = node.values
+    else:
         raise SlqError(
-            f"operator '{node.op.value}' is not valid for field '{node.field}'", node.op_position
+            f"field '{node.field}' supports only = / != / ~ / IN / NOT IN", node.field_position
         )
-    contains = node.op is CompareOp.CONTAINS
-    # `me` never reaches the resolver as text: plain() rejects the sentinel by
-    # design, so branch on it here and hand the resolver a typed flag.
-    is_me = is_sentinel(node.value, ME_LITERAL)
-    matching_ids = spec.item_ids(
-        contains,
-        "" if is_me else plain(node.value, node.field),
-        SlqFieldContext(current_user_id=ctx.current_user_id, is_me=is_me),
-    )
-    return polarity(node, WorkItem.id.in_(matching_ids))
+    clauses = []
+    for value in values:
+        # `me` never reaches the resolver as text: plain() rejects the sentinel by
+        # design, so branch on it here and hand the resolver a typed flag.
+        is_me = is_sentinel(value, ME_LITERAL)
+        matching_ids = spec.item_ids(
+            contains,
+            "" if is_me else plain(value, node.field),
+            SlqFieldContext(current_user_id=ctx.current_user_id, is_me=is_me),
+        )
+        clauses.append(WorkItem.id.in_(matching_ids))
+    return polarity(node, or_(*clauses))
 
 
 # --- label name resolution (the one async step) ---

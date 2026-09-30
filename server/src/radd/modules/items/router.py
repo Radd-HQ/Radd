@@ -38,6 +38,10 @@ from .schemas import (
     ItemUpdate,
     SlqValidation,
 )
+from pydantic import BaseModel
+
+from radd.kernel import registries
+
 from .slq import suggest as slq_suggest
 from .slq.suggest import SuggestResponse
 
@@ -157,6 +161,24 @@ async def validate_slq(
 ) -> SlqValidation:
     await service.validate_slq(session, actor=user, q=q, project_id=project_id)
     return SlqValidation()
+
+
+class SlqPluginField(BaseModel):
+    """One plugin-contributed SLQ field, for the query editors' cheat sheet (RADD-1497)."""
+
+    name: str
+    label: str
+    values: str
+
+
+@router.get("/slq/fields", response_model=list[SlqPluginField])
+async def slq_plugin_fields(user: Actor) -> list[SlqPluginField]:
+    """The SLQ fields plugins contribute right now (`logged_by`, `reporter_group`, …) —
+    the builtin vocabulary is frozen in the SPA, the contributed one is not."""
+    return [
+        SlqPluginField(name=spec.name, label=spec.label, values=spec.values)
+        for spec in registries.slq_fields.values()
+    ]
 
 
 _SUGGEST_DOC = (

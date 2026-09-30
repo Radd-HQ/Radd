@@ -20,6 +20,7 @@ export const queryKeys = {
     ["screen-effective", { projectId, issueTypeId }] as const,
   item: (itemId: string) => ["item", { itemId }] as const,
   itemByKey: (key: string) => ["itemByKey", { key }] as const,
+  slqPluginFields: () => ["slqPluginFields"] as const,
   comments: (itemId: string) => ["comments", { itemId }] as const,
   fields: ["fields"] as const,
   linkTypes: ["linkTypes"] as const,

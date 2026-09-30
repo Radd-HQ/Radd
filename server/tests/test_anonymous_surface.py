@@ -22,6 +22,8 @@ ANONYMOUS_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/v1/items/grouped"),  # read-only; same authorized ID scope
         ("GET", "/api/v1/items/slq/validate"),
         ("GET", "/api/v1/items/slq/suggest"),
+        # RADD-1497: the plugin-field vocabulary for the cheat sheet — names, like validate/suggest.
+        ("GET", "/api/v1/items/slq/fields"),
         ("GET", "/api/v1/items/ids"),
         ("GET", "/api/v1/items/count"),
         ("GET", "/api/v1/items/by-key/{key}"),

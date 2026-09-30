@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy import String, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.kernel import registries
 from radd.modules.auth import service as auth
 from radd.modules.cycles import service as cycles_service
 from radd.modules.fields.models import FieldDefinition
@@ -112,9 +113,7 @@ def _me() -> Candidate:
 
 
 def _none() -> Candidate:
-    return Candidate(
-        NONE_LITERAL, detail=SuggestDetail.NO_VALUE, tier=TIER_SENTINEL, literal=False
-    )
+    return Candidate(NONE_LITERAL, detail=SuggestDetail.NO_VALUE, tier=TIER_SENTINEL, literal=False)
 
 
 def _date_hint() -> Candidate:
@@ -148,6 +147,14 @@ async def value_candidates(
     try:
         builtin = SlqField(field)
     except ValueError:
+        spec = registries.slq_fields.get(field)
+        if spec is not None:
+            # RADD-1497: the plugin's own value source, when it has one.
+            if spec.suggest is None or session is None:
+                return []
+            return [
+                Candidate(value, detail=field) for value in await spec.suggest(session, partial)
+            ]
         definition = definitions_by_key.get(field)
         return [] if definition is None else _cf_candidates(definition)
     if session is None and builtin in _DB_BACKED_FIELDS:
@@ -194,6 +201,7 @@ async def value_candidates(
             return await _item_key_candidates(session, scope, partial)
         case SlqField.CYCLE_STATUS:
             from radd.modules.cycles.types import CycleStatus
+
             return _enum_candidates(CycleStatus, builtin)
         case SlqField.CYCLE | SlqField.PAST_CYCLE:
             return [_none()] + _entities(await _cycle_names(session), builtin)

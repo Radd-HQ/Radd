@@ -2,6 +2,7 @@ from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec, RaddPlugin
 
 from .router import router
+from .slq import SLQ_FIELDS
 from .types import GroupEvent
 
 plugin = RaddPlugin(
@@ -13,7 +14,8 @@ plugin = RaddPlugin(
         "Directory groups mirrored from Active Directory or LDAP, for granting access to whole groups."
     ),
     depends_on=("events", "auth"),
-    weak_depends=("teams",),
+    weak_depends=("teams", "items"),
+    slq_fields=SLQ_FIELDS,
     routers=(router,),
     event_types=(
         EventTypeSpec(GroupEvent.SYNCED, "Directory group synced", "Admin"),

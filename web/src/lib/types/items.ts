@@ -228,6 +228,14 @@ export interface ItemBulkPatch {
   remove_labels?: string[];
 }
 
+/** GET /items/slq/fields — one plugin-contributed SLQ field (RADD-1497). */
+export interface SlqPluginField {
+  name: string;
+  label: string;
+  /** Accepted values, human form ("team name", "group name or DN"). */
+  values: string;
+}
+
 export const BulkSkipReason = {
   notFound: "not_found",
   forbidden: "forbidden",

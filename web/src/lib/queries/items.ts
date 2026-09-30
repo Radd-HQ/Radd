@@ -1,15 +1,11 @@
+import type { SlqPluginField } from "../types";
 /** Items (paged/infinite/by-key), comments, and attachments. */
 
 import { commentFeedQuery, CommentSection } from "./comment-feed";
 import { queryOptions } from "@tanstack/react-query";
 import { api, type CursorPage } from "../api";
 import { Entity, entityMeta } from "@radd/plugin-sdk";
-import {
-  ApiPath,
-  apiAttachmentsPath,
-  apiItemByKeyPath,
-  apiItemCommentsPath,
-} from "../constants";
+import { ApiPath, apiAttachmentsPath, apiItemByKeyPath, apiItemCommentsPath, apiItemSlqFieldsPath } from "../constants";
 import { queryKeys } from "./shared";
 import type { Attachment, AttachmentTarget, Item } from "../types";
 import type { ValidationContext } from "@radd-plugin-ui/automations/types";
@@ -19,6 +15,15 @@ import type { ValidationContext } from "@radd-plugin-ui/automations/types";
  * resolver (spec 21) — the single source for the key-addressed issue page.
  * `retry: false` so an unknown key's 404 surfaces immediately as "not found".
  */
+/** RADD-1497: plugin-contributed SLQ fields (`logged_by`, `reporter_group`, …) — the builtin
+ *  vocabulary is frozen in `lib/slq.ts`, the contributed one is read live. */
+export const slqPluginFieldsQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.slqPluginFields(),
+    queryFn: ({ signal }) => api.get<SlqPluginField[]>(apiItemSlqFieldsPath(), { signal }),
+    staleTime: 5 * 60_000,
+  });
+
 export const itemByKeyQuery = (key: string) =>
   queryOptions({
     queryKey: queryKeys.itemByKey(key),

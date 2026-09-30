@@ -83,14 +83,24 @@ class SlqFieldContext:
 @dataclass(frozen=True)
 class SlqFieldSpec:
     """A plugin SLQ field: its own data (`note ~ "x"`) or a relational predicate
-    (`logged_by = me`). `item_ids(contains, value, ctx)` returns a `Select` of MATCHING
-    work-item ids from the plugin's own table; items wraps it as `id IN (…)` and applies
-    negation. Supports `=`, `!=`, `~`."""
+    (`logged_by = me`, `reporter_group = "pipeline"`). `item_ids(contains, value, ctx)`
+    returns a `Select` of MATCHING work-item ids from the plugin's own table; items wraps
+    it as `id IN (…)` and applies negation. Supports `=`, `!=`, `~` and, since RADD-1497,
+    `IN` / `NOT IN` (one `item_ids` call per value, OR-ed).
+
+    `values` is the human hint the cheat sheet and autocomplete show ("team name",
+    "email | me"); `suggest(session, partial)` supplies value candidates, or None for a
+    free-form field; `reveals` names the BUILTIN fields this one would disclose by
+    bisection (`reporter_team` reveals `reporter`), so a read restriction on the builtin
+    denies this field too (RADD-840)."""
 
     name: str  # the SLQ field keyword, e.g. "note"
     label: str  # human label (autocomplete / errors)
     # (contains, value, ctx) -> Select[work_item_id]. `contains` is True for `~`, False for `=`.
     item_ids: Callable[[bool, str, SlqFieldContext], Any]
+    values: str = ""
+    suggest: Callable[[Any, str], Any] | None = None
+    reveals: tuple[str, ...] = ()
 
 
 # --- events (§3 chokepoint 1: automations derives its trigger list from here) ---
