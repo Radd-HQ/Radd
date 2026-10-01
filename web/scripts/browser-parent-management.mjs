@@ -170,6 +170,11 @@ try {
   checks.push("issue rail sets the epic and the parent tag follows");
   await s.click('[aria-label="Change epic"]');
   await until(s, async () => has('[data-parent-search="epic"]'), "Change did not open the search");
+  // RADD-1500: the cross-project search tells you a project key narrows it — the first thing
+  // anyone types to reach another project's epics (the server owns the narrowing; its test is
+  // tests/test_cross_project.py).
+  assert.match(await s.eval(`document.querySelector('[data-parent-search="epic"]').placeholder`), /project key narrows/,
+    "the epic search does not say a project key narrows it");
   await type("Beta");
   await pick("PM-2");
   await until(s, async () => has('[data-parent-current="PM-2"]') && has('a[aria-label="Open parent PM-2"]'), "changed epic not shown");

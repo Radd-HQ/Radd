@@ -195,7 +195,7 @@ function AddLinkRow({
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 120)}
           autoComplete="off"
-          placeholder="Search by title, number, or key…"
+          placeholder="Search by title, number, or key — a project key narrows…"
           className="h-8 rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
         />
         {suggestions.length > 0 && (

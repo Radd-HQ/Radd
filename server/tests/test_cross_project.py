@@ -154,6 +154,37 @@ async def test_link_search_leads_with_the_named_key(db, actor):
     assert results[0].id == own.id
 
 
+async def test_link_search_narrows_to_a_typed_project_key(db, actor):
+    """RADD-1500: `DEV` typed on a GRQ issue means "DEV's epics", not GRQ titles
+    containing "dev" — on a large project those filled the limit and the picker
+    read as same-project only. `DEV lookdev` is text within that project; a full
+    key keeps its exact meaning; a word that is no readable project's key is
+    still a title search; a search pinned to the anchor project ignores it."""
+    grq = await make_project(db, "KG")
+    dev = await make_project(db, "KD")
+    epic = lambda project, title: items.create_item(  # noqa: E731
+        db, ItemCreate(project_id=project.id, title=title, kind=ItemKind.EPIC), actor
+    )
+    local = await epic(grq, f"lookdev {dev.key} override")
+    remote = await epic(dev, "lookdev groom")
+    remote_other = await epic(dev, "farm freeze")
+
+    async def search(q, **kw):
+        found = await items.link_search(
+            db, project_id=grq.id, q=q, actor=actor, limit=8, kind=ItemKind.EPIC, **kw
+        )
+        return [r.id for r in found]
+
+    for term in (dev.key, dev.key.lower(), f"{dev.key}-"):
+        assert set(await search(term)) == {remote.id, remote_other.id}, term
+    assert await search(f"{dev.key} lookdev") == [remote.id]
+    assert (await search(f"{dev.key}-{remote_other.number}"))[0] == remote_other.id
+    # No readable project is called LOOKDEV: a title search, the anchor project first.
+    assert (await search("lookdev"))[:2] == [local.id, remote.id]
+    # Pinned to the anchor project (a subtask's parent issue, RADD-1492): the key is text.
+    assert await search(dev.key, same_project=True) == [local.id]
+
+
 async def _member_of(db, project):
     """A person who reads ONE project through the builtin Member role and holds
     nothing else — the shape a TD-only teammate has (never an admin, whose

@@ -1,5 +1,6 @@
 """Item links: dependency typeahead, manual links, derived mention backlinks."""
 
+import re
 import uuid
 
 from sqlalchemy import and_, or_, select
@@ -35,6 +36,23 @@ def _search_number(term: str) -> int | None:
     return int(candidate) if candidate.isdigit() else None
 
 
+#: A project key as someone types it to NARROW the typeahead: `DEV`, `dev`, `DEV-`
+#: (the `ProjectCreate.key` shape, with the dash they were about to follow with a
+#: number). Whether it IS a readable project's key is decided against the database.
+_PROJECT_KEY_RE = re.compile(r"[A-Za-z][A-Za-z0-9]{0,9}-?")
+
+
+def _split_scope(term: str) -> tuple[str | None, str]:
+    """`DEV`, `DEV-` or `DEV lookdev` -> ("DEV", "" | "lookdev"): the first word
+    names a project to search IN, the rest is what to search for (RADD-1500). A
+    full key (`DEV-23`) and anything else -> (None, term), so RADD-1490's exact
+    meaning of a key is untouched."""
+    head, _, rest = term.partition(" ")
+    if _parse_key(head) is not None or not _PROJECT_KEY_RE.fullmatch(head):
+        return None, term
+    return head.rstrip("-").upper(), rest.strip()
+
+
 def _named_key_clause(project_key: str, number: int, term: str):
     """The row a full key names: `number` in the project whose key is
     `project_key`, or the item a spec-68 alias for `term` still points at."""
@@ -67,7 +85,15 @@ async def link_search(
     picker asks for the kind the ladder requires, so the LIMIT is spent on
     candidates that can be picked (RADD-1472). `unparented` keeps only items
     with no parent — an epic adopting existing issues (RADD-1473). `same_project`
-    keeps to the anchor project — a subtask's parent issue lives there (RADD-1492)."""
+    keeps to the anchor project — a subtask's parent issue lives there (RADD-1492).
+
+    A term that opens with a readable project's key narrows to THAT project
+    (RADD-1500): `DEV` lists DEV's candidates newest first, `DEV lookdev` those
+    whose title matches. Without it, `DEV` was a title search the anchor
+    project's own "lookdev" rows satisfied, and on a large project the
+    same-project tier filled the limit before any DEV row — which read as
+    "same project only". A word that is no readable key stays a title search,
+    so an unreadable key reveals nothing."""
     project = await projects_service.get_project(session, project_id)
     await authz.require(session, actor, Permission.ITEM_READ, project=project)
     # The memoised member floor (holds_base-aware, so a relation-qualified
@@ -86,6 +112,16 @@ async def link_search(
     if same_project:
         query = query.where(WorkItem.project_id == project_id)
     term = q.strip()
+    # RADD-1500: a leading project key narrows — unless the search is pinned
+    # to the anchor project already, where it could only contradict it.
+    scope_key, rest = _split_scope(term) if not same_project else (None, term)
+    if scope_key is not None:
+        scope_id = await session.scalar(
+            select(Project.id).where(Project.key == scope_key, Project.id.in_(readable_map.keys()))
+        )
+        if scope_id is not None:
+            query = query.where(WorkItem.project_id == scope_id)
+            term = rest
     tiers = [(WorkItem.project_id == project_id).desc(), WorkItem.number.desc()]
     if term:
         conditions = [WorkItem.title.ilike(ilike_term(term))]

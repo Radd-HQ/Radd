@@ -100,7 +100,9 @@ export function ParentSearchInput({
         onClick={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), DROPDOWN_BLUR_CLOSE_MS)}
         autoComplete="off"
-        placeholder={placeholder ?? (sameProject ? `Search ${kindWord}s in this project…` : `Search ${kindWord}s across all projects…`)}
+        // A leading project key narrows the cross-project search (RADD-1500) — the first thing
+        // anyone types to reach another project's epics, so the placeholder says it.
+        placeholder={placeholder ?? (sameProject ? `Search ${kindWord}s in this project…` : `Search ${kindWord}s across all projects — a project key narrows…`)}
         className="h-8 w-full rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
       />
       {open && candidates.length > 0 && (
