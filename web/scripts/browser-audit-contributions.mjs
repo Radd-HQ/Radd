@@ -36,7 +36,7 @@ const spa=await serveBuiltSpa((req,res,url)=>{
   else if(p.endsWith('/summary'))data={total:0,related_count:0,permissions:[]};
   else if(p.includes('notifications'))data={items:[],notifications:[],unread_count:0,total:0};
   else if(p.includes('preferences'))data={};
-  else if(p==='/api/v1/users/directory'){data=[{id:'person',name:'Selected person',email:'person@example.test'}];res.setHeader('X-Total-Count','1');requests.push({p,...Object.fromEntries(url.searchParams)});}
+  else if(p==='/api/v1/users/directory'){data=[{id:'person',name:'Selected person',email:'person@example.test',active:true,source:'local'}];res.setHeader('X-Total-Count','1');requests.push({p,...Object.fromEntries(url.searchParams)});}
   res.end(JSON.stringify(data));return true;
  }
 });

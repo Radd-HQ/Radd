@@ -32,7 +32,10 @@ const spa=await serveBuiltSpa(async(req,res,url)=>{
     if(refuse){res.writeHead(403,{'content-type':'application/json'});res.end(JSON.stringify({detail:'Directory access refused'}));return true;}
     const q=url.searchParams.get('q')??'',offset=Number(url.searchParams.get('offset')??0),limit=Number(url.searchParams.get('limit')??50);
     const prefix=p.includes('steward-candidates')?url.searchParams.get('purpose'):p.includes('member-candidates')?'member':p.endsWith('/teams')?'team':'person';
-    const all=Array.from({length:125},(_,i)=>({id:`${prefix}-${i+1}`,name:`${prefix} ${String(i+1).padStart(3,'0')}`})).filter(row=>row.name.includes(q));
+    // People rows carry what UserDirectoryEntry carries: the picker reads `active` and `source` for its
+    // hint (RADD-1499), and a mock without them wears "Inactive" on every row (RADD-1502). person 050 is
+    // the one inactive row, on the first page, so the hint is asserted rather than tripped over.
+    const all=Array.from({length:125},(_,i)=>({id:`${prefix}-${i+1}`,name:`${prefix} ${String(i+1).padStart(3,'0')}`,...(prefix==='team'?{}:{active:!(prefix==='person'&&i+1===50),source:'local'})})).filter(row=>row.name.includes(q));
     data=all.slice(offset,offset+limit);res.setHeader('X-Total-Count',String(all.length));
    }
   }
@@ -58,6 +61,7 @@ try{
  await change(()=>{enabled.add('auth');enabled.add('teams');});await until(s,()=>s.eval(`document.querySelectorAll('[data-picker] button:disabled').length===0`),'providers activated');
  await open('person');await until(s,()=>text('person 050'),'person first page');assert.equal(await s.eval(`document.querySelectorAll('[role="dialog"] li').length`),50);assert(await text('of 125'));
  assert(await s.eval(`document.querySelector('[role="dialog"]').contains(document.activeElement)`),'modal owns focus');
+ assert.equal(await s.eval(`document.querySelectorAll('[role="dialog"] [data-directory-hint]').length`),1,'exactly one hinted row');assert(await s.eval(`(()=>{const h=document.querySelector('[role="dialog"] [data-directory-hint]');return h.textContent==='Inactive'&&h.closest('button').textContent.includes('person 050');})()`),'the inactive person wears the Inactive hint');checks.push('an inactive person wears the Inactive hint; active rows wear none');
  await s.eval(`document.querySelector('[aria-label="Next people"]').click()`);await until(s,()=>text('person 051'),'second page');assert.equal(requests.at(-1).offset,50);
  await filter('125');await until(s,()=>text('person 125'),'search matches last result');assert.equal(requests.at(-1).offset,0);assert.equal(await s.eval(`document.querySelectorAll('[role="dialog"] li').length`),1);
  await s.screenshot('/tmp/radd-directory-picker.png');await s.click('[role="dialog"] button',t=>t.trim()==='person 125');await until(s,()=>s.eval(`document.querySelector('[data-picker="person"]').textContent.includes('person 125')`),'selection persisted');
