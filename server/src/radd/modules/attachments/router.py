@@ -9,7 +9,6 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import commit_before_streaming, get_session
-from radd.modules.auth import authz
 from radd.modules.auth.deps import Actor, CurrentUser
 
 from radd.exceptions import ForbiddenError
@@ -108,35 +107,7 @@ async def delete_attachment(
     attachment_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> None:
     attachment = await service.get_attachment(session, attachment_id)
-    binding = parents.binding_for(attachment.entity_type)
-    project_id = await binding.project_id_of(session, attachment.entity_id)
-    if project_id is None:
-        # Page attachments: the space's write/admin rule — no project scope for
-        # the attachment atoms to resolve against (RADD-816).
-        if attachment.created_by == user.id:
-            await binding.require_write(session, user, attachment.entity_id)
-        else:
-            await binding.require_admin(session, user, attachment.entity_id)
-    else:
-        # RADD-816: `attachment.delete` = ANYONE's; uploader-own is the Baseline's
-        # `attachment.delete@own`, resolved against this row after parent read.
-        await binding.require_read(session, user, attachment.entity_id)
-        from radd.modules.projects import service as projects_service
-
-        project = await projects_service.get_project(session, project_id)
-        permissions = await authz.effective_permissions(session, user, project=project)
-        relations = authz.relations_held(permissions, authz.Permission.ATTACHMENT_DELETE)
-        allowed = bool(relations) and (
-            authz.RELATION_ANY in relations
-            or authz.relation_holds_row(
-                "attachment",
-                relations,
-                await authz.relation_actor(session, user),
-                attachment,
-            )
-        )
-        if not allowed:
-            raise ForbiddenError("you may only delete your own attachments here")
+    await acl.require_deletable(session, user, attachment)  # the rule MCP shares (RADD-816)
     await service.delete_attachment(session, attachment, actor_id=user.id)
 
 

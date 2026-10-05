@@ -2,6 +2,7 @@
 the MCP methods answered, the builtin tool names, and the protocol revision implemented."""
 
 from enum import IntEnum, StrEnum
+from radd.kernel.mcptools import ToolContentType
 
 # The MCP revision whose semantics we implement (for the subset we support:
 # initialize / notifications/initialized / ping / tools/list / tools/call).
@@ -35,10 +36,9 @@ class McpMethod(StrEnum):
     TOOLS_CALL = "tools/call"
 
 
-class McpContentType(StrEnum):
-    """tools/call result content block types (v1: text only)."""
-
-    TEXT = "text"
+#: tools/call result content block types — the kernel's vocabulary, so a plugin that
+#: returns bytes (`ToolContent`) and the dispatcher that wraps JSON as TEXT agree.
+McpContentType = ToolContentType
 
 
 class McpTool(StrEnum):

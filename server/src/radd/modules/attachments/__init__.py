@@ -14,6 +14,7 @@ from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hook
 from .routing import rules as routing_rules
 from .routing.store import RuleConfigError
 from .service import AttachmentTooLarge
+from . import mcptools
 from .types import AttachmentEvent, RuleType
 
 
@@ -86,6 +87,7 @@ plugin = RaddPlugin(
     description="File attachments on issues and pages, stored on the hosts you configure and routed by rules you set.",
     depends_on=("events", "projects", "auth", "items", "access", "groups", "teams"),
     routers=(router, admin_router),
+    mcp_tools=mcptools.MCP_TOOLS,
     exception_handlers=(
         (AttachmentTooLarge, too_large_handler),
         (RuleConfigError, _rule_config_handler),

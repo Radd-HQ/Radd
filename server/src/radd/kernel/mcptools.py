@@ -1,7 +1,10 @@
 """Shared helpers for MCP tool contributions (RADD-889) — one copy of the paging clamp, so
 two tools cannot end up with different default page sizes."""
 
+import base64
 from collections.abc import Mapping
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from jsonschema import Draft202012Validator
@@ -10,6 +13,47 @@ from jsonschema.exceptions import ValidationError
 # tools/call result shaping (spec 45) — one page budget for every list tool.
 SEARCH_LIMIT_DEFAULT = 25
 SEARCH_LIMIT_MAX = 100
+
+
+class ToolContentType(StrEnum):
+    """tools/call result content block types: a handler's JSON is wrapped as TEXT by the
+    dispatcher; IMAGE and RESOURCE are what a `ToolContent` carries through untouched."""
+
+    TEXT = "text"
+    IMAGE = "image"
+    RESOURCE = "resource"
+
+
+@dataclass(frozen=True)
+class ToolContent:
+    """A handler's result as MCP content blocks instead of a JSON document — for bytes
+    (an image the agent can look at, a file as an embedded resource) that JSON cannot
+    carry. The dispatcher passes `blocks` through as the result's `content`."""
+
+    blocks: tuple[dict[str, Any], ...]
+
+    @staticmethod
+    def text_block(text: str) -> dict[str, Any]:
+        return {"type": ToolContentType.TEXT.value, "text": text}
+
+    @staticmethod
+    def image_block(data: bytes, mime_type: str) -> dict[str, Any]:
+        return {
+            "type": ToolContentType.IMAGE.value,
+            "data": base64.b64encode(data).decode("ascii"),
+            "mimeType": mime_type,
+        }
+
+    @staticmethod
+    def resource_block(uri: str, mime_type: str, data: bytes) -> dict[str, Any]:
+        return {
+            "type": ToolContentType.RESOURCE.value,
+            "resource": {
+                "uri": uri,
+                "mimeType": mime_type,
+                "blob": base64.b64encode(data).decode("ascii"),
+            },
+        }
 
 
 def limit_arg(args: Mapping[str, Any]) -> int:

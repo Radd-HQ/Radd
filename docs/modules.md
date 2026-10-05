@@ -479,12 +479,12 @@ Owns `search_index` (one row per item: key, title, description, PUBLIC comment t
 
 File attachments on issues and pages, stored on the hosts you configure and routed by rules you set.
 
-Owns polymorphic `attachments` (an `(entity_type, entity_id)` parent), `storage_hosts` and `storage_rules`, an ordered routing chain whose first answering rule wins and whose end is the default host. A module makes its rows attachable with `parents.register_parent`; cleanup of rows, grants and bytes derives from those bindings (`gc.py`). Every download goes through `service.download_response` after `acl.attachment_readable`; only non-SVG images render inline. Importers use the blob API (`service.save_blob`/`read_blob`/`remove_blob`). Trap: the parent type is a wire value the SPA mirrors in `web/src/lib/types/attachments.ts`; a mismatch compiles on both sides and 422s every upload.
+Owns polymorphic `attachments` (an `(entity_type, entity_id)` parent), `storage_hosts` and `storage_rules`, an ordered routing chain whose first answering rule wins, ending at the default host. A module makes its rows attachable with `parents.register_parent`; cleanup of rows, grants and bytes derives from those bindings (`gc.py`). Downloads go through `service.download_response` after `acl.attachment_readable`; `acl.require_deletable` is the delete rule REST and MCP share. `mcptools.py` lists, uploads (base64 under `mcp_attachment_max_bytes`), downloads (image/resource blocks) and deletes through the same bindings. Trap: the parent type is a wire value the SPA mirrors in `web/src/lib/types/attachments.ts`; a mismatch 422s every upload.
 
 - **Events:** `attachment.created`, `attachment.deleted`, `storage_host.created`, `storage_host.updated`, `storage_host.deleted`, `storage_rule.created`, `storage_rule.updated`, `storage_rule.deleted`
 - **Permissions:** `attachment.create (project)`, `attachment.delete (project)`
 - **Access:** relations `attachment@own`; relation domains `attachment.create → item`; access resources `attachment`
-- **Contributes:** socket providers `storage_backend: filesystem`, `storage_backend: s3`, `storage_routing_rule: user_choice`, `storage_routing_rule: cidr`; capabilities `storage`
+- **Contributes:** MCP tools `list_attachments`, `upload_attachment`, `download_attachment`, `delete_attachment`; socket providers `storage_backend: filesystem`, `storage_backend: s3`, `storage_routing_rule: user_choice`, `storage_routing_rule: cidr`; capabilities `storage`
 - **Data:** audit links `storage_host`, `storage_rule`; cascades `attachments:form_submission`, `attachments:item`, `attachments:page`
 
 ### avatars

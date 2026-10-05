@@ -24,7 +24,7 @@ from radd import __version__
 from radd.config import settings
 from radd.db import SessionLocal, commit_before_streaming, get_session
 from radd.exceptions import RaddError, UnauthorizedError
-from radd.kernel.mcptools import InvalidArgumentsError
+from radd.kernel.mcptools import InvalidArgumentsError, ToolContent
 from radd.modules.auth.deps import OptionalUser
 from radd.modules.auth.models import User
 
@@ -133,6 +133,9 @@ async def _tools_call(session: AsyncSession, user: User, params: dict[str, Any])
         raise JsonRpcError(
             JsonRpcErrorCode.INTERNAL_ERROR, f"tool '{name}' failed: {type(exc).__name__}: {exc}"
         ) from None
+    if isinstance(result, ToolContent):
+        # Bytes the handler already shaped (an image, an embedded resource): as they are.
+        return {"content": list(result.blocks), "isError": False}
     return {
         "content": [
             {

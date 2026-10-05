@@ -354,6 +354,9 @@ class Settings(BaseSettings):
     # degrades from an enum to a plain string — a 300-entry enum costs the agent
     # more context than the precision buys it.
     mcp_project_enum_max: int = 25
+    #: The largest attachment the MCP tools carry inline (base64 in a JSON-RPC body), in
+    #: either direction. Anything larger is told to use the multipart REST route instead.
+    mcp_attachment_max_bytes: int = 25 * 1024 * 1024
     # RADD-740: how often the tools/list_changed stream re-checks the caller's
     # catalog, and how often it emits a keepalive comment so proxies do not drop
     # an idle connection. Seconds.

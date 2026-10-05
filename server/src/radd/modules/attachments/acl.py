@@ -14,6 +14,7 @@ from radd.modules.access import registry as access_registry
 from radd.modules.access import resolution
 from radd.modules.access import service as access_service
 from radd.modules.access.types import Access, GrantSubject
+from radd.modules.auth import authz
 from radd.modules.auth.models import User
 
 from . import parents
@@ -187,3 +188,32 @@ async def readable_map(
             True,
         )
     return out
+
+
+async def require_deletable(session: AsyncSession, user: User, attachment: Attachment) -> None:
+    """The one delete rule, for REST and MCP alike. Page attachments: the space's write
+    rule for your own, admin for anyone's — no project scope for the attachment atoms to
+    resolve against. Item attachments: `attachment.delete` = anyone's; uploader-own is the
+    Baseline's `attachment.delete@own`, resolved against this row after parent read."""
+    binding = parents.binding_for(attachment.entity_type)
+    project_id = await binding.project_id_of(session, attachment.entity_id)
+    if project_id is None:
+        if attachment.created_by == user.id:
+            await binding.require_write(session, user, attachment.entity_id)
+        else:
+            await binding.require_admin(session, user, attachment.entity_id)
+        return
+    await binding.require_read(session, user, attachment.entity_id)
+    from radd.modules.projects import service as projects_service
+
+    project = await projects_service.get_project(session, project_id)
+    permissions = await authz.effective_permissions(session, user, project=project)
+    relations = authz.relations_held(permissions, authz.Permission.ATTACHMENT_DELETE)
+    allowed = bool(relations) and (
+        authz.RELATION_ANY in relations
+        or authz.relation_holds_row(
+            "attachment", relations, await authz.relation_actor(session, user), attachment
+        )
+    )
+    if not allowed:
+        raise ForbiddenError("you may only delete your own attachments here")

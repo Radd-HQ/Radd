@@ -159,7 +159,7 @@ Owns `search_index` (one row per item: key, title, description, PUBLIC comment t
 
 ### attachments
 
-Owns polymorphic `attachments` (an `(entity_type, entity_id)` parent), `storage_hosts` and `storage_rules`, an ordered routing chain whose first answering rule wins and whose end is the default host. A module makes its rows attachable with `parents.register_parent`; cleanup of rows, grants and bytes derives from those bindings (`gc.py`). Every download goes through `service.download_response` after `acl.attachment_readable`; only non-SVG images render inline. Importers use the blob API (`service.save_blob`/`read_blob`/`remove_blob`). Trap: the parent type is a wire value the SPA mirrors in `web/src/lib/types/attachments.ts`; a mismatch compiles on both sides and 422s every upload.
+Owns polymorphic `attachments` (an `(entity_type, entity_id)` parent), `storage_hosts` and `storage_rules`, an ordered routing chain whose first answering rule wins, ending at the default host. A module makes its rows attachable with `parents.register_parent`; cleanup of rows, grants and bytes derives from those bindings (`gc.py`). Downloads go through `service.download_response` after `acl.attachment_readable`; `acl.require_deletable` is the delete rule REST and MCP share. `mcptools.py` lists, uploads (base64 under `mcp_attachment_max_bytes`), downloads (image/resource blocks) and deletes through the same bindings. Trap: the parent type is a wire value the SPA mirrors in `web/src/lib/types/attachments.ts`; a mismatch 422s every upload.
 
 ### avatars
 
