@@ -16,6 +16,38 @@ Moved here from the CLAUDE.md preamble on 2026-09-27 (RADD-1441): one entry per 
 preamble narrated it at the time, so the working agreement stays rules-only. The tracker's RADD project
 and `docs/specs/` are the primary record; these entries are the per-wave summary.
 
+### Roadmap feedback round — epic RADD-1504 (2026-10-20), on main, unreleased
+
+A colleague's first real session with the roadmap on the Cinesite instance came back as eight points: three
+bugs, three UX asks, two design debates. Read against the code, every one had a concrete mechanism, and
+the "data loss" one was the ugliest: Save was one PATCH per item, children first and the epic last, stopping
+at the first refusal — exactly "one child saved, the epic's dates gone". Seven issues, one browser proof
+(`web/scripts/roadmap-feedback-proof.mjs`, 32 measured checks), three node test files, one pytest.
+- **RADD-1505**: `PATCH /items` applies a list of per-item patches in ONE transaction and re-raises the
+  first refusal with the item's key in front; Save sends one request, awaits the item refetch before
+  clearing the draft (inserted rows used to blink out for the length of the paged stream), and parks a
+  refusal beside the button with the draft intact.
+- **RADD-1506**: rows the draft inserted were frozen snapshots, so a dependency drawn from one never showed
+  until reload; the surface now fetches the drafted keys live (item-tagged) and folds the draft over
+  base ∪ fresh.
+- **RADD-1507**: the tray's drop target was the rows block; it is the whole pane now, x alone picks the
+  day, and the gutter lands on the first visible day.
+- **RADD-1508**: child rows had a 2px indent (padding but no chevron slot); 24px plus a tree guide now,
+  and the group box is tinted with the epic's category colour. The proof caught a year-old bug on the
+  way: `CATEGORY_CHART_COLORS` are `var(--chart-*)` tokens, so the bars' `${color}33` idiom was invalid
+  CSS and **every epic bar has drawn with no fill since RADD-900** — `color-mix` now, both places.
+- **RADD-1509**: bars under 90px drew nothing, and a one-week bar at the default zoom is 63px; a compact
+  tier (icon + avatar) from 48px. The never-built "title outside the bar" promise is dropped.
+- **RADD-1510**: auto-schedule and bring-children-in only GROW the epic now (`epicGrowPatch`, the drag
+  convention; Fit to children stays the inward verb); a new "Spread children across the epic" verb gives
+  the even layout the feedback asked for, labelled as a layout, not an estimate; a plan's patches and rank
+  chain are one `compound` draft op (one Undo), gated on rank-ordered views — RADD-1433's two boxes.
+- **RADD-1511**: a per-view Flat toggle (no epic rows, parent chipped on every leaf) and cycle bands on the
+  axis (`model/cycles.ts`), the cycle-centric reading without a second row grouping.
+Traps: a drop earlier than every bar re-pads the domain by whole weeks and shifts every index (compare to
+the today line in proofs); the Bash harness here is zsh, not fish; pytest needs a reachable Postgres
+(`RADD_TEST_DATABASE_URL` at the clean stack's :5457 when the working one is down).
+
 ### Cross-project hierarchy, second pass — epic RADD-1489 (2026-09-29), shipped as v0.50.0
 
 A discussion of "a DEV epic with TD issues" found the model already allowed it (spec 80, from Hussein's own

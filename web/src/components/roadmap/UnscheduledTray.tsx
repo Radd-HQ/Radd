@@ -182,6 +182,7 @@ export function UnscheduledTray({
                   role="button"
                   tabIndex={0}
                   draggable={canEdit}
+                  data-tray-item={item.key}
                   onDragStart={(event) => {
                     event.dataTransfer.effectAllowed = "move";
                     onDragStart(item);
