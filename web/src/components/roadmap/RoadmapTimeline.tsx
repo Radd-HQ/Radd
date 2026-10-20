@@ -16,6 +16,7 @@ import {
   ROADMAP_HOVER_CARD_DELAY_MS,
 } from "../../lib/constants";
 import type { CardAnchor } from "../../lib/floating-position";
+import { CATEGORY_CHART_COLORS } from "../../lib/meta";
 import type { Item, RollupResponse, TimelogBatchResponse } from "../../lib/types";
 import { BarRow } from "./BarRow";
 import { Connectors, type ConnectorEdge, type RubberBand } from "./Connectors";
@@ -46,6 +47,10 @@ import {
 /** Hover card anchoring: bottom-right of the CURSOR (offset both axes; the
  *  card flips above via anchor.top when the viewport bottom is near). */
 const HOVER_CURSOR_OFFSET_PX = 14;
+/** Epic container boxes carry their epic's category colour at this hex
+ *  alpha (RADD-1508) — faint enough that bars and text sit on it untouched,
+ *  strong enough to tell neighbouring groups apart without squinting. */
+const ROADMAP_REGION_TINT_ALPHA = "1f";
 
 const EXTEND_CAPS = [
   { direction: ExtendDirection.before, when: "earlier", side: "left-0", border: "border-r" },
@@ -324,6 +329,10 @@ export function RoadmapTimeline({
       /** Region right edge in px — the max CLAMPED bar edge among members,
        *  so a min-width bar never pokes past its container box. */
       rightX: number;
+      /** The epic's category chart colour — the box is tinted with it at low
+       *  alpha so adjacent groups differ and each reads as ITS epic's
+       *  (RADD-1508; the bar itself uses the same colour at 20%). */
+      color: string;
     }[] = [];
     visibleRows.forEach((row, index) => {
       if (row.rowKind !== RoadmapRowKind.epic) return;
@@ -347,6 +356,7 @@ export function RoadmapTimeline({
         rowCount: childCount + 1,
         startIndex,
         rightX,
+        color: CATEGORY_CHART_COLORS[row.item.state.category],
       });
     });
     return regions;
@@ -549,12 +559,14 @@ export function RoadmapTimeline({
               return (
                 <div
                   key={region.epicId}
-                  className="absolute rounded-lg border border-strong/40 bg-elevated/15"
+                  data-epic-region={region.epicId}
+                  className="absolute rounded-lg border border-strong/70"
                   style={{
                     left: (region.startIndex + delta) * dayWidth,
                     width: region.rightX - region.startIndex * dayWidth,
                     top: region.rowIndex * ROADMAP_ROW_H,
                     height: region.rowCount * ROADMAP_ROW_H,
+                    backgroundColor: `${region.color}${ROADMAP_REGION_TINT_ALPHA}`,
                   }}
                 />
               );

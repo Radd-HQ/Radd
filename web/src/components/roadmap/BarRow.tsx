@@ -48,6 +48,9 @@ const DARK_FILL_CATEGORIES: ReadonlySet<string> = new Set<string>([
 const BAR_TRAIL_GAP_PX = 6;
 /** Extra clearance between the ○ handle's hit box and the depends chip. */
 const BAR_TRAIL_HANDLE_CLEARANCE_PX = 2;
+/** The child rows' tree guide x inside the label cell: the centre of the
+ *  epic's chevron slot (8px `pl-2` + half the 16px slot). */
+const ROADMAP_TREE_GUIDE_X = 16;
 /** True if the cursor is in the top half of the event's target (row reorder,
  *  spec 82 — the ViewList idiom: top half = insert before). */
 function isTopHalf(event: ReactDragEvent): boolean {
@@ -268,6 +271,7 @@ export function BarRow({
         } ${isChild ? "pl-8" : "pl-2"}${
           canReorder ? " cursor-grab active:cursor-grabbing" : ""
         }`}
+        data-row-kind={rowKind}
       >
         {isEpic && row.scheduledChildCount > 0 ? (
           <button
@@ -280,7 +284,19 @@ export function BarRow({
             <ChevronIcon size={14} aria-hidden />
           </button>
         ) : (
-          !isChild && <span className="w-4 shrink-0" aria-hidden />
+          // Every non-chevron row keeps the chevron's slot, children included:
+          // without it a child's badge sat 2px right of its epic's (RADD-1508).
+          <span className="w-4 shrink-0" aria-hidden />
+        )}
+        {isChild && (
+          // Tree guide (RADD-1508): a rail under the epic's chevron, down the
+          // whole child block, so the indent reads as nesting at a glance.
+          <span
+            className="pointer-events-none absolute inset-y-0 border-l border-strong/60"
+            style={{ left: ROADMAP_TREE_GUIDE_X }}
+            data-tree-guide
+            aria-hidden
+          />
         )}
         <KindBadge kind={item.kind} size={13} />
         <ItemKeyLink itemKey={item.key} />
