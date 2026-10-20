@@ -51,10 +51,12 @@ import {
 /** Hover card anchoring: bottom-right of the CURSOR (offset both axes; the
  *  card flips above via anchor.top when the viewport bottom is near). */
 const HOVER_CURSOR_OFFSET_PX = 14;
-/** Epic container boxes carry their epic's category colour at this hex
- *  alpha (RADD-1508) — faint enough that bars and text sit on it untouched,
- *  strong enough to tell neighbouring groups apart without squinting. */
-const ROADMAP_REGION_TINT_ALPHA = "1f";
+/** Epic container boxes carry their epic's category colour at this strength
+ *  (RADD-1508) — faint enough that bars and text sit on it untouched, strong
+ *  enough to tell neighbouring groups apart without squinting. Mixed with
+ *  color-mix because the colour is a `var(--chart-*)` token, which takes no
+ *  hex-alpha suffix. */
+const ROADMAP_REGION_TINT_PERCENT = 12;
 
 const EXTEND_CAPS = [
   { direction: ExtendDirection.before, when: "earlier", side: "left-0", border: "border-r" },
@@ -620,7 +622,7 @@ export function RoadmapTimeline({
                     width: region.rightX - region.startIndex * dayWidth,
                     top: region.rowIndex * ROADMAP_ROW_H,
                     height: region.rowCount * ROADMAP_ROW_H,
-                    backgroundColor: `${region.color}${ROADMAP_REGION_TINT_ALPHA}`,
+                    backgroundColor: `color-mix(in srgb, ${region.color} ${ROADMAP_REGION_TINT_PERCENT}%, transparent)`,
                   }}
                 />
               );
@@ -715,6 +717,7 @@ export function RoadmapTimeline({
           <div
             className="pointer-events-none absolute top-0 z-20"
             style={{ left: labelWidth, width: innerWidth }}
+            data-roadmap-connectors
           >
             <Connectors
               rows={visibleRows}

@@ -416,7 +416,11 @@ export function BarRow({
             left,
             width,
             height: barHeight,
-            backgroundColor: isEpic ? `${color}33` : color,
+            // The category colours are `var(--chart-*)` tokens (RADD-900), so
+            // a hex-alpha suffix on them is invalid CSS: `${color}33` had left
+            // every epic bar with NO fill at all — found by the RADD-1508
+            // proof. color-mix is how a token takes an alpha.
+            backgroundColor: isEpic ? `color-mix(in srgb, ${color} 20%, transparent)` : color,
             border: isEpic ? `1.5px ${row.derived ? "dashed" : "solid"} ${color}` : undefined,
             touchAction: draggable ? "none" : undefined,
           }}
