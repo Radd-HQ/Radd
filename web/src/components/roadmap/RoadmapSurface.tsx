@@ -20,6 +20,7 @@ import {
   Gem,
   History,
   Redo2,
+  Rows3,
   Undo2,
   ZoomIn,
   ZoomOut,
@@ -27,8 +28,9 @@ import {
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { startHorizontalDrag } from "../../lib/drag";
-import { useDurationConfig, useIsAuthenticated } from "../../lib/hooks";
+import { useDurationConfig, useIsAuthenticated, useStoredFlag } from "../../lib/hooks";
 import {
+  cyclesQuery,
   projectTimeloggingQuery,
   roadmapDraftedItemsQuery,
   timelogBatchChunkedQuery,
@@ -45,6 +47,7 @@ import {
   ROADMAP_LABEL_MAX_WIDTH,
   ROADMAP_LABEL_MIN_WIDTH,
   ROADMAP_LABEL_WIDTH,
+  roadmapFlatStorageKey,
   roadmapLabelWidthStorageKey,
   ROADMAP_PROGRESS_STALE_MS,
   ROADMAP_ZOOM_LEVELS,
@@ -67,9 +70,11 @@ import {
   autoSchedulePlan,
   blocksEdges,
   buildRoadmapModel,
+  cycleBands,
   durationDaysFromEstimate,
   importChildrenPlan,
   parseDay,
+  roadmapAxisHeight,
   spreadChildrenPlan,
   type RoadmapExtension,
   type RoadmapRow,
@@ -222,10 +227,18 @@ export function RoadmapSurface({
       return soloIds.has(item.id) || (item.parent && soloIds.has(item.parent.id));
     });
   }, [draftedItems, soloIds, epicsOnly]);
+  // Flat (RADD-1511): no epic rows, every scheduled issue its own row with
+  // its epic as a chip — the cycle-centric reading. Persisted per view.
+  const [flat, toggleFlat] = useStoredFlag(roadmapFlatStorageKey(view.id));
   const model = useMemo(
-    () => buildRoadmapModel(modelItems, todayIso(), extension),
-    [modelItems, extension],
+    () => buildRoadmapModel(modelItems, todayIso(), extension, flat),
+    [modelItems, extension, flat],
   );
+  // Cycle bands (RADD-1511): the dated cycles this project plans with (every
+  // cycle, on an all-projects roadmap) as labelled spans on the axis.
+  const authenticated = useIsAuthenticated();
+  const cycles = useQuery({ ...cyclesQuery(undefined, project?.id), enabled: authenticated });
+  const bands = useMemo(() => cycleBands(cycles.data ?? [], model), [cycles.data, model]);
 
   const editing = useRoadmapEditing(view, model, draft, baseItems);
   const [confirmDialog, confirm] = useConfirm();
@@ -293,7 +306,7 @@ export function RoadmapSurface({
   }, [model.rows]);
   const timelogBatch = useQuery({
     ...timelogBatchChunkedQuery(timelogItemIds),
-    enabled: useIsAuthenticated() && timeloggingOn && timelogItemIds.length > 0,
+    enabled: authenticated && timeloggingOn && timelogItemIds.length > 0,
     staleTime: ROADMAP_PROGRESS_STALE_MS,
   });
   // Epic tint fractions (done/total children) — the spec-76 rollup batch over
@@ -561,11 +574,12 @@ export function RoadmapSurface({
     requestAnimationFrame(() => {
       el.scrollLeft = Math.max(0, minStart * targetW - (visible - spanDays * targetW) / 2);
       if (Number.isFinite(firstRowIndex)) {
-        // Rows start after the 40px axis header in the scroll content.
-        el.scrollTop = Math.max(0, 40 + firstRowIndex * ROADMAP_ROW_H - el.clientHeight / 2);
+        // Rows start after the axis header (plus the cycle strip) in the scroll content.
+        const header = roadmapAxisHeight(bands.length > 0);
+        el.scrollTop = Math.max(0, header + firstRowIndex * ROADMAP_ROW_H - el.clientHeight / 2);
       }
     });
-  }, [scrollRef, selectedIds, model.rows, visibleRows, labelWidth]);
+  }, [scrollRef, selectedIds, model.rows, visibleRows, labelWidth, bands.length]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -733,6 +747,18 @@ export function RoadmapSurface({
           Epics only
         </ToolbarToggle>
         <ToolbarToggle
+          pressed={flat}
+          onClick={toggleFlat}
+          icon={Rows3}
+          title={
+            flat
+              ? "Flat is on: epic rows are hidden and every scheduled issue is its own row, its epic as a chip — the cycle-centric reading. Click to group under epics again."
+              : "Flat: hide the epic rows and list only the scheduled issues, each with its epic as a chip — what a cycle-centric roadmap reads like. Pair it with a cycle filter in the view's query."
+          }
+        >
+          Flat
+        </ToolbarToggle>
+        <ToolbarToggle
           pressed={showClosed}
           onClick={onToggleShowClosed}
           icon={History}
@@ -831,6 +857,7 @@ export function RoadmapSurface({
             <RoadmapTimeline
               model={model}
               visibleRows={visibleRows}
+              bands={bands}
               dayWidth={dayWidth}
               labelWidth={labelWidth}
               onLabelResizeStart={startLabelResize}

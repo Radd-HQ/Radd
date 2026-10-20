@@ -37,7 +37,7 @@ import {
   roadmapMembersOnlyStorageKey,
   roadmapShowClosedStorageKey, ITEMS_PAGE_SIZES } from "../lib/constants";
 import { downloadCsv, itemsToCsv } from "../lib/csv";
-import { useCurrentUser, useKeyboardShortcut, usePermissions, usePointsEnabled, useAnonymousBounce, useIsAuthenticated, useItemsPageLimit } from "../lib/hooks";
+import { useCurrentUser, useKeyboardShortcut, usePermissions, usePointsEnabled, useAnonymousBounce, useIsAuthenticated, useItemsPageLimit, useStoredFlag } from "../lib/hooks";
 import { cyclesQuery, infiniteViewItemsQuery, itemIdsQuery, itemsCountQuery, pagedViewItemsQuery, queryKeys, roadmapMembersQuery, statesQuery, useTimelogBatches, usersQuery, viewQuery as viewDefinitionQuery, allStatesQuery, stateCategoriesQuery } from "../lib/queries";
 import { pushToast } from "../lib/toast";
 import { useReorderItem, useToggleStar, useUpdateItemInView } from "../lib/item-mutations";
@@ -102,21 +102,6 @@ import { CycleModal } from "./settings/cycles";
 import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
 import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
 import { FieldType } from "@radd-plugin-ui/fields/types";
-
-/** A localStorage-backed on/off flag ("1"/"0"), re-read when the key changes. */
-function useStoredFlag(storageKey: string): [boolean, () => void] {
-  const [on, setOn] = useState(() => window.localStorage.getItem(storageKey) === "1");
-  useEffect(() => {
-    setOn(window.localStorage.getItem(storageKey) === "1");
-  }, [storageKey]);
-  const toggle = () => {
-    setOn((current) => {
-      window.localStorage.setItem(storageKey, current ? "0" : "1");
-      return !current;
-    });
-  };
-  return [on, toggle];
-}
 
 /**
  * Saved-view page (specs 09/11): `/p/$projectKey/v/$viewId` and the

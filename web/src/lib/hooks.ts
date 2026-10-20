@@ -59,6 +59,22 @@ export function useItemsPageLimit(): [number, (size: number) => void] {
   return [stored ?? (mobile ? ITEMS_PAGE_LIMIT_PHONE : ITEMS_PAGE_LIMIT), set];
 }
 
+/** A localStorage-backed on/off flag ("1"/"0"), re-read when the key changes —
+ *  the per-view roadmap toggles (Show closed, Epics only, Flat). */
+export function useStoredFlag(storageKey: string): [boolean, () => void] {
+  const [on, setOn] = useState(() => window.localStorage.getItem(storageKey) === "1");
+  useEffect(() => {
+    setOn(window.localStorage.getItem(storageKey) === "1");
+  }, [storageKey]);
+  const toggle = useCallback(() => {
+    setOn((current) => {
+      window.localStorage.setItem(storageKey, current ? "0" : "1");
+      return !current;
+    });
+  }, [storageKey]);
+  return [on, toggle];
+}
+
 /** Spec 121: a real account is signed in (not the anonymous principal). */
 export function useIsAuthenticated(): boolean {
   return useAuthState()?.status === AuthStatus.authenticated;

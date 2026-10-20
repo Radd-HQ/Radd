@@ -110,10 +110,15 @@ export interface RoadmapExtension {
 export const NO_EXTENSION: RoadmapExtension = { extendBeforeDays: 0, extendAfterDays: 0 };
 
 export function buildRoadmapModel(
-  items: Item[],
+  source: Item[],
   today: string = todayIso(),
   extension: RoadmapExtension = NO_EXTENSION,
+  /** Flat (RADD-1511): no epic rows at all — every scheduled issue is a
+   *  standalone row in fetch order, its epic named by a chip. With no loaded
+   *  epic to nest under, the ordinary path yields exactly that. */
+  flat = false,
 ): RoadmapModel {
+  const items = flat ? source.filter((item) => item.kind !== ItemKind.epic) : source;
   const epics = items.filter((item) => item.kind === ItemKind.epic);
   const epicIds = new Set(epics.map((epic) => epic.id));
   const childrenByEpic = new Map<string, Item[]>();

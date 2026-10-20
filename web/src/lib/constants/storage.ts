@@ -46,6 +46,11 @@ export const roadmapShowClosedStorageKey = (viewId: string) =>
 export const roadmapEpicsOnlyStorageKey = (viewId: string) =>
   `radd.roadmap.${viewId}.epicsOnly`;
 
+/** Roadmap "Flat" toggle (RADD-1511): on = no epic rows, every scheduled
+ *  issue its own row with its epic as a chip — the cycle-centric reading.
+ *  Per view, like Epics only. */
+export const roadmapFlatStorageKey = (viewId: string) => `radd.roadmap.${viewId}.flat`;
+
 /** Roadmap Members/All toggle OVERRIDE ("1"/"0"; unset = derive: members-only
  *  whenever the view has members). Per view. */
 export const roadmapMembersOnlyStorageKey = (viewId: string) =>

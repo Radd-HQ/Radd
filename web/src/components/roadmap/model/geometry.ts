@@ -11,6 +11,16 @@ const ROADMAP_EPIC_BAR_H = 34;
 const ROADMAP_ROW_PAD_Y = 5;
 /** Row pitch — label cells, lanes, connector Y math, and the drop lane. */
 export const ROADMAP_ROW_H = ROADMAP_EPIC_BAR_H + ROADMAP_ROW_PAD_Y * 2;
+/** The sticky axis header (months + week ticks). */
+export const ROADMAP_AXIS_H = 40;
+/** The cycle strip under the axis (RADD-1511): one labelled band per dated
+ *  cycle; present only when a cycle overlaps the domain. */
+export const ROADMAP_CYCLE_STRIP_H = 18;
+
+/** The header's height — rows start below it in the scroll content. */
+export function roadmapAxisHeight(hasCycleStrip: boolean): number {
+  return ROADMAP_AXIS_H + (hasCycleStrip ? ROADMAP_CYCLE_STRIP_H : 0);
+}
 /** Bars at least this wide draw their FULL info (title + priority + assignee)
  *  inside the bar. */
 export const ROADMAP_BAR_INFO_MIN_PX = 90;

@@ -309,6 +309,18 @@ export function BarRow({
         >
           {item.title}
         </span>
+        {rowKind === RoadmapRowKind.standalone && item.parent && (
+          // A standalone row with a parent that is not drawn above it — every
+          // row in Flat mode (RADD-1511), or a child whose epic the query
+          // left out — names it, so the epic stays one glance away.
+          <span
+            data-parent-chip={item.parent.key}
+            title={`Part of ${item.parent.key} — ${item.parent.title}`}
+            className="flex shrink-0 items-center rounded border border-subtle px-1 text-[10px] leading-4 text-fg-muted"
+          >
+            <ItemKeyLink itemKey={item.parent.key} className="font-mono hover:text-accent-text hover:underline" />
+          </span>
+        )}
         {onToggleMember && rowKind !== RoadmapRowKind.child && (
           <button
             type="button"

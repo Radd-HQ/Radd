@@ -22,6 +22,8 @@ import { BarRow } from "./BarRow";
 import { Connectors, type ConnectorEdge, type RubberBand } from "./Connectors";
 import { RoadmapHoverCard } from "./RoadmapHoverCard";
 import {
+  ROADMAP_AXIS_H,
+  ROADMAP_CYCLE_STRIP_H,
   ROADMAP_ROW_H,
   RoadmapRowKind,
   barRenderRightX,
@@ -29,8 +31,10 @@ import {
   dayFromX,
   daysBetween,
   isRoadmapSibling,
+  roadmapAxisHeight,
   rowBarProgress,
   rowDropFromY,
+  type RoadmapCycleBand,
   type RoadmapModel,
   type RoadmapRow,
   type RoadmapSpan,
@@ -61,6 +65,9 @@ interface RoadmapTimelineProps {
   model: RoadmapModel;
   /** Rows with collapsed epics' children filtered out, in render order. */
   visibleRows: RoadmapRow[];
+  /** Dated cycles overlapping the domain (RADD-1511): a labelled strip under
+   *  the axis and a faint band down the body per cycle. Empty = no strip. */
+  bands: RoadmapCycleBand[];
   dayWidth: number;
   /** LIVE label-gutter width (resizable, persisted per view). */
   labelWidth: number;
@@ -115,6 +122,7 @@ interface RoadmapTimelineProps {
 export function RoadmapTimeline({
   model,
   visibleRows,
+  bands,
   dayWidth,
   labelWidth,
   onLabelResizeStart,
@@ -515,7 +523,30 @@ export function RoadmapTimeline({
         >
           Timeline
         </div>
-        <div className="relative" style={{ width: innerWidth, height: 40 }}>
+        <div
+          className="relative"
+          style={{ width: innerWidth, height: roadmapAxisHeight(bands.length > 0) }}
+        >
+          {/* Cycle strip (RADD-1511): one labelled band per dated cycle, under
+              the week ticks — the axis already IS the time, so cycles are
+              marks on it rather than a second row grouping. */}
+          {bands.map((band) => (
+            <span
+              key={band.id}
+              data-cycle-band={band.id}
+              title={`${band.name} · ${band.startIso} → ${band.endIso}`}
+              className="absolute truncate border-x border-accent/50 bg-accent/15 px-1 text-[10px] text-fg-secondary"
+              style={{
+                top: ROADMAP_AXIS_H,
+                height: ROADMAP_CYCLE_STRIP_H,
+                lineHeight: `${ROADMAP_CYCLE_STRIP_H}px`,
+                left: band.startIndex * dayWidth,
+                width: (band.endIndex - band.startIndex + 1) * dayWidth,
+              }}
+            >
+              {band.name}
+            </span>
+          ))}
           {model.months.map((month) => (
             <span
               key={`m-${month.index}`}
@@ -600,6 +631,17 @@ export function RoadmapTimeline({
           className="pointer-events-none absolute inset-y-0 z-0"
           style={{ left: labelWidth, width: innerWidth }}
         >
+          {bands.map((band) => (
+            <div
+              key={`b-${band.id}`}
+              data-cycle-band-body={band.id}
+              className="absolute inset-y-0 border-x border-dashed border-accent/30 bg-accent/5"
+              style={{
+                left: band.startIndex * dayWidth,
+                width: (band.endIndex - band.startIndex + 1) * dayWidth,
+              }}
+            />
+          ))}
           {weekTicks.map((week) => (
             <div
               key={`g-${week.index}`}
