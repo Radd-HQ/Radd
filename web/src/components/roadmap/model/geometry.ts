@@ -11,9 +11,27 @@ const ROADMAP_EPIC_BAR_H = 34;
 const ROADMAP_ROW_PAD_Y = 5;
 /** Row pitch — label cells, lanes, connector Y math, and the drop lane. */
 export const ROADMAP_ROW_H = ROADMAP_EPIC_BAR_H + ROADMAP_ROW_PAD_Y * 2;
-/** Bars at least this wide draw their info (title + priority + assignee)
- *  INSIDE the bar; narrower bars put the title outside, to the right. */
+/** Bars at least this wide draw their FULL info (title + priority + assignee)
+ *  inside the bar. */
 export const ROADMAP_BAR_INFO_MIN_PX = 90;
+/** Bars at least this wide (under the full tier) draw the COMPACT tier: the
+ *  priority icon and the assignee avatar in their pill, centred, no title.
+ *  At the default zoom a one-week bar is 63px, so a blank bar was the common
+ *  case, not the edge (RADD-1509). The pill is 4+14+4+20+4 = 46px, hence 48.
+ *  Narrower bars draw nothing — the hover card covers them; a title OUTSIDE
+ *  the bar was considered and dropped: the sticky label gutter already names
+ *  every row, and an outside title collides with the next bar. */
+export const ROADMAP_BAR_COMPACT_MIN_PX = 48;
+
+export const RoadmapBarInfoTier = { full: "full", compact: "compact", none: "none" } as const;
+export type RoadmapBarInfoTierValue = (typeof RoadmapBarInfoTier)[keyof typeof RoadmapBarInfoTier];
+
+/** Which in-bar info tier a rendered width earns. */
+export function barInfoTier(renderWidth: number): RoadmapBarInfoTierValue {
+  if (renderWidth >= ROADMAP_BAR_INFO_MIN_PX) return RoadmapBarInfoTier.full;
+  if (renderWidth >= ROADMAP_BAR_COMPACT_MIN_PX) return RoadmapBarInfoTier.compact;
+  return RoadmapBarInfoTier.none;
+}
 
 /** The bar height for a row — epics are taller than leaves. */
 export function roadmapBarHeight(isEpic: boolean): number {

@@ -18,11 +18,12 @@ import { ItemLinkType, StateCategory } from "../../lib/types";
 import { AssigneeAvatar, ItemKeyLink, KindBadge, PriorityIcon } from "../items/ItemBadges";
 import {
   DragEdge,
-  ROADMAP_BAR_INFO_MIN_PX,
   ROADMAP_LINK_HANDLE_HIT_PX,
   ROADMAP_ROW_H,
+  RoadmapBarInfoTier,
   RoadmapRowKind,
   barHitZones,
+  barInfoTier,
   barRenderWidth,
   isoFromDay,
   roadmapBarHeight,
@@ -158,8 +159,8 @@ export function BarRow({
   const zones = barHitZones(width);
   const color = CATEGORY_CHART_COLORS[item.state.category];
   const barHeight = roadmapBarHeight(isEpic);
-  // In-bar info needs room; narrower bars rely on the hover card instead.
-  const showInBarInfo = width >= ROADMAP_BAR_INFO_MIN_PX;
+  // In-bar info by width (RADD-1509): full, compact (icon + avatar), none.
+  const infoTier = barInfoTier(width);
   // Leaf bars are SOLID category fills: acted-on categories are light and take
   // dark text; terminal states (slate) and translucent epics take light text.
   // The same split picks the progress band colour.
@@ -377,6 +378,7 @@ export function BarRow({
         <button
           type="button"
           {...{ [BAR_ITEM_ATTR]: item.id }}
+          data-bar-info={infoTier}
           {...barGestures}
           onClick={() => {
             onHoverEnd();
@@ -424,16 +426,30 @@ export function BarRow({
               aria-hidden
             />
           )}
-          {/* In-bar info: truncated title + priority/assignee, only when the
-              bar has room; pointer-events-none keeps every gesture (move,
-              edge resize, link-drop targeting) on the bar itself. */}
-          {showInBarInfo && (
+          {/* In-bar info by tier: full = truncated title + the priority/
+              assignee pill; compact = the pill alone, centred; none below
+              that. pointer-events-none keeps every gesture (move, edge
+              resize, link-drop targeting) on the bar itself. */}
+          {infoTier === RoadmapBarInfoTier.full && (
             <span className="pointer-events-none flex h-full w-full min-w-0 items-center gap-1.5 overflow-hidden px-2">
               <span
                 className={`min-w-0 flex-1 truncate text-left text-xs font-medium ${barTextClass}`}
+                data-bar-title
               >
                 {item.title}
               </span>
+              <span
+                className={`flex shrink-0 items-center gap-1 ${
+                  isEpic ? "" : "rounded-full bg-base/25 px-1 py-0.5"
+                }`}
+              >
+                <PriorityIcon priority={item.priority} size={14} />
+                {item.assignee && <AssigneeAvatar assignee={item.assignee} />}
+              </span>
+            </span>
+          )}
+          {infoTier === RoadmapBarInfoTier.compact && (
+            <span className="pointer-events-none flex h-full w-full items-center justify-center overflow-hidden">
               <span
                 className={`flex shrink-0 items-center gap-1 ${
                   isEpic ? "" : "rounded-full bg-base/25 px-1 py-0.5"
