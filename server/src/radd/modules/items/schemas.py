@@ -189,6 +189,23 @@ class ItemUpdate(BaseModel):
     )
 
 
+class ItemBatchPatch(BaseModel):
+    """One item's patch inside `PATCH /items` (RADD-1505)."""
+
+    item_id: uuid.UUID
+    patch: ItemUpdate
+
+
+class ItemBatchUpdate(BaseModel):
+    """`PATCH /items` (RADD-1505): several items' patches applied in ONE
+    transaction — the roadmap's Save. All or nothing: the first refusal (authz,
+    a transition guard, the date rule) rolls every patch back and names the
+    item. Unlike `/bulk-update`, each item carries its OWN patch and nothing
+    is skipped."""
+
+    patches: list[ItemBatchPatch] = Field(min_length=1, max_length=settings.bulk_max_items)
+
+
 # --- bulk operations (spec 68) ---
 
 _bulk_ids = Field(min_length=1, max_length=settings.bulk_max_items)

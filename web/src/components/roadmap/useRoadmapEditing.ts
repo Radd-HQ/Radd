@@ -93,6 +93,9 @@ export function useRoadmapEditing(
   const patchItems = useRoadmapItemPatch(view);
   const reorderItem = useReorderItem(view);
   const [saving, setSaving] = useState(false);
+  /** The last Save's refusal, item named — shown beside the button until the
+   *  next attempt or a Discard (RADD-1505). */
+  const [saveError, setSaveError] = useState<string | null>(null);
   const addLink = useAddItemLink("");
   const removeLink = useRemoveItemLink("");
   const [menu, setMenu] = useState<RoadmapMenuAnchor | null>(null);
@@ -180,12 +183,20 @@ export function useRoadmapEditing(
     [draft],
   );
 
-  /** Flush the draft: ONE batched field PATCH of the net changes, then the
-   *  rank intents replayed in op order (anchors are ids, so date patches and
-   *  reorders never interact). Clears the buffer on success. */
+  /**
+   * Flush the draft (RADD-1505): the net field changes as ONE all-or-nothing
+   * `PATCH /items`, then the rank intents replayed in op order (anchors are
+   * ids, so date patches and reorders never interact; rank writes are
+   * idempotent, so a retry after a mid-chain failure is safe). The draft is
+   * cleared only AFTER the item refetch lands — clearing it first made every
+   * inserted row vanish until the paged stream completed, seconds on a big
+   * instance, which read as data loss. A refusal stays on the Save button
+   * (`saveError`) with the item named, and the draft stays intact to retry.
+   */
   const saveDraft = useCallback(async () => {
     if (!draft.dirty || saving) return;
     setSaving(true);
+    setSaveError(null);
     try {
       const patches = draft.netPatches(baseItems);
       if (patches.length > 0) await patchItems.mutateAsync({ patches });
@@ -205,13 +216,14 @@ export function useRoadmapEditing(
           }
         }
       }
+      await invalidateEntities(queryClient, Entity.item);
       draft.clear();
       pushToast("Roadmap changes saved");
     } catch (error) {
-      pushToast(errorMessage(error));
+      setSaveError(errorMessage(error));
+      void invalidateEntities(queryClient, Entity.item);
     } finally {
       setSaving(false);
-      void invalidateEntities(queryClient, Entity.item);
     }
   }, [draft, baseItems, saving, patchItems, reorderItem, queryClient]);
 
@@ -436,6 +448,8 @@ export function useRoadmapEditing(
     setAllCollapsed,
     saveDraft,
     saving,
+    saveError,
+    clearSaveError: () => setSaveError(null),
     menu,
     openMenu: (row: RoadmapRow, x: number, y: number) => setMenu({ row, x, y }),
     closeMenu: () => setMenu(null),

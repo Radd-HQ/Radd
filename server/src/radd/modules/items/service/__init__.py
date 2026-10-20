@@ -19,6 +19,7 @@ from .core import (
     star_item,
     unstar_item,
     update_item,
+    update_items,
 )
 from .customvalues import (
     count_with_value,
@@ -107,5 +108,6 @@ __all__ = [
     "sync_mention_links",
     "unstar_item",
     "update_item",
+    "update_items",
     "validate_slq",
 ]

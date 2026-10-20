@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
-from radd.exceptions import ConflictError
+from radd.exceptions import ConflictError, RaddError
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
@@ -24,7 +24,7 @@ from radd.hooks import hooks
 from ..enums import FINISHED_CATEGORIES, ItemEntity, ItemEvent, ItemKind, ItemVisibility
 from ..hooks import ItemCreating, ItemHook
 from ..models import ItemStar, WorkItem
-from ..schemas import ItemCreate, ItemRankUpdate, ItemRead, ItemUpdate
+from ..schemas import ItemBatchUpdate, ItemCreate, ItemRankUpdate, ItemRead, ItemUpdate
 from .links import sync_mention_links
 from radd.clock import utcnow
 
@@ -202,6 +202,32 @@ async def create_item(session: AsyncSession, data: ItemCreate, actor: User) -> I
         occurred_at=occurred_at,
         event_actor_id=event_actor_id,
     )
+
+
+async def update_items(
+    session: AsyncSession, data: ItemBatchUpdate, actor: User
+) -> list[ItemRead]:
+    """`PATCH /items` (RADD-1505): every patch inside the request transaction,
+    so a refusal on the Nth item leaves the first N-1 unwritten too — the
+    session rolls back as a whole. The roadmap's Save used to be one PATCH per
+    item that stopped at the first failure: some children saved, the epic
+    (patched last) never, and a reload showed one child and no epic dates.
+    A `RaddError` is re-raised as itself (its own status code) with the item's
+    key in front, so the client can say which row refused."""
+    updated: list[ItemRead] = []
+    for entry in data.patches:
+        try:
+            updated.append(await update_item(session, entry.item_id, entry.patch, actor))
+        except RaddError as error:
+            # Domain refusals leave the session usable; the item and its
+            # project are in the identity map when the refusal came after the
+            # permission read, so this is two lookups, not two queries.
+            item = await session.get(WorkItem, entry.item_id)
+            project = await projects_service.get_project(session, item.project_id) if item else None
+            if item is not None and project is not None:
+                error.args = (f"{project.key}-{item.number}: {error}",)
+            raise
+    return updated
 
 
 async def update_item(

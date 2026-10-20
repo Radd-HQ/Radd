@@ -238,7 +238,10 @@ export function RoadmapSurface({
       confirmLabel: "Discard",
       danger: true,
     });
-    if (ok) draft.clear();
+    if (ok) {
+      draft.clear();
+      editing.clearSaveError();
+    }
   };
   const toggleSolo = useCallback(
     (epicId: string) => {
@@ -768,6 +771,19 @@ export function RoadmapSurface({
                 disabled={!draft.canRedo}
                 disabledClass="disabled:opacity-40 disabled:pointer-events-none"
               />
+              {editing.saveError && (
+                // RADD-1505: a refused save stays visible beside the button,
+                // item named, until the next attempt or a Discard — a toast
+                // was the only signal before, and it read as "saved".
+                <span
+                  role="alert"
+                  data-save-error
+                  title={editing.saveError}
+                  className="max-w-xs truncate rounded-md border border-status-danger/40 bg-status-danger/10 px-2 py-0.5 text-[11px] text-status-danger-ink"
+                >
+                  Save refused — {editing.saveError}
+                </span>
+              )}
               {draft.dirty && (
                 <Button variant="ghost" size="sm" onClick={() => void discardDraft()}>
                   Discard

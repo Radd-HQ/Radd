@@ -20,6 +20,7 @@ from .history import item_history
 from .schemas import (
     BulkMoveResult,
     BulkUpdateResult,
+    ItemBatchUpdate,
     ItemBulkMove,
     ItemBulkUpdate,
     ItemCount,
@@ -304,6 +305,16 @@ async def get_item_history(item_id: uuid.UUID, session: Session, user: Actor) ->
     """Chronological, actor-attributed activity feed: field changes + comments,
     worklogs, and links on the item (the History tab)."""
     return await item_history(session, item_id, actor=user)
+
+
+@router.patch("", response_model=list[ItemRead])
+async def update_items(
+    data: ItemBatchUpdate, session: Session, user: CurrentUser
+) -> list[ItemRead]:
+    """Several items' patches in ONE transaction (RADD-1505) — the roadmap's
+    Save. All or nothing: the first refusal rolls everything back and its
+    detail names the item (`<KEY>: <reason>`), with the refusal's own status."""
+    return await service.update_items(session, data, actor=user)
 
 
 @router.patch("/{item_id}", response_model=ItemRead)

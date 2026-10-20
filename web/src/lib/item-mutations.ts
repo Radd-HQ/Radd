@@ -140,23 +140,22 @@ export interface RoadmapDatePatch {
 }
 
 /**
- * The roadmap draft's Save: the net patches as sequential PATCHes, painted
- * optimistically into the view's paged `viewItems` cache. A failure rolls the
- * whole set back and toasts once; the settle invalidation refetches server
- * truth either way (a PATCH that landed before a later one failed stays valid).
+ * The roadmap draft's Save: the net patches as ONE `PATCH /items` (RADD-1505),
+ * painted optimistically into the view's paged `viewItems` cache. The server
+ * applies the batch in a single transaction — all or nothing — so a refusal
+ * on the Nth item never leaves the first N-1 written (the sequential loop this
+ * replaced saved some children and never the epic). A failure rolls the
+ * optimistic paint back; the caller owns the error display and the refetch.
  */
 export function useRoadmapItemPatch(view: Pick<View, "id" | "query_string"> | undefined) {
   const queryClient = useQueryClient();
   const listKey = queryKeys.viewItems(view?.id ?? "", view?.query_string ?? "");
 
   return useMutation({
-    mutationFn: async ({ patches }: { patches: RoadmapDatePatch[] }) => {
-      const updated: Item[] = [];
-      for (const { itemId, patch } of patches) {
-        updated.push(await api.patch<Item>(apiItemPath(itemId), patch));
-      }
-      return updated;
-    },
+    mutationFn: ({ patches }: { patches: RoadmapDatePatch[] }) =>
+      api.patch<Item[]>(ApiPath.items, {
+        patches: patches.map(({ itemId, patch }) => ({ item_id: itemId, patch })),
+      }),
     onMutate: async ({ patches }) => {
       await queryClient.cancelQueries({ queryKey: listKey });
       const previous = queryClient.getQueryData<ItemPages>(listKey);
@@ -168,14 +167,12 @@ export function useRoadmapItemPatch(view: Pick<View, "id" | "query_string"> | un
       queryClient.setQueryData<ItemPages>(listKey, mapPages(apply));
       return { previous };
     },
-    onError: (error, _variables, context) => {
+    onError: (_error, _variables, context) => {
       if (context?.previous) queryClient.setQueryData(listKey, context.previous);
-      pushToast(errorMessage(error));
     },
     onSuccess: (updated) => {
       for (const item of updated) cacheItem(queryClient, item);
     },
-    onSettled: () => invalidateItemCaches(queryClient),
   });
 }
 
