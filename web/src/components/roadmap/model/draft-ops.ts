@@ -12,7 +12,7 @@ export interface DraftFieldPatch {
   insert?: Item;
 }
 
-export type DraftOp =
+export type DraftLeafOp =
   | { kind: "patch"; label: string; patches: DraftFieldPatch[] }
   | {
       kind: "reorder";
@@ -23,11 +23,25 @@ export type DraftOp =
     }
   | { kind: "chain"; label: string; orderedIds: string[] };
 
+/** A `compound` op is ONE user-sized step made of several leaf ops (a plan's
+ *  date patches plus the rank chain that orders its rows, RADD-1510), so a
+ *  single Undo reverts the whole verb — RADD-1433 found auto-schedule
+ *  recording two steps, with one Undo reverting only the ordering. */
+export type DraftOp = DraftLeafOp | { kind: "compound"; label: string; ops: DraftLeafOp[] };
+
 /** The draftable field subset (what roadmap gestures may change). */
 export const DRAFT_FIELDS = ["start_date", "target_date", "flagged"] as const;
 
+/** The leaf ops in order, compounds opened — the save diff, the rank intents
+ *  and the changed-count badge all walk leaves. */
+export function flattenOps(ops: readonly DraftOp[]): DraftLeafOp[] {
+  return ops.flatMap((op) => (op.kind === "compound" ? op.ops : [op]));
+}
+
 export function applyOp(items: Item[], op: DraftOp): Item[] {
   switch (op.kind) {
+    case "compound":
+      return op.ops.reduce(applyOp, items);
     case "patch": {
       let next = items;
       for (const patch of op.patches) {

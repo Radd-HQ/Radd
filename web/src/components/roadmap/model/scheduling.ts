@@ -1,9 +1,11 @@
-/** Roadmap schedulers: estimate/dependency/assignee-aware auto-schedule + import-children (spec 78). */
+/** Roadmap schedulers: estimate/dependency/assignee-aware auto-schedule,
+ *  import-children (spec 78) and the even spread (RADD-1510). */
 
 import { shiftIsoDay } from "@radd/plugin-sdk";
 import { ROADMAP_LEAF_SPAN_DAYS } from "../../../lib/constants";
 import type { Item, ItemUpdate } from "../../../lib/types";
-import type { BlocksEdge, RoadmapPlanPatch } from "./planning";
+import { isoDaysBetween } from "./dates";
+import { epicGrowPatch, type BlocksEdge, type RoadmapPlanPatch } from "./planning";
 
 /**
  * Calendar-day duration for one child (spec 78): ceil(estimate / working day)
@@ -19,34 +21,20 @@ export function durationDaysFromEstimate(
   return Math.max(1, Math.ceil(estimateSeconds / (hoursPerDay * 3600)));
 }
 
-interface AutoSchedulePlan {
-  /** Child date patches in schedule order, then the epic fit patch. */
-  patches: RoadmapPlanPatch[];
-  scheduledCount: number;
-  /** Child ids in the plan's schedule order — the spec-82 rank chain input,
-   *  so a freshly scheduled epic reads top-to-bottom by date. */
-  orderedIds: string[];
+interface TopoOrder {
+  /** The children in dependency-then-rank order. */
+  order: Item[];
+  /** Per child, the ids of the loaded children that block it. */
+  blockersOf: ReadonlyMap<string, string[]>;
 }
 
 /**
- * "Auto-schedule children" (spec 78 §4): Kahn topological order over the
- * `blocks` edges among `children` (deduped here; other endpoints and
- * self-loops ignored) with rank (input-order) tie-breaking — a cyclic
- * remainder falls back to rank order. Each child starts at
- * `max(anchor, blockers' end + 1d, same-assignee last end + 1d)`: different or
- * missing assignees parallelize freely, a shared assignee serializes in
- * topo-then-rank order. `end = start + duration − 1` (inclusive spans). The
- * epic's own fit-to-children patch (inward AND outward — this verb owns the
- * span) is appended last.
+ * Kahn topological order over the `blocks` edges among `children` (deduped
+ * here; other endpoints and self-loops ignored) with rank (input-order)
+ * tie-breaking — a cyclic remainder falls back to rank order. Shared by
+ * auto-schedule and the spread, so both verbs read the same way.
  */
-export function autoSchedulePlan(
-  children: Item[],
-  edges: BlocksEdge[],
-  anchorIso: string,
-  durations: ReadonlyMap<string, number>,
-  epic: Item,
-): AutoSchedulePlan {
-  if (children.length === 0) return { patches: [], scheduledCount: 0, orderedIds: [] };
+export function topoOrder(children: Item[], edges: BlocksEdge[]): TopoOrder {
   const ids = new Set(children.map((child) => child.id));
   const indegree = new Map<string, number>(children.map((child) => [child.id, 0]));
   const dependentsOf = new Map<string, string[]>();
@@ -64,9 +52,9 @@ export function autoSchedulePlan(
     blockersOf.set(edge.targetId, [...(blockersOf.get(edge.targetId) ?? []), edge.sourceId]);
   }
 
-  // Kahn with rank tie-breaking: sweep the rank-ordered list, placing every
-  // ready child, until a sweep places nothing. Cycles never become ready —
-  // the remainder appends in rank order.
+  // Sweep the rank-ordered list, placing every ready child, until a sweep
+  // places nothing. Cycles never become ready — the remainder appends in
+  // rank order.
   const order: Item[] = [];
   const placed = new Set<string>();
   let progressed = true;
@@ -85,6 +73,35 @@ export function autoSchedulePlan(
   for (const child of children) {
     if (!placed.has(child.id)) order.push(child);
   }
+  return { order, blockersOf };
+}
+
+interface AutoSchedulePlan {
+  /** Child date patches in schedule order, then the epic's grow patch (if any). */
+  patches: RoadmapPlanPatch[];
+  scheduledCount: number;
+  /** Child ids in the plan's schedule order — the spec-82 rank chain input,
+   *  so a freshly scheduled epic reads top-to-bottom by date. */
+  orderedIds: string[];
+}
+
+/**
+ * "Auto-schedule children" (spec 78 §4): `topoOrder` over the `blocks` edges,
+ * then each child starts at `max(anchor, blockers' end + 1d, same-assignee
+ * last end + 1d)`: different or missing assignees parallelize freely, a
+ * shared assignee serializes in topo-then-rank order. `end = start +
+ * duration − 1` (inclusive spans). The epic's OUTWARD-only grow patch
+ * (`epicGrowPatch`, RADD-1510) is appended last when the result overflows it.
+ */
+export function autoSchedulePlan(
+  children: Item[],
+  edges: BlocksEdge[],
+  anchorIso: string,
+  durations: ReadonlyMap<string, number>,
+  epic: Item,
+): AutoSchedulePlan {
+  if (children.length === 0) return { patches: [], scheduledCount: 0, orderedIds: [] };
+  const { order, blockersOf } = topoOrder(children, edges);
 
   const endOf = new Map<string, string>();
   const lastEndByAssignee = new Map<string, string>();
@@ -116,7 +133,8 @@ export function autoSchedulePlan(
     if (maxEnd === null || end > maxEnd) maxEnd = end;
   }
   if (minStart !== null && maxEnd !== null) {
-    patches.push({ itemId: epic.id, patch: { start_date: minStart, target_date: maxEnd } });
+    const grow = epicGrowPatch(epic, minStart, maxEnd);
+    if (grow) patches.push({ itemId: epic.id, patch: grow });
   }
   return { patches, scheduledCount: order.length, orderedIds: order.map((child) => child.id) };
 }
@@ -126,7 +144,7 @@ export function autoSchedulePlan(
 const ROADMAP_IMPORT_SPAN_DAYS = 1;
 
 interface ImportChildrenPlan {
-  /** Fill patches for children missing a date, then the epic fit patch. */
+  /** Fill patches for children missing a date, then the epic's grow patch (if any). */
   patches: RoadmapPlanPatch[];
   /** How many children had a date filled in (drives the toast). */
   importedCount: number;
@@ -137,7 +155,7 @@ interface ImportChildrenPlan {
  * no reflow, no serialization, no rank chain. Only MISSING dates fill: a start
  * gets the caller's anchor, clamped to an existing target (the server rejects
  * inverted spans); a target gets start + estimate days − 1, or
- * `ROADMAP_IMPORT_SPAN_DAYS`. The epic fit (inward AND outward) over every
+ * `ROADMAP_IMPORT_SPAN_DAYS`. The epic's OUTWARD-only grow patch over every
  * child's effective window is appended last.
  */
 export function importChildrenPlan(
@@ -173,7 +191,49 @@ export function importChildrenPlan(
   }
   if (importedCount === 0) return { patches: [], importedCount: 0 };
   if (minStart !== null && maxEnd !== null) {
-    patches.push({ itemId: epic.id, patch: { start_date: minStart, target_date: maxEnd } });
+    const grow = epicGrowPatch(epic, minStart, maxEnd);
+    if (grow) patches.push({ itemId: epic.id, patch: grow });
   }
   return { patches, importedCount };
+}
+
+interface SpreadChildrenPlan {
+  /** One date patch per child, in slot order. The epic is never patched. */
+  patches: RoadmapPlanPatch[];
+  spreadCount: number;
+  /** Child ids in slot order — the rank chain input, like auto-schedule's. */
+  orderedIds: string[];
+}
+
+/**
+ * "Spread children across the epic" (RADD-1510): a LAYOUT, not an estimate.
+ * The epic's own window is cut into N equal back-to-back slots — `topoOrder`
+ * where `blocks` edges exist, rank order otherwise — and child i takes slot
+ * i, so the children tile the epic exactly. A window shorter than N days
+ * degrades to one-day slots that overlap rather than refusing. The epic
+ * itself is untouched; a date-less epic yields an empty plan (there is no
+ * window to spread across — "Fit to children" or a drag gives it one).
+ */
+export function spreadChildrenPlan(
+  children: Item[],
+  edges: BlocksEdge[],
+  epic: Item,
+): SpreadChildrenPlan {
+  const epicStart = epic.start_date;
+  const epicTarget = epic.target_date;
+  if (children.length === 0 || !epicStart || !epicTarget) {
+    return { patches: [], spreadCount: 0, orderedIds: [] };
+  }
+  const { order } = topoOrder(children, edges);
+  const totalDays = isoDaysBetween(epicStart, epicTarget) + 1;
+  const slots = order.length;
+  const patches = order.map((child, index) => {
+    const from = Math.floor((index * totalDays) / slots);
+    const to = Math.max(from, Math.floor(((index + 1) * totalDays) / slots) - 1);
+    return {
+      itemId: child.id,
+      patch: { start_date: shiftIsoDay(epicStart, from), target_date: shiftIsoDay(epicStart, to) },
+    };
+  });
+  return { patches, spreadCount: slots, orderedIds: order.map((child) => child.id) };
 }

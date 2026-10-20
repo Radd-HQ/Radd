@@ -40,6 +40,7 @@ import {
   type RoadmapSpan,
 } from "./roadmap-model";
 import { BarDragMode, type CommitModifiers } from "./useBarDrag";
+import type { DraftLeafOp } from "./model/draft-ops";
 import type { RoadmapDraft } from "./useRoadmapDraft";
 import { shiftIsoDay, todayIso } from "@radd/plugin-sdk";
 
@@ -141,6 +142,39 @@ export function useRoadmapEditing(
           after: entry.patch,
           insert: entry.insert,
         })),
+      });
+    },
+    [draft],
+  );
+
+  /**
+   * Record a PLAN (auto-schedule, spread) as ONE draft op (RADD-1510, closing
+   * RADD-1433's box): the date patches and — when the view is rank-ordered
+   * and the caller passes the plan's order — the rank chain that makes the
+   * result read top-to-bottom, compounded so a single Undo reverts both.
+   * `orderedIds` null = the view orders its rows itself (explicit ORDER BY),
+   * so no chain is recorded.
+   */
+  const applyPlan = useCallback(
+    (patches: RoadmapDatePatch[], label: string, orderedIds: string[] | null) => {
+      if (patches.length === 0) return;
+      const patchOp: DraftLeafOp = {
+        kind: "patch",
+        label,
+        patches: patches.map((entry) => ({
+          itemId: entry.itemId,
+          after: entry.patch,
+          insert: entry.insert,
+        })),
+      };
+      if (!orderedIds || orderedIds.length < RANK_CHAIN_MIN_ITEMS) {
+        draft.pushOp(patchOp);
+        return;
+      }
+      draft.pushOp({
+        kind: "compound",
+        label,
+        ops: [patchOp, { kind: "chain", label, orderedIds }],
       });
     },
     [draft],
@@ -406,6 +440,7 @@ export function useRoadmapEditing(
     openMenu: (row: RoadmapRow, x: number, y: number) => setMenu({ row, x, y }),
     closeMenu: () => setMenu(null),
     applyPatches,
+    applyPlan,
     commitSpan,
     scheduleFromTray,
     reorderRow,

@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import {
+  AlignHorizontalDistributeCenter,
   BookmarkPlus,
   BookmarkX,
   CalendarArrowDown,
@@ -48,6 +49,8 @@ interface RoadmapContextMenuProps {
   onImportChildren: (row: RoadmapRow) => void;
   /** "Auto-schedule children" (spec 78) — the owner supplies durations/edges. */
   onAutoSchedule: (row: RoadmapRow) => void;
+  /** "Spread children across the epic" (RADD-1510) — equal slots, a layout. */
+  onSpreadChildren: (row: RoadmapRow) => void;
   /** "Order children by date" (spec 82) — rank chain over the loaded children. */
   onOrderChildren: (row: RoadmapRow) => void;
   /** Remove one manual link (either endpoint id works for DELETE). */
@@ -98,6 +101,7 @@ export function RoadmapContextMenu({
   onPatch,
   onImportChildren,
   onAutoSchedule,
+  onSpreadChildren,
   onOrderChildren,
   onRemoveLink,
 }: RoadmapContextMenuProps) {
@@ -169,7 +173,7 @@ export function RoadmapContextMenu({
       kind: "action",
       label: "Bring children into roadmap",
       icon: CalendarPlus,
-      hint: "Place the epic's unscheduled children as-is at the epic's start — an estimate sets the bar length, otherwise one day; already-dated children stay put. The epic is fit to the result.",
+      hint: "Place the epic's unscheduled children as-is at the epic's start — an estimate sets the bar length, otherwise one day; already-dated children stay put. The epic grows to hold the result and never shrinks.",
       onSelect: () => onImportChildren(row),
     });
 
@@ -177,8 +181,21 @@ export function RoadmapContextMenu({
       kind: "action",
       label: "Auto-schedule children",
       icon: Wand2,
-      hint: "Lay out ALL the epic's children from its start: estimates set bar lengths, blocks-links order them, and issues sharing an assignee run one after another. The epic is fit to the result.",
+      hint: "Lay out ALL the epic's children from its start: estimates set bar lengths, blocks-links order them, and issues sharing an assignee run one after another. The epic grows to hold the result and never shrinks — Fit to children is the verb that does.",
       onSelect: () => onAutoSchedule(row),
+    });
+
+    // RADD-1510: the even spread Aurelien asked for, as what it is — a
+    // layout across the epic's window, not a schedule.
+    nodes.push({
+      kind: "action",
+      label: "Spread children across the epic",
+      icon: AlignHorizontalDistributeCenter,
+      disabled: row.derived,
+      hint: row.derived
+        ? "The epic has no dates of its own — give it a window first (drag its bar, or Fit to children)."
+        : "Cut the epic's window into equal back-to-back slots, one per child, in blocks-then-rank order. A layout for reading, not an estimate: the bar lengths mean nothing. The epic itself is untouched.",
+      onSelect: () => onSpreadChildren(row),
     });
 
     // Spec 82: rows no longer re-sort by date — this verb makes date order a

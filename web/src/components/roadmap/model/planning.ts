@@ -25,6 +25,19 @@ function epicStretchPatch(
   return patch.start_date !== undefined || patch.target_date !== undefined ? patch : null;
 }
 
+/**
+ * The epic patch a PLAN verb appends (RADD-1510): the same OUTWARD-only
+ * stretch every drag applies — grow whichever edge the children now exceed,
+ * never shrink ("Fit to children" is the one inward verb; auto-schedule used
+ * to shrink too, which read as the verb undoing a deliberate extension). A
+ * date-less epic takes the children's union outright, so the plan leaves a
+ * real bar. Null when the children already fit.
+ */
+export function epicGrowPatch(epic: Item, minStartIso: string, maxEndIso: string): ItemUpdate | null {
+  if (!isScheduled(epic)) return { start_date: minStartIso, target_date: maxEndIso };
+  return epicStretchPatch(epic, minStartIso, maxEndIso);
+}
+
 /** One planned date PATCH — `patch` carries only `start_date`/`target_date`. */
 export interface RoadmapPlanPatch {
   itemId: string;

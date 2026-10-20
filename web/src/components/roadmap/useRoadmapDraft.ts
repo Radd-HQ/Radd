@@ -5,7 +5,9 @@
  *                fetch (tray drop, a child a plan verb brings in) carries its
  *                full Item as an INSERT so it draws before Save;
  *  - `reorder` — one row's rank intent (anchor ids; the server ranks at save);
- *  - `chain`   — a sequential rank chain (date-order verb, auto-schedule).
+ *  - `chain`   — a sequential rank chain (date-order verb, auto-schedule);
+ *  - `compound` — several of the above as ONE step (a plan's patches + its
+ *                 rank chain), so Undo reverts the whole verb (RADD-1510).
  *  Derivation recomputes from base on every change, which keeps undo trivially
  *  correct. Link edits and membership pins stay immediate: both pass an
  *  explicit popover/menu step, so they are acts, not slips.
@@ -13,7 +15,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import type { Item, ItemUpdate } from "../../lib/types";
-import { DRAFT_FIELDS, applyOp, type DraftOp } from "./model/draft-ops";
+import { DRAFT_FIELDS, applyOp, flattenOps, type DraftLeafOp, type DraftOp } from "./model/draft-ops";
 
 export interface RoadmapDraft {
   dirty: boolean;
@@ -33,7 +35,7 @@ export interface RoadmapDraft {
    *  batch. Inserted items diff against their own carried base values. */
   netPatches: (base: Item[]) => { itemId: string; patch: ItemUpdate }[];
   /** The rank intents, in op order — replayed sequentially at save. */
-  intents: () => Extract<DraftOp, { kind: "reorder" | "chain" }>[];
+  intents: () => Extract<DraftLeafOp, { kind: "reorder" | "chain" }>[];
 }
 
 export function useRoadmapDraft(): RoadmapDraft {
@@ -74,7 +76,7 @@ export function useRoadmapDraft(): RoadmapDraft {
     (base: Item[]) => {
       const baseline = new Map<string, Item>(base.map((item) => [item.id, item]));
       const merged = new Map<string, ItemUpdate>();
-      for (const op of ops) {
+      for (const op of flattenOps(ops)) {
         if (op.kind !== "patch") continue;
         for (const patch of op.patches) {
           if (patch.insert && !baseline.has(patch.itemId)) {
@@ -100,13 +102,16 @@ export function useRoadmapDraft(): RoadmapDraft {
   );
 
   const intents = useCallback(
-    () => ops.filter((op): op is Extract<DraftOp, { kind: "reorder" | "chain" }> => op.kind !== "patch"),
+    () =>
+      flattenOps(ops).filter(
+        (op): op is Extract<DraftLeafOp, { kind: "reorder" | "chain" }> => op.kind !== "patch",
+      ),
     [ops],
   );
 
   const changedCount = useMemo(() => {
     const touched = new Set<string>();
-    for (const op of ops) {
+    for (const op of flattenOps(ops)) {
       if (op.kind === "patch") for (const patch of op.patches) touched.add(patch.itemId);
       else if (op.kind === "reorder") touched.add(op.itemId);
       else for (const id of op.orderedIds) touched.add(id);

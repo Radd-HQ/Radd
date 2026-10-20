@@ -66,6 +66,7 @@ import {
   durationDaysFromEstimate,
   importChildrenPlan,
   parseDay,
+  spreadChildrenPlan,
   type RoadmapExtension,
   type RoadmapRow,
 } from "./roadmap-model";
@@ -306,9 +307,10 @@ export function RoadmapSurface({
     }
     return collected;
   }, []);
-  /** Children + their estimate batch (durations) — the two verb inputs. */
-  const loadChildrenWithEstimates = useCallback(
-    async (row: RoadmapRow): Promise<{ children: Item[]; durations: Map<string, number> } | null> => {
+  /** The epic's children for a verb — toasts (and yields null) when the
+   *  fetch fails or the epic has none. */
+  const loadChildren = useCallback(
+    async (row: RoadmapRow): Promise<Item[] | null> => {
       let children: Item[];
       try {
         children = await fetchEpicChildren(row.item);
@@ -320,6 +322,15 @@ export function RoadmapSurface({
         pushToast("This epic has no children");
         return null;
       }
+      return children;
+    },
+    [fetchEpicChildren],
+  );
+  /** Children + their estimate batch (durations) — the scheduling verbs' inputs. */
+  const loadChildrenWithEstimates = useCallback(
+    async (row: RoadmapRow): Promise<{ children: Item[]; durations: Map<string, number> } | null> => {
+      const children = await loadChildren(row);
+      if (!children) return null;
       const durations = new Map<string, number>();
       if (timeloggingOn) {
         const batch = await queryClient
@@ -334,7 +345,7 @@ export function RoadmapSurface({
       }
       return { children, durations };
     },
-    [fetchEpicChildren, timeloggingOn, queryClient, durationConfig.hoursPerDay],
+    [loadChildren, timeloggingOn, queryClient, durationConfig.hoursPerDay],
   );
 
   // RADD-1151: a plan's patches must DRAW before Save like a tray drop does.
@@ -367,15 +378,36 @@ export function RoadmapSurface({
         durations,
         row.item,
       );
-      editing.applyPatches(
+      // Spec 82: on a rank-ordered view the children also rank in schedule
+      // order so the result reads top-to-bottom — one undo step with the
+      // dates (RADD-1510 / RADD-1433); a view with its own ORDER BY gets no chain.
+      editing.applyPlan(
         withInserts(plan.patches, children),
         `Auto-schedule ${row.item.key}'s children`,
+        rankOrdered ? plan.orderedIds : null,
       );
       pushToast(`Scheduled ${plan.scheduledCount} item${plan.scheduledCount === 1 ? "" : "s"}`);
-      // Spec 82: rank the children in schedule order so the result reads top-to-bottom.
-      editing.applyRankChain(plan.orderedIds);
     },
-    [loadChildrenWithEstimates, editing, withInserts],
+    [loadChildrenWithEstimates, editing, withInserts, rankOrdered],
+  );
+
+  // "Spread children across the epic" (RADD-1510): a layout verb — equal
+  // back-to-back slots across the epic's OWN window, no estimates involved.
+  const handleSpreadChildren = useCallback(
+    async (row: RoadmapRow) => {
+      const children = await loadChildren(row);
+      if (!children) return;
+      const plan = spreadChildrenPlan(children, blocksEdges(children), row.item);
+      if (plan.patches.length === 0) return;
+      editing.applyPlan(
+        withInserts(plan.patches, children),
+        `Spread ${row.item.key}'s children`,
+        rankOrdered ? plan.orderedIds : null,
+      );
+      const count = plan.spreadCount;
+      pushToast(`Spread ${count} ${count === 1 ? "child" : "children"} across ${row.item.key}`);
+    },
+    [loadChildren, editing, withInserts, rankOrdered],
   );
 
   // "Bring children into roadmap": Auto-schedule's anchor and estimate source,
@@ -823,6 +855,7 @@ export function RoadmapSurface({
           onPatch={editing.applyPatches}
           onImportChildren={handleImportChildren}
           onAutoSchedule={handleAutoSchedule}
+          onSpreadChildren={handleSpreadChildren}
           onOrderChildren={editing.orderChildrenByDate}
           onRemoveLink={editing.deleteLink}
         />
