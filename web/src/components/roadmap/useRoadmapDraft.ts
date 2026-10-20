@@ -36,6 +36,10 @@ export interface RoadmapDraft {
   netPatches: (base: Item[]) => { itemId: string; patch: ItemUpdate }[];
   /** The rank intents, in op order — replayed sequentially at save. */
   intents: () => Extract<DraftLeafOp, { kind: "reorder" | "chain" }>[];
+  /** The items the live ops carry as INSERTs (tray drops, children a plan
+   *  brought in), first snapshot per id — the surface fetches these live so a
+   *  link or title edit on a drafted row shows before Save (RADD-1506). */
+  insertedItems: Item[];
 }
 
 export function useRoadmapDraft(): RoadmapDraft {
@@ -109,6 +113,17 @@ export function useRoadmapDraft(): RoadmapDraft {
     [ops],
   );
 
+  const insertedItems = useMemo(() => {
+    const byId = new Map<string, Item>();
+    for (const op of flattenOps(ops)) {
+      if (op.kind !== "patch") continue;
+      for (const patch of op.patches) {
+        if (patch.insert && !byId.has(patch.itemId)) byId.set(patch.itemId, patch.insert);
+      }
+    }
+    return [...byId.values()];
+  }, [ops]);
+
   const changedCount = useMemo(() => {
     const touched = new Set<string>();
     for (const op of flattenOps(ops)) {
@@ -133,5 +148,6 @@ export function useRoadmapDraft(): RoadmapDraft {
     clear,
     netPatches,
     intents,
+    insertedItems,
   };
 }

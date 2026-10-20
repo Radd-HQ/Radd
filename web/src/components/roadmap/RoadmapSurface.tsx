@@ -28,7 +28,11 @@ import {
 import { api } from "../../lib/api";
 import { startHorizontalDrag } from "../../lib/drag";
 import { useDurationConfig, useIsAuthenticated } from "../../lib/hooks";
-import { projectTimeloggingQuery, timelogBatchChunkedQuery } from "../../lib/queries";
+import {
+  projectTimeloggingQuery,
+  roadmapDraftedItemsQuery,
+  timelogBatchChunkedQuery,
+} from "../../lib/queries";
 import {
   ApiPath,
   ITEMS_PAGE_LIMIT,
@@ -165,7 +169,31 @@ export function RoadmapSurface({
 
   // Gestures edit a LOCAL draft (useRoadmapDraft); only Save writes.
   const draft = useRoadmapDraft();
-  const draftedItems = useMemo(() => draft.applyTo(items), [draft, items]);
+  // RADD-1506: rows the draft INSERTED exist nowhere in the server fetch, so
+  // their snapshot would freeze at gesture time — a dependency drawn from one
+  // never appeared until Save + reload. Fetch them live by key (the query is
+  // item-tagged, so every link/item write refetches it) and fold the draft
+  // over `base ∪ fresh`; the snapshot stays the fallback until the first
+  // fetch lands, so nothing flickers.
+  const loadedIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
+  const draftedKeys = useMemo(
+    () =>
+      draft.insertedItems
+        .filter((item) => !loadedIds.has(item.id))
+        .map((item) => item.key)
+        .sort(),
+    [draft.insertedItems, loadedIds],
+  );
+  const draftedRows = useQuery({
+    ...roadmapDraftedItemsQuery(draftedKeys, project?.id ?? null),
+    enabled: draftedKeys.length > 0,
+  });
+  const baseItems = useMemo(() => {
+    const fresh = draftedRows.data;
+    if (!fresh || fresh.length === 0) return items;
+    return [...items, ...fresh.filter((item) => !loadedIds.has(item.id))];
+  }, [items, loadedIds, draftedRows.data]);
+  const draftedItems = useMemo(() => draft.applyTo(baseItems), [draft, baseItems]);
   useEffect(() => {
     if (!draft.dirty) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -199,7 +227,7 @@ export function RoadmapSurface({
     [modelItems, extension],
   );
 
-  const editing = useRoadmapEditing(view, model, draft, items);
+  const editing = useRoadmapEditing(view, model, draft, baseItems);
   const [confirmDialog, confirm] = useConfirm();
   const discardDraft = async () => {
     const ok = await confirm({

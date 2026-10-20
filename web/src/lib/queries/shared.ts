@@ -48,6 +48,7 @@ export const queryKeys = {
   roadmapTray: (viewId: string, q: string, projectId: string, page: number) =>
     ["roadmapTray", { viewId, q, projectId, page }] as const,
   roadmapMembers: (viewId: string) => ["roadmapMembers", { viewId }] as const,
+  roadmapDrafted: (keys: readonly string[]) => ["roadmapDrafted", { keys }] as const,
   viewItemsPage: (viewId: string, queryString: string, page: number, limit: number) =>
     ["viewItemsPage", { viewId, queryString, page, limit }] as const,
   slqItems: (scope: Record<string, string>, q: string) => ["slqItems", { scope, q }] as const,
