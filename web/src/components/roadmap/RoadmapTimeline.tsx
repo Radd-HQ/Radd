@@ -143,6 +143,7 @@ export function RoadmapTimeline({
   rollupByItem,
 }: RoadmapTimelineProps) {
   const innerWidth = model.domainDays * dayWidth;
+  const rootRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [trayDropDay, setTrayDropDay] = useState<number | null>(null);
 
@@ -429,16 +430,21 @@ export function RoadmapTimeline({
     document.addEventListener("mouseup", up);
   };
 
-  // Tray drag-in: the whole body is the lane; drops on the gutter ignored —
-  // including the STICKY gutter, which overlays real day columns once the
-  // pane is scrolled (layout x alone can't tell those apart).
+  // Tray drag-in (RADD-1507): the WHOLE timeline is the lane — the axis
+  // header, the rows and the open space below them all accept the drop, and
+  // only x picks the day. It used to be the rows block alone (rows + one
+  // spare lane), so with three rows most of the pane refused the drop and
+  // the user had to "drag high enough". A drop on the STICKY label gutter
+  // (which overlays real day columns once the pane is scrolled, so layout x
+  // alone can't tell those apart) lands on the first VISIBLE day.
   const dayAtEvent = (event: ReactDragEvent<HTMLElement>): number | null => {
-    const rect = bodyRef.current?.getBoundingClientRect();
+    const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return null;
-    const pane = scrollRef.current?.getBoundingClientRect();
-    if (pane && event.clientX - pane.left < labelWidth) return null;
-    const x = event.clientX - rect.left - labelWidth;
-    if (x < 0) return null;
+    const pane = scrollRef.current;
+    if (pane && event.clientX - pane.getBoundingClientRect().left < labelWidth) {
+      return clampDay(dayFromX(pane.scrollLeft, dayWidth), model.domainDays);
+    }
+    const x = Math.max(0, event.clientX - rect.left - labelWidth);
     return clampDay(dayFromX(x, dayWidth), model.domainDays);
   };
   const trayTargetProps =
@@ -465,7 +471,24 @@ export function RoadmapTimeline({
       : {};
 
   return (
-    <div className="relative" style={{ minWidth: labelWidth + innerWidth }}>
+    // min-h-full: the timeline fills the scroll pane even when a few rows
+    // would not, so the whole pane is the tray's drop lane (RADD-1507).
+    <div
+      ref={rootRef}
+      className="relative min-h-full"
+      style={{ minWidth: labelWidth + innerWidth }}
+      data-roadmap-timeline
+      {...trayTargetProps}
+    >
+      {/* Tray drop indicator: the target day, down the FULL pane height. */}
+      {trayDropDay !== null && (
+        <div
+          className="pointer-events-none absolute inset-y-0 z-20 border-l-2 border-dashed border-accent-hover/80"
+          style={{ left: labelWidth + trayDropDay * dayWidth }}
+          data-tray-drop-day={trayDropDay}
+          aria-hidden
+        />
+      )}
       {/* Full-height resize handle on the labels/timeline divider. Absolute so
           it never joins the row flow; wrapped in a sticky-left rail so it rides
           horizontal scroll with the (sticky) label gutter it resizes. */}
@@ -532,7 +555,7 @@ export function RoadmapTimeline({
         ref={bodyRef}
         className={`relative${band ? " select-none" : ""}`}
         onMouseDown={bandStart}
-        {...trayTargetProps}
+        data-roadmap-body
       >
         {band && (
           <div
@@ -589,12 +612,6 @@ export function RoadmapTimeline({
               className="absolute inset-y-0 border-l-2 border-accent/60"
               style={{ left: model.todayIndex * dayWidth }}
               title="Today"
-            />
-          )}
-          {trayDropDay !== null && (
-            <div
-              className="absolute inset-y-0 z-20 border-l-2 border-dashed border-accent-hover/80"
-              style={{ left: trayDropDay * dayWidth }}
             />
           )}
         </div>
