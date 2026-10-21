@@ -201,7 +201,9 @@ export function CyclePage() {
                   </h2>
                   <span className="text-xs text-fg-muted">{group.items.length} on this page</span>
                 </div>
-                <ul className="rounded-lg border border-subtle">
+                {/* A box that groups by STATUS is information, not a separator — the strong
+                    border (RADD-1517; the subtle one read as noise at 1.3:1). */}
+                <ul className="rounded-lg border border-strong">
                   {group.items.map((item) => (
                     <CycleItemRow key={item.id} item={item} />
                   ))}

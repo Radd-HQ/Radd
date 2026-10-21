@@ -227,19 +227,23 @@
 
 /* Dark theme values (unlayered: they override the layered :root theme vars). */
 html {
+  /* Dark ramp (RADD-1517): separation is carried by SURFACE STEPS and BORDERS,
+     not by text — text was already 12:1+. Panel/page 1.14, subtle border 1.75,
+     strong border 2.5, every state colour ≥ 3:1 on panel and elevated. Colours
+     only: sizes live on :root and never differ by theme. */
   /* One monospace stack for every code surface (RADD-752). */
   --radd-code-font: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --color-zinc-950: #131519; /* page background */
-  --color-zinc-900: #1b1e24; /* panels, inputs, cards */
-  --color-zinc-850: #22262e; /* elevated surfaces (raised cards, hover fills) */
-  --color-zinc-825: #2a2f39; /* overlay surfaces (menus, popovers) */
-  --color-zinc-800: #272c35; /* borders, dividers */
-  --color-zinc-700: #333a46; /* stronger borders, chips */
-  --color-zinc-600: #6a7480; /* faintest text, emphasis borders */
-  --color-zinc-500: #838d9a; /* muted text */
-  --color-zinc-400: #98a1ad; /* secondary text */
-  --color-zinc-200: #d3d9e1; /* primary text */
-  --color-zinc-100: #e6e9ee; /* headings */
+  --color-zinc-950: #0e1014; /* page background */
+  --color-zinc-900: #1a1e25; /* panels, inputs, cards — 1.14:1 on the page */
+  --color-zinc-850: #242932; /* elevated surfaces (raised cards, hover fills) — 1.14:1 on a panel */
+  --color-zinc-825: #2e3440; /* overlay surfaces (menus, popovers) — 1.5:1 on the page */
+  --color-zinc-800: #353d4a; /* borders, dividers — 1.75:1 on the page (was 1.3, RADD-1517) */
+  --color-zinc-700: #4b5565; /* stronger borders, chips — 2.5:1 on the page (was 1.6) */
+  --color-zinc-600: #7a8593; /* faintest text, emphasis borders — 4.5:1 on a panel */
+  --color-zinc-500: #8d97a4; /* muted text — 5.7:1 on a panel */
+  --color-zinc-400: #a2abb7; /* secondary text — 7.2:1 on a panel */
+  --color-zinc-200: #d6dce4; /* primary text */
+  --color-zinc-100: #eaedf1; /* headings */
 
   /* Accent (dark): a filled accent LIGHTENS on hover, and accent text sits
      light enough to read on dark panels. */
@@ -253,9 +257,9 @@ html {
   --chart-triage: #d9b43c; /* yellow — caution, not yet looked at */
   --chart-backlog: #a3a5a9; /* light grey — dormant, still ahead of you */
   --chart-todo: #4d8fd4; /* blue — queued, waiting for the light */
-  --chart-progress: #26804a; /* GREEN — go */
-  --chart-done: #6b7482; /* dark slate — out of play */
-  --chart-canceled: #6b7482; /* dark slate — out of play, same as done */
+  --chart-progress: #2a8a50; /* GREEN — go (3.4:1 on the lighter elevated surface) */
+  --chart-done: #6f788a; /* dark slate — out of play (3.3:1 on elevated) */
+  --chart-canceled: #6f788a; /* dark slate — out of play, same as done */
 
   /* Ink tier (dark): >= 4.5:1 against each pill's own tinted background. */
   --chart-triage-ink: #d9b43c;
