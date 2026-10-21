@@ -88,6 +88,20 @@ issues followed on 2026-10-21 from Hussein trying the build on real data and fro
   same grey as the day grid. It is 2px in the category's INK tier now (`CATEGORY_CHART_INK`, new in
   `meta.ts`): the fill tier is 2:1 there for yellow, the ink tier clears 3:1 in both themes, which the
   proof asserts by toggling `html.light`.
+- **RADD-1520** (Hussein on BNS, 306 rows over six years: "there is a limit to how much I can zoom out
+  that is bothering me"): measured, the 2px/day floor left the domain 4.6 panes wide and the rows never
+  shrank — 13.5k px tall at every zoom, which is why he had been dropping the BROWSER to 30%. The zoom
+  scales the board now (`model/zoom.ts`): below the default day width the row pitch and bar heights
+  shrink by the same factor, floored at an 8px strip; the floor is 0.25px/day (a year ≈ 91px); the axis
+  steps month (the year on January) → quarter → year by what a label needs in px, with the opening tick
+  decided at render time; the label cell steps full → mini → none; in-bar info needs height too; Fit (A)
+  frames the whole domain; off-preset levels read as a percentage; the level is remembered per view.
+  Second proof (`roadmap-zoom-proof.mjs`, 20 checks) and `roadmap-zoom.test.mjs`. Two things the proof
+  found that the diff could not: the last axis label and a min-width bar on the domain's last days poked
+  past the domain and widened the scroll content, so "fit" was always 3–15px wider than the pane
+  (`overflow-hidden` on the axis, `overflow-x-clip` on the row cell — `clip`, because `hidden` on one
+  axis makes the other `auto` and every row a scroll container); and a dirty draft arms `beforeunload`,
+  whose headless "leave site?" dialog blocks `Page.navigate` for ever — undo before reloading.
 Traps: a drop earlier than every bar re-pads the domain by whole weeks and shifts every index (compare to
 the today line in proofs); the Bash harness here is zsh, not fish; pytest needs a reachable Postgres
 (`RADD_TEST_DATABASE_URL` at the clean stack's :5457 when the working one is down).

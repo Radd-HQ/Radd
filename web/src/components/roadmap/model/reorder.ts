@@ -3,7 +3,6 @@
  *  on SIBLINGS from its own row order. */
 
 import type { Item } from "../../../lib/types";
-import { ROADMAP_ROW_H } from "./geometry";
 import { RoadmapRowKind, type RoadmapRow } from "./rows";
 
 /** A rank chain needs at least two members to change anything. */
@@ -51,7 +50,7 @@ export function roadmapReorderNeighbours(
 
 /** A bar-body reorder drag's hovered row half (spec 82 follow-up). */
 interface RowDropTarget {
-  /** Index into the VISIBLE rows (fixed ROADMAP_ROW_H pitch). */
+  /** Index into the VISIBLE rows (one `rowH` pitch). */
   index: number;
   /** True in the row's top half — insert BEFORE it (the ViewList idiom). */
   before: boolean;
@@ -60,14 +59,15 @@ interface RowDropTarget {
 /**
  * Map a body-local y (px below the FIRST row's top — measure the row
  * container itself; the axis header is a sibling, so no offset math) to the
- * visible row it falls in, plus which half. Rows are fixed ROADMAP_ROW_H
- * pitch. Null above the rows or past the last one.
+ * visible row it falls in, plus which half. Rows are one `rowH` pitch — the
+ * LIVE pitch (RADD-1520), never the constant. Null above the rows or past the
+ * last one.
  */
-export function rowDropFromY(y: number, rowCount: number): RowDropTarget | null {
-  if (y < 0 || rowCount <= 0) return null;
-  const index = Math.floor(y / ROADMAP_ROW_H);
+export function rowDropFromY(y: number, rowCount: number, rowH: number): RowDropTarget | null {
+  if (y < 0 || rowCount <= 0 || rowH <= 0) return null;
+  const index = Math.floor(y / rowH);
   if (index >= rowCount) return null;
-  return { index, before: y - index * ROADMAP_ROW_H < ROADMAP_ROW_H / 2 };
+  return { index, before: y - index * rowH < rowH / 2 };
 }
 
 /**

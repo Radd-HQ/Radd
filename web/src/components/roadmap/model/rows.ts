@@ -40,9 +40,13 @@ export interface RoadmapRow {
   scheduledChildCount: number;
 }
 
-interface AxisTick {
+export interface AxisTick {
   index: number;
   label: string;
+  /** The domain's opening label at day 0, when the domain does not start on
+   *  this tier's boundary. The timeline draws it only when the first real
+   *  tick is far enough away in px (`primaryAxisTicks`, RADD-1520). */
+  opening?: boolean;
 }
 
 export interface RoadmapModel {
@@ -50,7 +54,13 @@ export interface RoadmapModel {
   domainStart: Date | null;
   domainDays: number;
   weeks: AxisTick[];
+  /** Month starts — the label carries the year on January and on the opening
+   *  tick, so a multi-year domain says which year it is (RADD-1520). */
   months: AxisTick[];
+  /** Quarter starts ("Q3 2026") and year starts ("2026"): the coarser axis
+   *  tiers the timeline draws once a month is too narrow for its label. */
+  quarters: AxisTick[];
+  years: AxisTick[];
   /** Day index of today, or null when today is outside the domain. */
   todayIndex: number | null;
 }
@@ -63,7 +73,14 @@ export function rowWindowIso(row: RoadmapRow): { start: string | null; target: s
   };
 }
 
-const MONTH_SHORT =(date: Date) => formatIso(toISODate(date), { month: "short" });
+const MONTH_SHORT = (date: Date) => formatIso(toISODate(date), { month: "short" });
+const MONTH_YEAR = (date: Date) => `${MONTH_SHORT(date)} ${date.getFullYear()}`;
+const QUARTER_LABEL = (date: Date) => `Q${Math.floor(date.getMonth() / 3) + 1} ${date.getFullYear()}`;
+
+/** Prepend the opening tick at day 0 unless a real one already sits there. */
+function openingTick(ticks: AxisTick[], label: string): void {
+  if (ticks.length === 0 || ticks[0].index > 0) ticks.unshift({ index: 0, label, opening: true });
+}
 
 function minDate(dates: Date[]): Date {
   return dates.reduce((a, b) => (a.getTime() <= b.getTime() ? a : b));
@@ -188,6 +205,8 @@ export function buildRoadmapModel(
       domainDays: 0,
       weeks: [],
       months: [],
+      quarters: [],
+      years: [],
       todayIndex: null,
     };
   }
@@ -235,17 +254,24 @@ export function buildRoadmapModel(
   }
 
   const months: AxisTick[] = [];
+  const quarters: AxisTick[] = [];
+  const years: AxisTick[] = [];
   for (let day = new Date(domainStart); day <= domainEnd; day = addDays(day, 1)) {
-    if (day.getDate() === 1) months.push({ index: indexOf(day), label: MONTH_SHORT(day) });
+    if (day.getDate() !== 1) continue;
+    const index = indexOf(day);
+    const month = day.getMonth();
+    months.push({ index, label: month === 0 ? MONTH_YEAR(day) : MONTH_SHORT(day) });
+    if (month % 3 === 0) quarters.push({ index, label: QUARTER_LABEL(day) });
+    if (month === 0) years.push({ index, label: String(day.getFullYear()) });
   }
-  // Label the domain's opening month too, but only when the first month
-  // boundary is far enough in that the two labels won't collide.
-  if (months.length === 0 || months[0].index >= 6) {
-    months.unshift({ index: 0, label: MONTH_SHORT(domainStart) });
-  }
+  // Label the domain's opening month / quarter / year too; whether it fits
+  // beside the first real tick depends on the zoom, so the timeline decides.
+  openingTick(months, MONTH_YEAR(domainStart));
+  openingTick(quarters, QUARTER_LABEL(domainStart));
+  openingTick(years, String(domainStart.getFullYear()));
 
   const todayDate = parseDay(today);
   const todayIndex = todayDate >= domainStart && todayDate <= domainEnd ? indexOf(todayDate) : null;
 
-  return { rows, domainStart, domainDays, weeks, months, todayIndex };
+  return { rows, domainStart, domainDays, weeks, months, quarters, years, todayIndex };
 }

@@ -37,6 +37,9 @@ export const sidePanelStorageKey = (panelKey: string) => `radd.panel.${panelKey}
 export const roadmapLabelWidthStorageKey = (viewId: string) =>
   `radd.roadmap.${viewId}.labelWidth`;
 
+/** Roadmap zoom (the day width), remembered per view like the gutter (RADD-1520). */
+export const roadmapZoomStorageKey = (viewId: string) => `radd.roadmap.${viewId}.dayWidth`;
+
 /** Roadmap "Show closed" toggle: off = done/canceled items are not drawn (RADD-946). */
 export const roadmapShowClosedStorageKey = (viewId: string) =>
   `radd.roadmap.${viewId}.showClosed`;

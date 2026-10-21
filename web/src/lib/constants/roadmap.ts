@@ -14,16 +14,23 @@ export const ROADMAP_LABEL_MAX_WIDTH = 560;
 
 /** Roadmap zoom levels (spec 77): selectable day widths for the time axis. */
 export const ROADMAP_ZOOM_LEVELS: readonly { width: number; label: string }[] = [
+  { width: 2, label: "Overview" },
   { width: 6, label: "Compact" },
   { width: ROADMAP_DAY_WIDTH, label: "Default" },
   { width: 14, label: "Wide" },
 ];
 /** Continuous zoom bounds (viewport wave): ctrl+wheel / ± buttons move the
- *  day width anywhere in this range; the presets above are just landmarks. */
-export const ROADMAP_DAY_WIDTH_MIN = 2;
+ *  day width anywhere in this range; the presets above are just landmarks.
+ *  The floor is a quarter pixel per day (RADD-1520): a year is ~91px, so a
+ *  multi-year domain fits one pane — the old floor of 2 left the six-year
+ *  BNS roadmap 4.6 panes wide. The rows scale down with the day width
+ *  (model/zoom.ts), which is the other half of "zoom out". */
+export const ROADMAP_DAY_WIDTH_MIN = 0.25;
 export const ROADMAP_DAY_WIDTH_MAX = 40;
 /** One ctrl+wheel notch (deltaY 100) multiplies the day width by this. */
 export const ROADMAP_ZOOM_WHEEL_FACTOR = 1.18;
+/** One ± toolbar click multiplies the day width by this. */
+export const ROADMAP_ZOOM_BUTTON_FACTOR = 1.4;
 /** Rubber-band drags shorter than this (px) count as plain clicks. */
 export const ROADMAP_BAND_THRESHOLD_PX = 4;
 /** Frame-selected (F): the selection span fills this fraction of the pane. */

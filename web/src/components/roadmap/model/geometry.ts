@@ -1,12 +1,15 @@
 /** Roadmap geometry: bar sizes, hit zones, px ↔ day-index conversion (spec 77). */
 
 // Vertical bar/row geometry — ONE source for bar rows, connectors, drag ghosts
-// and container regions so nothing misaligns. Fixed px, independent of zoom.
+// and container regions so nothing misaligns. These are the COMFORTABLE sizes,
+// at and above the default day width; zooming out below it scales them down
+// together (`roadmapRowMetrics` in ./zoom.ts, RADD-1520) — read the live
+// metrics, never these constants, anywhere a row's height matters.
 
 /** Leaf (issue/subtask) bar height. */
-const ROADMAP_LEAF_BAR_H = 30;
+export const ROADMAP_LEAF_BAR_H = 30;
 /** Epic bar height — a touch taller than leaves so containers read as such. */
-const ROADMAP_EPIC_BAR_H = 34;
+export const ROADMAP_EPIC_BAR_H = 34;
 /** Breathing room above/below the tallest bar in a row. */
 const ROADMAP_ROW_PAD_Y = 5;
 /** Row pitch — label cells, lanes, connector Y math, and the drop lane. */
@@ -32,20 +35,31 @@ export const ROADMAP_BAR_INFO_MIN_PX = 90;
  *  the bar was considered and dropped: the sticky label gutter already names
  *  every row, and an outside title collides with the next bar. */
 export const ROADMAP_BAR_COMPACT_MIN_PX = 48;
+/** Height gates (RADD-1520): bars shrink with the zoom, and chrome that cannot
+ *  fit steps down rather than clipping. The title line (13px text) needs 22px;
+ *  the icon pill (14px icon + its padding) 18px; the 20px avatar in its pill
+ *  26px — below that the pill keeps the icon alone. */
+export const ROADMAP_BAR_INFO_MIN_H = 22;
+export const ROADMAP_BAR_PILL_MIN_H = 18;
+export const ROADMAP_BAR_AVATAR_MIN_H = 26;
 
 export const RoadmapBarInfoTier = { full: "full", compact: "compact", none: "none" } as const;
 export type RoadmapBarInfoTierValue = (typeof RoadmapBarInfoTier)[keyof typeof RoadmapBarInfoTier];
 
-/** Which in-bar info tier a rendered width earns. */
-export function barInfoTier(renderWidth: number): RoadmapBarInfoTierValue {
-  if (renderWidth >= ROADMAP_BAR_INFO_MIN_PX) return RoadmapBarInfoTier.full;
-  if (renderWidth >= ROADMAP_BAR_COMPACT_MIN_PX) return RoadmapBarInfoTier.compact;
+/** Which in-bar info tier a rendered width AND height earn. */
+export function barInfoTier(renderWidth: number, barHeight: number): RoadmapBarInfoTierValue {
+  if (renderWidth >= ROADMAP_BAR_INFO_MIN_PX && barHeight >= ROADMAP_BAR_INFO_MIN_H) {
+    return RoadmapBarInfoTier.full;
+  }
+  if (renderWidth >= ROADMAP_BAR_COMPACT_MIN_PX && barHeight >= ROADMAP_BAR_PILL_MIN_H) {
+    return RoadmapBarInfoTier.compact;
+  }
   return RoadmapBarInfoTier.none;
 }
 
-/** The bar height for a row — epics are taller than leaves. */
-export function roadmapBarHeight(isEpic: boolean): number {
-  return isEpic ? ROADMAP_EPIC_BAR_H : ROADMAP_LEAF_BAR_H;
+/** Whether the assignee avatar fits the bar's pill at this height. */
+export function barShowsAvatar(barHeight: number): boolean {
+  return barHeight >= ROADMAP_BAR_AVATAR_MIN_H;
 }
 
 // A bar's rendered width IS its logical width (>= one day). The one clamp is

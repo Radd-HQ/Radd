@@ -14,3 +14,4 @@ export * from "./model/scheduling";
 export * from "./model/reorder";
 export * from "./model/progress";
 export * from "./model/cycles";
+export * from "./model/zoom";

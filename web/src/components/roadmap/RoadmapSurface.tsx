@@ -19,6 +19,7 @@ import {
   GanttChartSquare,
   Gem,
   History,
+  Maximize2,
   Redo2,
   Rows3,
   Undo2,
@@ -40,8 +41,6 @@ import {
   ITEMS_PAGE_LIMIT,
   ROADMAP_CHILDREN_PAGE_CAP,
   ROADMAP_DAY_WIDTH,
-  ROADMAP_DAY_WIDTH_MAX,
-  ROADMAP_DAY_WIDTH_MIN,
   ROADMAP_EXTEND_STEP_DAYS,
   ROADMAP_FRAME_FILL,
   ROADMAP_LABEL_MAX_WIDTH,
@@ -49,7 +48,9 @@ import {
   ROADMAP_LABEL_WIDTH,
   roadmapFlatStorageKey,
   roadmapLabelWidthStorageKey,
+  roadmapZoomStorageKey,
   ROADMAP_PROGRESS_STALE_MS,
+  ROADMAP_ZOOM_BUTTON_FACTOR,
   ROADMAP_ZOOM_LEVELS,
 } from "../../lib/constants";
 import { pushToast } from "../../lib/toast";
@@ -65,16 +66,19 @@ import { UnscheduledTray } from "./UnscheduledTray";
 import { useRoadmapEditing } from "./useRoadmapEditing";
 import {
   NO_EXTENSION,
-  ROADMAP_ROW_H,
   RoadmapRowKind,
   blocksEdges,
   buildRoadmapModel,
+  clampDayWidth,
   cycleBands,
   durationDaysFromEstimate,
+  fitDayWidth,
   importChildrenPlan,
   parseDay,
   roadmapAxisHeight,
+  roadmapRowMetrics,
   spreadChildrenPlan,
+  zoomPercentLabel,
   type RoadmapExtension,
   type RoadmapRow,
 } from "./roadmap-model";
@@ -276,7 +280,21 @@ export function RoadmapSurface({
         .map((row) => row.item.id),
     [model.rows],
   );
-  const [dayWidth, setDayWidth] = useState(ROADMAP_DAY_WIDTH);
+  // Zoom = the day width, remembered per view (RADD-1520) the way the label
+  // gutter is: a planner comes back to the level they left, not the default.
+  // Only a user change writes; a view switch re-reads.
+  const [dayWidth, setDayWidthState] = useState(() => storedDayWidth(view.id));
+  useEffect(() => {
+    setDayWidthState(storedDayWidth(view.id));
+  }, [view.id]);
+  const setDayWidth = useCallback(
+    (width: number) => {
+      const next = clampDayWidth(width);
+      setDayWidthState(next);
+      window.localStorage.setItem(roadmapZoomStorageKey(view.id), String(next));
+    },
+    [view.id],
+  );
   const [showConnectors, setShowConnectors] = useState(true);
   const [trayDragItem, setTrayDragItem] = useState<Item | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -506,7 +524,8 @@ export function RoadmapSurface({
 
   // Viewport navigation (DCC-style): middle-mouse pan + ctrl-wheel cursor-
   // anchored zoom; zoomBy also backs the toolbar ± buttons.
-  const { zoomBy } = useRoadmapViewport(scrollRef, labelWidth, dayWidth, setDayWidth);
+  const axisHeight = roadmapAxisHeight(bands.length > 0);
+  const { zoomBy } = useRoadmapViewport(scrollRef, labelWidth, axisHeight, dayWidth, setDayWidth);
 
   // Selection (viewport wave): label clicks select (ctrl/meta toggles), the
   // timeline's rubber band multi-selects, F frames the selection, Escape
@@ -542,10 +561,7 @@ export function RoadmapSurface({
     const maxEnd = Math.max(...rows.map((row) => row.endIndex));
     const spanDays = Math.max(maxEnd - minStart + 1, 1);
     const visible = Math.max(el.clientWidth - labelWidth, 100);
-    const targetW = Math.min(
-      ROADMAP_DAY_WIDTH_MAX,
-      Math.max(ROADMAP_DAY_WIDTH_MIN, (visible * ROADMAP_FRAME_FILL) / spanDays),
-    );
+    const targetW = clampDayWidth((visible * ROADMAP_FRAME_FILL) / spanDays);
     setDayWidth(targetW);
     const firstRowIndex = Math.min(
       ...rows.map((row) => visibleRows.findIndex((r) => r.item.id === row.item.id)).filter((i) => i >= 0),
@@ -553,12 +569,27 @@ export function RoadmapSurface({
     requestAnimationFrame(() => {
       el.scrollLeft = Math.max(0, minStart * targetW - (visible - spanDays * targetW) / 2);
       if (Number.isFinite(firstRowIndex)) {
-        // Rows start after the axis header (plus the cycle strip) in the scroll content.
-        const header = roadmapAxisHeight(bands.length > 0);
-        el.scrollTop = Math.max(0, header + firstRowIndex * ROADMAP_ROW_H - el.clientHeight / 2);
+        // Rows start after the axis header (plus the cycle strip) in the
+        // scroll content, at the pitch the NEW zoom gives them.
+        const { rowH } = roadmapRowMetrics(targetW);
+        el.scrollTop = Math.max(0, axisHeight + firstRowIndex * rowH - el.clientHeight / 2);
       }
     });
-  }, [scrollRef, selectedIds, model.rows, visibleRows, labelWidth, bands.length]);
+  }, [scrollRef, selectedIds, model.rows, visibleRows, labelWidth, axisHeight, setDayWidth]);
+
+  /** Fit (A): the whole domain in the visible timeline width, from the origin
+   *  — the DCC "frame all" verb beside F. The rows follow the day width down,
+   *  so a long domain also shows far more of the plan vertically. */
+  const fitAll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || model.domainDays === 0) return;
+    anchoredRef.current = false; // manual navigation from here on
+    setDayWidth(fitDayWidth(el.clientWidth - labelWidth, model.domainDays));
+    requestAnimationFrame(() => {
+      el.scrollLeft = 0;
+      el.scrollTop = 0;
+    });
+  }, [scrollRef, model.domainDays, labelWidth, setDayWidth]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -571,6 +602,8 @@ export function RoadmapSurface({
       }
       if (event.key === "f" || event.key === "F") {
         frameSelection();
+      } else if (event.key === "a" || event.key === "A") {
+        fitAll();
       } else if (event.key === "Escape") {
         setSelectedIds(new Set());
         setSelectionMenu(null);
@@ -585,7 +618,7 @@ export function RoadmapSurface({
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [frameSelection, draft]);
+  }, [frameSelection, fitAll, draft]);
 
   // Keep TODAY in view: the domain begins at the earliest loaded bar (often
   // years back). Anchor today ~1/3 into the timeline, re-applied as pages
@@ -642,23 +675,32 @@ export function RoadmapSurface({
               value: String(zoom.width),
               label: zoom.label,
             })),
-            // Ctrl+wheel / ± leave the presets — show where we landed.
+            // Ctrl+wheel / ± / Fit leave the presets — show where we landed,
+            // as a share of the default: "22%" reads, "2.0px" did not.
             ...(ROADMAP_ZOOM_LEVELS.some((zoom) => zoom.width === dayWidth)
               ? []
-              : [{ value: String(dayWidth), label: `${dayWidth.toFixed(1)}px` }]),
+              : [{ value: String(dayWidth), label: zoomPercentLabel(dayWidth) }]),
           ]}
         />
         <ToolbarIconButton
           icon={ZoomOut}
           label="Zoom out"
           title="Zoom out (or ctrl+wheel on the timeline)"
-          onClick={() => zoomBy(1 / 1.4)}
+          onClick={() => zoomBy(1 / ROADMAP_ZOOM_BUTTON_FACTOR)}
         />
         <ToolbarIconButton
           icon={ZoomIn}
           label="Zoom in"
           title="Zoom in (or ctrl+wheel on the timeline)"
-          onClick={() => zoomBy(1.4)}
+          onClick={() => zoomBy(ROADMAP_ZOOM_BUTTON_FACTOR)}
+        />
+        <ToolbarIconButton
+          icon={Maximize2}
+          label="Fit the whole timeline"
+          title="Fit the whole timeline in view (A) — F frames the selection"
+          onClick={fitAll}
+          disabled={model.domainDays === 0}
+          disabledClass="opacity-50 pointer-events-none"
         />
         <button
           type="button"
@@ -940,6 +982,13 @@ export function RoadmapSurface({
       )}
     </div>
   );
+}
+
+/** The view's remembered day width, or the default; clamped, so a stale value
+ *  from an older range never lands outside today's. */
+function storedDayWidth(viewId: string): number {
+  const stored = Number(window.localStorage.getItem(roadmapZoomStorageKey(viewId)));
+  return Number.isFinite(stored) && stored > 0 ? clampDayWidth(stored) : ROADMAP_DAY_WIDTH;
 }
 
 const TOOLBAR_ICON_BUTTON =

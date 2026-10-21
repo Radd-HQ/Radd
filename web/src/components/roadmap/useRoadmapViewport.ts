@@ -2,21 +2,21 @@
  *  CTRL/META+wheel zooms the day width anchored at the cursor (plain wheel still
  *  scrolls); `zoomBy` backs the toolbar ± buttons, anchored at the viewport
  *  center. Listeners live on the pane, and pan uses a button bars, labels and
- *  tray drags never use, so those gestures are untouched. */
+ *  tray drags never use, so those gestures are untouched.
+ *
+ *  The zoom is two-axis (RADD-1520): below the default day width the row pitch
+ *  shrinks with it (`roadmapRowMetrics`), so the scroll correction anchors the
+ *  ROW under the cursor as well as the day. */
 
 import { useCallback, useEffect, useRef, type RefObject } from "react";
-import {
-  ROADMAP_DAY_WIDTH_MAX,
-  ROADMAP_DAY_WIDTH_MIN,
-  ROADMAP_ZOOM_WHEEL_FACTOR,
-} from "../../lib/constants";
-
-const clampWidth = (width: number) =>
-  Math.min(ROADMAP_DAY_WIDTH_MAX, Math.max(ROADMAP_DAY_WIDTH_MIN, width));
+import { ROADMAP_ZOOM_WHEEL_FACTOR } from "../../lib/constants";
+import { clampDayWidth, roadmapRowMetrics } from "./roadmap-model";
 
 export function useRoadmapViewport(
   scrollRef: RefObject<HTMLDivElement | null>,
   labelWidth: number,
+  /** The sticky axis header's height — rows start below it in the scroll content. */
+  axisHeight: number,
   dayWidth: number,
   setDayWidth: (width: number) => void,
 ) {
@@ -25,26 +25,34 @@ export function useRoadmapViewport(
   dayWidthRef.current = dayWidth;
   const labelWidthRef = useRef(labelWidth);
   labelWidthRef.current = labelWidth;
+  const axisHeightRef = useRef(axisHeight);
+  axisHeightRef.current = axisHeight;
 
-  /** Zoom so the day at `anchorViewportX` (px from the pane's left edge;
-   *  default = center of the visible timeline) stays under that point. */
+  /** Zoom so the day at `anchorX` and the row at `anchorY` (px from the pane's
+   *  top-left; default = the centre of the visible timeline) stay under that
+   *  point. */
   const zoomBy = useCallback(
-    (factor: number, anchorViewportX?: number) => {
+    (factor: number, anchorX?: number, anchorY?: number) => {
       const el = scrollRef.current;
       if (!el) return;
       const oldW = dayWidthRef.current;
-      const newW = clampWidth(oldW * factor);
+      const newW = clampDayWidth(oldW * factor);
       if (newW === oldW) return;
       const gutter = labelWidthRef.current;
-      const anchor =
-        anchorViewportX ?? gutter + (el.clientWidth - gutter) / 2;
-      // Content x of the anchored day, minus the gutter, in day units.
-      const day = (el.scrollLeft + anchor - gutter) / oldW;
+      const header = axisHeightRef.current;
+      const ax = anchorX ?? gutter + (el.clientWidth - gutter) / 2;
+      const ay = anchorY ?? header + (el.clientHeight - header) / 2;
+      // Content position of the anchored day / row, in day and row units.
+      const day = (el.scrollLeft + ax - gutter) / oldW;
+      const oldRowH = roadmapRowMetrics(oldW).rowH;
+      const newRowH = roadmapRowMetrics(newW).rowH;
+      const row = (el.scrollTop + ay - header) / oldRowH;
       setDayWidth(newW);
-      // The scroll correction uses the NEW width directly — no need to wait
+      // The scroll correction uses the NEW sizes directly — no need to wait
       // for the re-render, scroll metrics are independent of paint.
       requestAnimationFrame(() => {
-        el.scrollLeft = Math.max(0, day * newW + gutter - anchor);
+        el.scrollLeft = Math.max(0, day * newW + gutter - ax);
+        if (newRowH !== oldRowH) el.scrollTop = Math.max(0, row * newRowH + header - ay);
       });
     },
     [scrollRef, setDayWidth],
@@ -90,20 +98,22 @@ export function useRoadmapViewport(
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    let queued: { deltaY: number; x: number } | null = null;
+    let queued: { deltaY: number; x: number; y: number } | null = null;
     const wheel = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
       const first = queued === null;
+      const rect = el.getBoundingClientRect();
       queued = {
         deltaY: (queued?.deltaY ?? 0) + event.deltaY,
-        x: event.clientX - el.getBoundingClientRect().left,
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
       };
       if (!first) return;
       requestAnimationFrame(() => {
         if (!queued) return;
         const steps = -queued.deltaY / 100;
-        zoomBy(ROADMAP_ZOOM_WHEEL_FACTOR ** steps, queued.x);
+        zoomBy(ROADMAP_ZOOM_WHEEL_FACTOR ** steps, queued.x, queued.y);
         queued = null;
       });
     };

@@ -19,16 +19,18 @@ import { AssigneeAvatar, ItemKeyLink, KindBadge, PriorityIcon } from "../items/I
 import {
   DragEdge,
   ROADMAP_LINK_HANDLE_HIT_PX,
-  ROADMAP_ROW_H,
   RoadmapBarInfoTier,
+  RoadmapLabelTier,
   RoadmapRowKind,
   barHitZones,
   barInfoTier,
   barRenderWidth,
+  barShowsAvatar,
   isoFromDay,
-  roadmapBarHeight,
+  roadmapLabelTier,
   type BarProgress,
   type RoadmapRow,
+  type RoadmapRowMetrics,
   type RoadmapSpan,
 } from "./roadmap-model";
 import { BAR_ITEM_ATTR, BarDragMode, type BarDrag } from "./useBarDrag";
@@ -62,6 +64,7 @@ export function BarRow({
   row,
   innerWidth,
   dayWidth,
+  metrics,
   labelWidth,
   canEdit,
   drag,
@@ -94,6 +97,9 @@ export function BarRow({
   row: RoadmapRow;
   innerWidth: number;
   dayWidth: number;
+  /** LIVE row pitch and bar heights for this zoom (RADD-1520) — never the
+   *  geometry constants, which are the comfortable ceiling. */
+  metrics: RoadmapRowMetrics;
   /** LIVE label-gutter width — see the note on ROADMAP_LABEL_WIDTH. */
   labelWidth: number;
   canEdit: boolean;
@@ -158,9 +164,13 @@ export function BarRow({
   const width = barRenderWidth(span.startIndex, span.endIndex, dayWidth);
   const zones = barHitZones(width);
   const color = CATEGORY_CHART_COLORS[item.state.category];
-  const barHeight = roadmapBarHeight(isEpic);
-  // In-bar info by width (RADD-1509): full, compact (icon + avatar), none.
-  const infoTier = barInfoTier(width);
+  const barHeight = isEpic ? metrics.epicBarH : metrics.leafBarH;
+  // In-bar info by width (RADD-1509) and height (RADD-1520): full, compact
+  // (icon + avatar), none — and the avatar alone needs a taller bar.
+  const infoTier = barInfoTier(width, barHeight);
+  const showAvatar = barShowsAvatar(barHeight);
+  // The label cell's chrome steps down with the row pitch (RADD-1520).
+  const labelTier = roadmapLabelTier(metrics.rowH);
   // Leaf bars are SOLID category fills: acted-on categories are light and take
   // dark text; terminal states (slate) and translucent epics take light text.
   // The same split picks the progress band colour.
@@ -202,13 +212,13 @@ export function BarRow({
         (selected ? " bg-accent/10" : "")
       }
       // The ROW owns the height (RADD-1513): with border-box sizing the 1px
-      // separator is INSIDE these ROADMAP_ROW_H px and the two cells stretch
-      // to fill, so consecutive rows are exactly ROADMAP_ROW_H apart — which
-      // is what every `rowIndex * ROADMAP_ROW_H` (group boxes, connectors,
-      // drop targets) assumes. Cells that carried the height themselves put
-      // the border outside and drifted a pixel per row (a DEVICE pixel when
-      // zoomed out: six rows over a 92-child epic at 30%).
-      style={{ height: ROADMAP_ROW_H }}
+      // separator is INSIDE these rowH px and the two cells stretch to fill,
+      // so consecutive rows are exactly rowH apart — which is what every
+      // `rowIndex * rowH` (group boxes, connectors, drop targets) assumes.
+      // Cells that carried the height themselves put the border outside and
+      // drifted a pixel per row (a DEVICE pixel when zoomed out: six rows
+      // over a 92-child epic at 30%).
+      style={{ height: metrics.rowH }}
       onContextMenu={
         canEdit
           ? (event) => {
@@ -282,21 +292,24 @@ export function BarRow({
         }`}
         data-row-kind={rowKind}
       >
-        {isEpic && row.scheduledChildCount > 0 ? (
-          <button
-            type="button"
-            onClick={() => onToggleCollapse(item.id)}
-            aria-expanded={!collapsed}
-            aria-label={collapsed ? "Expand children" : "Collapse children"}
-            className="shrink-0 rounded p-px text-fg-muted hover:bg-elevated hover:text-fg focus-visible:outline-2 focus-visible:outline-focus cursor-pointer"
-          >
-            <ChevronIcon size={14} aria-hidden />
-          </button>
-        ) : (
-          // Every non-chevron row keeps the chevron's slot, children included:
-          // without it a child's badge sat 2px right of its epic's (RADD-1508).
-          <span className="w-4 shrink-0" aria-hidden />
-        )}
+        {labelTier !== RoadmapLabelTier.none &&
+          (isEpic && row.scheduledChildCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => onToggleCollapse(item.id)}
+              aria-expanded={!collapsed}
+              aria-label={collapsed ? "Expand children" : "Collapse children"}
+              // A fixed 16px slot whatever the icon size, so the tree guide
+              // under it stays centred at every pitch.
+              className="flex w-4 shrink-0 items-center justify-center rounded text-fg-muted hover:bg-elevated hover:text-fg focus-visible:outline-2 focus-visible:outline-focus cursor-pointer"
+            >
+              <ChevronIcon size={labelTier === RoadmapLabelTier.full ? 14 : 10} aria-hidden />
+            </button>
+          ) : (
+            // Every non-chevron row keeps the chevron's slot, children included:
+            // without it a child's badge sat 2px right of its epic's (RADD-1508).
+            <span className="w-4 shrink-0" aria-hidden />
+          ))}
         {isChild && (
           // Tree guide (RADD-1508): a rail under the epic's chevron, down the
           // whole child block, so the indent reads as nesting at a glance.
@@ -307,6 +320,26 @@ export function BarRow({
             aria-hidden
           />
         )}
+        {labelTier === RoadmapLabelTier.mini && (
+          // The mini line (14–21px rows): key and title at the nano size,
+          // nothing else — the row still names itself at an overview zoom.
+          <>
+            <ItemKeyLink
+              itemKey={item.key}
+              className="shrink-0 font-mono text-nano text-fg-secondary hover:text-accent-text hover:underline"
+            />
+            <span
+              className={`min-w-0 flex-1 truncate text-nano leading-none ${
+                isEpic ? "font-semibold text-heading" : "text-fg"
+              }`}
+              title={item.title}
+            >
+              {item.title}
+            </span>
+          </>
+        )}
+        {labelTier === RoadmapLabelTier.full && (
+        <>
         <KindBadge kind={item.kind} size={13} />
         <ItemKeyLink itemKey={item.key} />
         <span
@@ -379,9 +412,17 @@ export function BarRow({
             <Focus size={13} aria-hidden />
           </button>
         )}
+        </>
+        )}
       </div>
 
-      <div className="relative" style={{ width: innerWidth }}>
+      {/* overflow-x-clip (RADD-1520): a min-width bar on the domain's last days,
+          plus the ○ handle and chip that hang off its right edge, would poke
+          past the domain and widen the scroll content, so a fitted timeline
+          was always a few px wider than the pane. `clip` (not hidden) keeps
+          the cell out of the scroll-container business and leaves the y axis
+          alone, so the ghost date chip above the row still shows. */}
+      <div className="relative overflow-x-clip" style={{ width: innerWidth }}>
         {/* Original position placeholder while the ghost is out. */}
         {preview && (
           <div
@@ -468,7 +509,7 @@ export function BarRow({
                 }`}
               >
                 <PriorityIcon priority={item.priority} size={14} />
-                {item.assignee && <AssigneeAvatar assignee={item.assignee} />}
+                {item.assignee && showAvatar && <AssigneeAvatar assignee={item.assignee} />}
               </span>
             </span>
           )}
@@ -480,7 +521,7 @@ export function BarRow({
                 }`}
               >
                 <PriorityIcon priority={item.priority} size={14} />
-                {item.assignee && <AssigneeAvatar assignee={item.assignee} />}
+                {item.assignee && showAvatar && <AssigneeAvatar assignee={item.assignee} />}
               </span>
             </span>
           )}
@@ -552,7 +593,7 @@ export function BarRow({
         {/* Depends-on chip — the fallback when the blocker's bar isn't drawn
             or connectors are off. Hangs off the clamped edge, past the ○
             handle's hit box in edit mode. */}
-        {dependsOn.length > 0 && (
+        {dependsOn.length > 0 && labelTier === RoadmapLabelTier.full && (
           <span
             className="absolute top-1/2 flex -translate-y-1/2 items-center gap-0.5 whitespace-nowrap rounded bg-red-500/15 px-1 py-px text-micro font-medium text-red-300"
             title={`Depends on ${dependsOn.map((link) => link.item.key).join(", ")}`}

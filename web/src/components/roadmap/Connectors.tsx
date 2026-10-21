@@ -1,6 +1,5 @@
 import { ItemLinkType } from "../../lib/types";
 import {
-  ROADMAP_ROW_H,
   barRenderRightX,
   isBlocksViolation,
   rowWindowIso,
@@ -56,7 +55,7 @@ interface Edge extends ConnectorEdge {
 }
 
 /** Source right edge → target left edge, orthogonal segments only. */
-function elbowPath(edge: Edge): string {
+function elbowPath(edge: Edge, rowH: number): string {
   const { sx, sy, tx, ty } = edge;
   if (tx - STUB_PX >= sx) {
     // Forward: out of the source, turn just before the target, drop in.
@@ -64,21 +63,24 @@ function elbowPath(edge: Edge): string {
     return `M ${sx} ${sy} H ${tx - STUB_PX} V ${ty} H ${tx}`;
   }
   // Backward: duck into the gutter between rows, run left, come back in.
-  const gutterY = ty > sy ? ty - ROADMAP_ROW_H / 2 : ty + ROADMAP_ROW_H / 2;
+  const gutterY = ty > sy ? ty - rowH / 2 : ty + rowH / 2;
   return `M ${sx} ${sy} H ${sx + STUB_PX} V ${gutterY} H ${tx - STUB_PX} V ${ty} H ${tx}`;
 }
 
 export function Connectors({
   rows,
   dayWidth,
+  rowH,
   width,
   showEdges,
   rubber,
   onEdgeClick,
 }: {
-  /** VISIBLE rows in render order — index i sits at y = i * ROADMAP_ROW_H. */
+  /** VISIBLE rows in render order — index i sits at y = i * rowH. */
   rows: RoadmapRow[];
   dayWidth: number;
+  /** The LIVE row pitch (RADD-1520) — it shrinks with the zoom. */
+  rowH: number;
   width: number;
   showEdges: boolean;
   rubber: RubberBand | null;
@@ -87,7 +89,7 @@ export function Connectors({
 }) {
   // One spare row of height so the rubber band isn't clipped over the open
   // drop lane below the last row.
-  const height = (rows.length + 1) * ROADMAP_ROW_H;
+  const height = (rows.length + 1) * rowH;
   const posById = new Map(rows.map((row, index) => [row.item.id, { row, index }] as const));
 
   const edges: Edge[] = [];
@@ -109,9 +111,9 @@ export function Connectors({
           // Off the CLAMPED right edge — min-width bars are wider than their
           // logical span, and the elbow must start at the visible edge.
           sx: barRenderRightX(row.startIndex, row.endIndex, dayWidth),
-          sy: index * ROADMAP_ROW_H + ROADMAP_ROW_H / 2,
+          sy: index * rowH + rowH / 2,
           tx: target.row.startIndex * dayWidth,
-          ty: target.index * ROADMAP_ROW_H + ROADMAP_ROW_H / 2,
+          ty: target.index * rowH + rowH / 2,
           violated:
             link.link_type === ItemLinkType.blocks &&
             Boolean(dependentStart && blockerTarget) &&
@@ -137,7 +139,7 @@ export function Connectors({
           : edge.linkType === ItemLinkType.blocks
             ? BLOCKS_COLOR
             : NEUTRAL_COLOR;
-        const path = elbowPath(edge);
+        const path = elbowPath(edge, rowH);
         return (
           <g key={edge.linkId} stroke={color} strokeOpacity={0.55}>
             <path

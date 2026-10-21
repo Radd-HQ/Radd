@@ -24,14 +24,17 @@ import { RoadmapHoverCard } from "./RoadmapHoverCard";
 import {
   ROADMAP_AXIS_H,
   ROADMAP_CYCLE_STRIP_H,
-  ROADMAP_ROW_H,
   RoadmapRowKind,
+  RoadmapWeekTier,
   barRenderRightX,
   clampDay,
   dayFromX,
   daysBetween,
   isRoadmapSibling,
+  primaryAxisTicks,
   roadmapAxisHeight,
+  roadmapAxisTiers,
+  roadmapRowMetrics,
   rowBarProgress,
   rowDropFromY,
   type RoadmapCycleBand,
@@ -153,6 +156,10 @@ export function RoadmapTimeline({
   rollupByItem,
 }: RoadmapTimelineProps) {
   const innerWidth = model.domainDays * dayWidth;
+  // The row pitch and bar heights for THIS zoom (RADD-1520) — every y below
+  // (regions, connectors, the rubber band, drop targets) multiplies rowH.
+  const metrics = roadmapRowMetrics(dayWidth);
+  const { rowH } = metrics;
   const rootRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [trayDropDay, setTrayDropDay] = useState<number | null>(null);
@@ -171,13 +178,13 @@ export function RoadmapTimeline({
   // both the live indicator and the drop, so they never disagree.
   const resolveReorderDrop = useCallback(
     (moved: RoadmapRow, y: number): { target: RoadmapRow; before: boolean } | null => {
-      const hit = rowDropFromY(y, visibleRows.length);
+      const hit = rowDropFromY(y, visibleRows.length, rowH);
       if (!hit) return null;
       const target = visibleRows[hit.index];
       if (target.item.id === moved.item.id || !isRoadmapSibling(moved, target)) return null;
       return { target, before: hit.before };
     },
-    [visibleRows],
+    [visibleRows, rowH],
   );
   const handleReorderDrop = useCallback(
     (moved: RoadmapRow, y: number) => {
@@ -308,8 +315,18 @@ export function RoadmapTimeline({
     [visibleRows],
   );
 
-  // Compact zoom halves the week-label density so ticks don't collide.
-  const weekTicks = dayWidth < 8 ? model.weeks.filter((week) => week.index % 14 === 0) : model.weeks;
+  // Axis tiers by pixel pitch (RADD-1520): weekly labels, then alternate weeks,
+  // then none; months (the year on January) down to ~2.2px/day, quarters to
+  // ~0.64, years below. The body gridlines follow the finest tier drawn.
+  const tiers = roadmapAxisTiers(dayWidth);
+  const weekTicks =
+    tiers.weeks === RoadmapWeekTier.all
+      ? model.weeks
+      : tiers.weeks === RoadmapWeekTier.alternate
+        ? model.weeks.filter((week) => week.index % 14 === 0)
+        : [];
+  const primaryTicks = primaryAxisTicks(model, tiers.primary, dayWidth);
+  const gridTicks = weekTicks.length > 0 ? weekTicks : primaryTicks;
 
   // Epic container drag (spec 81): while an epic's BODY moves (and Alt isn't
   // held), its child bars render translated by the epic ghost's live snapped
@@ -382,7 +399,7 @@ export function RoadmapTimeline({
     linkState?.pointer != null
       ? {
           x1: barRenderRightX(linkState.row.startIndex, linkState.row.endIndex, dayWidth),
-          y1: (rowIndexById.get(linkState.row.item.id) ?? 0) * ROADMAP_ROW_H + ROADMAP_ROW_H / 2,
+          y1: (rowIndexById.get(linkState.row.item.id) ?? 0) * rowH + rowH / 2,
           x2: linkState.pointer.x,
           y2: linkState.pointer.y,
         }
@@ -428,10 +445,10 @@ export function RoadmapTimeline({
       const y1 = e.clientY - r.top;
       const dayLo = Math.floor((Math.min(x0, x1) - labelWidth) / dayWidth);
       const dayHi = Math.ceil((Math.max(x0, x1) - labelWidth) / dayWidth);
-      const rowLo = Math.max(0, Math.floor(Math.min(y0, y1) / ROADMAP_ROW_H));
+      const rowLo = Math.max(0, Math.floor(Math.min(y0, y1) / rowH));
       const rowHi = Math.min(
         visibleRows.length - 1,
-        Math.floor(Math.max(y0, y1) / ROADMAP_ROW_H),
+        Math.floor(Math.max(y0, y1) / rowH),
       );
       const ids: string[] = [];
       for (let i = rowLo; i <= rowHi; i++) {
@@ -492,6 +509,9 @@ export function RoadmapTimeline({
       className="relative min-h-full"
       style={{ minWidth: labelWidth + innerWidth }}
       data-roadmap-timeline
+      data-day-width={dayWidth}
+      data-row-h={rowH}
+      data-axis-tier={tiers.primary}
       {...trayTargetProps}
     >
       {/* Tray drop indicator: the target day, down the FULL pane height. */}
@@ -530,7 +550,10 @@ export function RoadmapTimeline({
           Timeline
         </div>
         <div
-          className="relative"
+          // overflow-hidden: the last tick's label (whitespace-nowrap, anchored
+          // at its left) would otherwise spill past the domain's end and widen
+          // the scroll content, so Fit could never quite fit (RADD-1520).
+          className="relative overflow-hidden"
           style={{ width: innerWidth, height: roadmapAxisHeight(bands.length > 0) }}
         >
           {/* Cycle strip (RADD-1511): one labelled band per dated cycle, under
@@ -553,7 +576,7 @@ export function RoadmapTimeline({
               {band.name}
             </span>
           ))}
-          {model.months.map((month) => (
+          {primaryTicks.map((month) => (
             <span
               key={`m-${month.index}`}
               className="absolute top-1 whitespace-nowrap border-l border-strong pl-1 text-meta font-semibold text-fg"
@@ -624,8 +647,8 @@ export function RoadmapTimeline({
                   style={{
                     left: (region.startIndex + delta) * dayWidth,
                     width: region.rightX - region.startIndex * dayWidth,
-                    top: region.rowIndex * ROADMAP_ROW_H,
-                    height: region.rowCount * ROADMAP_ROW_H,
+                    top: region.rowIndex * rowH,
+                    height: region.rowCount * rowH,
                     // RADD-1515: 2px in the category's ink tier. A neutral border
                     // was the day grid's grey — ~1.1:1 on the light page, and
                     // invisible wherever it sat on a day line; the fill tier
@@ -653,7 +676,7 @@ export function RoadmapTimeline({
               }}
             />
           ))}
-          {weekTicks.map((week) => (
+          {gridTicks.map((week) => (
             <div
               key={`g-${week.index}`}
               className="absolute inset-y-0 border-l border-subtle/50"
@@ -676,6 +699,7 @@ export function RoadmapTimeline({
               row={row}
               innerWidth={innerWidth}
               dayWidth={dayWidth}
+              metrics={metrics}
               labelWidth={labelWidth}
               canEdit={canEdit}
               drag={drag}
@@ -716,7 +740,7 @@ export function RoadmapTimeline({
             />
           ))}
           {/* Open lane below the last row — drop space for tray scheduling. */}
-          {canEdit && <div style={{ height: ROADMAP_ROW_H }} aria-hidden />}
+          {canEdit && <div style={{ height: rowH }} aria-hidden />}
         </div>
 
         {/* Connectors read the COMMITTED model spans, so during an epic
@@ -731,6 +755,7 @@ export function RoadmapTimeline({
             <Connectors
               rows={visibleRows}
               dayWidth={dayWidth}
+              rowH={rowH}
               width={innerWidth}
               showEdges={showConnectors}
               rubber={rubber}
