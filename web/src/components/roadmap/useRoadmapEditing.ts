@@ -34,6 +34,7 @@ import {
   isoDaysBetween,
   isoFromDay,
   roadmapReorderNeighbours,
+  trayDropPlacement,
   type RoadmapModel,
   type RoadmapMove,
   type RoadmapRow,
@@ -298,10 +299,20 @@ export function useRoadmapEditing(
   /**
    * Schedule an unscheduled item dropped from the tray: start = the drop day
    * (today when the timeline is still empty), target = start + the kind's
-   * default span.
+   * default span. With a `placement` (the row and half under the pointer,
+   * RADD-1522) the item is also RANKED there, in the same compound op — the
+   * fold's reorder moves it to that row at once, one Undo reverts both, and
+   * Save replays the rank intent after the date patch exactly as a label
+   * drag does. Returns whether it was placed; an unplaceable drop (a sorted
+   * view, the axis header, a cross-scope target) appends as before and the
+   * caller reveals the row.
    */
   const scheduleFromTray = useCallback(
-    (item: Item, dayIndex: number | null) => {
+    (
+      item: Item,
+      dayIndex: number | null,
+      placement: { target: RoadmapRow; before: boolean } | null,
+    ): boolean => {
       const start =
         dayIndex !== null && model.domainStart
           ? isoFromDay(model.domainStart, dayIndex)
@@ -309,17 +320,34 @@ export function useRoadmapEditing(
       const spanDays =
         item.kind === ItemKind.epic ? ROADMAP_EPIC_SPAN_DAYS : ROADMAP_LEAF_SPAN_DAYS;
       const target = shiftIsoDay(start, spanDays);
+      const label = `Schedule ${item.key}`;
       // Direct draft push: the tray item is not in the roadmap's base fetch,
       // so the op carries the full Item (draft-wave INSERT) for drawing.
-      draft.pushOp({
+      const patch: DraftLeafOp = {
         kind: "patch",
-        label: `Schedule ${item.key}`,
+        label,
         patches: [
           { itemId: item.id, after: { start_date: start, target_date: target }, insert: item },
         ],
+      };
+      const placed = placement
+        ? trayDropPlacement(model.rows, item, placement.target, placement.before)
+        : null;
+      if (!placed) {
+        draft.pushOp(patch);
+        return false;
+      }
+      draft.pushOp({
+        kind: "compound",
+        label,
+        ops: [
+          patch,
+          { kind: "reorder", label, itemId: item.id, afterId: placed.afterId, beforeId: placed.beforeId },
+        ],
       });
+      return true;
     },
-    [model.domainStart, draft],
+    [model.domainStart, model.rows, draft],
   );
 
   /** ○-handle drop (spec 78): open the type popover at the drop point. */

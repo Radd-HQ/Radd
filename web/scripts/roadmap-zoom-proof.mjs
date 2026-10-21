@@ -2,6 +2,9 @@
 /**
  * RADD-1520 proof — the roadmap zoom, measured in a real browser:
  *
+ *   RADD-1522  a tray drop takes the row it was dropped on: beside a top-level row, after an epic's
+ *              block when dropped on one of its children, first child when a child is dropped on its
+ *              epic — with the insertion line on the landing row while dragging; Undo reverts each
  *   RADD-1520  Fit puts a 3.5-year domain inside the pane with no overlapping axis labels; the rows
  *              scale with the day width (every row exactly `data-row-h` apart, the group box ending
  *              on its last child at that pitch); the floor is 0.25 px/day with 8 px rows; zooming
@@ -12,7 +15,8 @@
  *   node web/scripts/roadmap-zoom-proof.mjs http://127.0.0.1:8000 admin@example.com change-me
  *
  * Creates a throwaway project (two epics with six children each, thirty standalone leaves spread
- * over 2024-02 → 2027-06, one roadmap view), measures, and deletes the project.
+ * over 2024-02 → 2027-06, three unscheduled items for the tray, one roadmap view), measures, and
+ * deletes the project.
  */
 import { resolve } from "node:path";
 import { outputPath, PAGE_API, report, sleep } from "./lib/cdp.mjs";
@@ -107,10 +111,13 @@ async function main() {
       }
       const leaves = [];
       for (const body of ${JSON.stringify(leaves)}) leaves.push(await item(body));
+      const trayOne = await item({ title: "tray one" });
+      const trayTwo = await item({ title: "tray two" });
+      const trayChild = await item({ title: "tray child", parent_id: epic1.id });
       const view = (await api("POST", "/views", { project_id: project.id, name: "Zoom roadmap", view_type: "roadmap" })).body;
-      return { project, epic1, epic2, kids, leaves, view };
+      return { project, epic1, epic2, kids, leaves, trayOne, trayTwo, trayChild, view };
     })()`);
-    const { project, epic1, epic2, leaves: leafItems, view } = setup;
+    const { project, epic1, epic2, kids, leaves: leafItems, trayOne, trayTwo, trayChild, view } = setup;
     projectId = project?.id ?? null;
     check("setup created the project, 44 rows' worth of items and the view", Boolean(project?.id && epic1?.id && epic2?.id && view?.id && leafItems?.length === 30), JSON.stringify({ project: project?.id, view: view?.id, leaves: leafItems?.length }));
     const url = `${baseUrl}/p/${KEY}/v/${view.id}`;
@@ -122,6 +129,67 @@ async function main() {
     check("the default zoom is 9 px/day with 44 px rows, month labels and weekly ticks", s && s.dayWidth === DAY_PX && s.rowH === ROW_PX && s.tier === "month" && s.weekLabels > 0, JSON.stringify(context.default));
     const pitchOk = (state) => state.rows.every((row, i) => i === 0 || Math.abs(row.top - state.rows[i - 1].bottom) < 0.01) && state.rows.every((row) => Math.abs(row.h - state.rowH) < 0.01);
     check("rows are exactly one pitch apart at the default", s && pitchOk(s), JSON.stringify(s?.rows.slice(0, 3).map((r) => [r.top, r.h])));
+
+    // --- RADD-1522: a tray drop lands on the row it was dropped on ----------------------------------
+    const hasKey = (text, key) => text.startsWith(key) && !/\d/.test(text.charAt(key.length));
+    const ROW_INDEX = (key) => `(() => [...document.querySelectorAll("[data-row-kind]")].findIndex((cell) => { const t = cell.textContent.trim(); return t.startsWith(${JSON.stringify(key)}) && !/\\d/.test(t.charAt(${key.length})); }))()`;
+    const INDICATOR = `(() => [...document.querySelectorAll("[data-row-kind]")].findIndex((cell) => /shadow-\\[inset_0_-?2px/.test(cell.parentElement.className)))()`;
+    /** Drag a tray card and drop it on the `before` (top) or bottom half of the row at `index`. */
+    const dropOnRow = async (item, index, before) => {
+      const geometry = await session.eval(`(() => {
+        const rowEl = document.querySelectorAll("[data-row-kind]")[${index}].parentElement;
+        rowEl.scrollIntoView({ block: "center" });
+        const row = rowEl.getBoundingClientRect();
+        // The pane is scrolled to today, so the root's left is far off-screen: measure from the PANE.
+        const pane = document.querySelector("[data-roadmap-timeline]").parentElement.getBoundingClientRect();
+        return { x: pane.left + ${260 + 60}, y: ${before} ? row.top + row.height * 0.25 : row.top + row.height * 0.75 };
+      })()`);
+      await session.eval(`(() => {
+        const card = document.querySelector("[data-tray-item='${item.key}']");
+        const dt = new DataTransfer();
+        card.dispatchEvent(new DragEvent("dragstart", { bubbles: true, cancelable: true, dataTransfer: dt }));
+        window.__proofDt = dt;
+      })()`);
+      await sleep(150);
+      const over = await session.eval(`(() => {
+        const dt = window.__proofDt;
+        const target = document.elementFromPoint(${geometry.x}, ${geometry.y});
+        const init = { bubbles: true, cancelable: true, dataTransfer: dt, clientX: ${geometry.x}, clientY: ${geometry.y} };
+        target.dispatchEvent(new DragEvent("dragover", init));
+        return true;
+      })()`);
+      await sleep(100);
+      const indicator = await session.eval(INDICATOR);
+      await session.eval(`(() => {
+        const dt = window.__proofDt;
+        const target = document.elementFromPoint(${geometry.x}, ${geometry.y});
+        const init = { bubbles: true, cancelable: true, dataTransfer: dt, clientX: ${geometry.x}, clientY: ${geometry.y} };
+        target.dispatchEvent(new DragEvent("drop", init));
+        document.querySelector("[data-tray-item='${item.key}']")?.dispatchEvent(new DragEvent("dragend", { bubbles: true, cancelable: true, dataTransfer: dt }));
+        return true;
+      })()`);
+      await sleep(400);
+      return { over, indicator, index: await session.eval(ROW_INDEX(item.key)), save: await session.eval(SAVE) };
+    };
+    // The default rank is newest first, so the thirty leaves lead and the two epic blocks follow;
+    // rows are located by key, never assumed.
+    const rowIndex = (key) => session.eval(ROW_INDEX(key));
+    const d1 = await dropOnRow(trayOne, 15, true);
+    check("a tray item dropped on the top half of row 15 IS row 15, with the insertion line there first", d1.indicator === 15 && d1.index === 15 && /Save · 1/.test(d1.save ?? ""), JSON.stringify(d1));
+    const e1 = await rowIndex(epic1.key);
+    const d2 = await dropOnRow(trayChild, e1, false);
+    check("an epic's own child dropped on the epic row becomes its first child", e1 >= 0 && d2.indicator === e1 && d2.index === e1 + 1 && /Save · 2/.test(d2.save ?? ""), JSON.stringify({ e1, ...d2 }));
+    const e2 = await rowIndex(epic2.key);
+    const c2 = await rowIndex(kids[1].key); // "two child 1", somewhere in epic two's six-row block
+    const d3 = await dropOnRow(trayTwo, c2, true);
+    check("a top-level item dropped on a child row lands right after that epic's block, the line on its last child", e2 >= 0 && c2 > e2 && c2 <= e2 + 6 && d3.indicator === e2 + 6 && d3.index === e2 + 7 && /Save · 3/.test(d3.save ?? ""), JSON.stringify({ e2, c2, ...d3 }));
+    for (let i = 0; i < 3; i++) {
+      await session.eval(`(() => { document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true })); return true; })()`);
+      await sleep(150);
+    }
+    s = await session.eval(STATE);
+    const undoneSave = await session.eval(SAVE);
+    check("three Undos remove the three drops and leave the draft clean", s && s.rows.filter((r) => hasKey(r.text, trayOne.key) || hasKey(r.text, trayTwo.key) || hasKey(r.text, trayChild.key)).length === 0 && /^Saved/.test(undoneSave ?? ""), JSON.stringify({ undoneSave, rows: s?.rows.length }));
 
     const total = 2 + 12 + 30;
     // --- Fit ---------------------------------------------------------------------------------------

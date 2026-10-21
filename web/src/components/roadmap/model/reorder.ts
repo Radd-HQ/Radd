@@ -2,7 +2,7 @@
  *  (spec 24, shared with lists), so a roadmap rank PATCH only ever anchors
  *  on SIBLINGS from its own row order. */
 
-import type { Item } from "../../../lib/types";
+import { ItemKind, type Item } from "../../../lib/types";
 import { RoadmapRowKind, type RoadmapRow } from "./rows";
 
 /** A rank chain needs at least two members to change anything. */
@@ -37,6 +37,16 @@ export function roadmapReorderNeighbours(
   const siblings = rows.filter(
     (row) => row.item.id !== moved.item.id && isRoadmapSibling(moved, row),
   );
+  return neighboursAround(siblings, target, before);
+}
+
+/** The anchors for landing on the top (`before`) / bottom half of `target`
+ *  within its sibling run. Null when the target is not in the run. */
+function neighboursAround(
+  siblings: RoadmapRow[],
+  target: RoadmapRow,
+  before: boolean,
+): RoadmapReorderNeighbours | null {
   const index = siblings.findIndex((row) => row.item.id === target.item.id);
   if (index === -1) return null;
   const afterId = before ? (index > 0 ? siblings[index - 1].item.id : null) : target.item.id;
@@ -46,6 +56,70 @@ export function roadmapReorderNeighbours(
       ? siblings[index + 1].item.id
       : null;
   return { afterId, beforeId };
+}
+
+/** Where a tray drop lands (RADD-1522): the rank anchors for the save, and
+ *  the row the insertion line should mark while the drag hovers. */
+export interface TrayDropPlacement extends RoadmapReorderNeighbours {
+  landing: { rowId: string; before: boolean };
+}
+
+/**
+ * Resolve a tray drop on the top (`before`) / bottom half of `target` for an
+ * item that is NOT a row yet. Its sibling scope comes from what it IS: an
+ * epic, or a leaf whose parent is not a loaded epic, is a top-level row; a
+ * child of a loaded epic is one of that epic's children. The target is then
+ * projected onto that scope — a top-level item dropped on a child row goes
+ * AFTER that epic's whole block (its last visible child is the landing); a
+ * child dropped on its own epic's row goes to the top of the children.
+ * Null when the target is outside the scope (a cross-scope rank would be a
+ * cross-scope move) or the scope has nothing to anchor on — the model then
+ * appends, as before.
+ */
+export function trayDropPlacement(
+  rows: RoadmapRow[],
+  item: Item,
+  target: RoadmapRow,
+  before: boolean,
+): TrayDropPlacement | null {
+  const parentId = item.parent?.id ?? null;
+  const parentEpicId =
+    item.kind !== ItemKind.epic &&
+    parentId !== null &&
+    rows.some((row) => row.rowKind === RoadmapRowKind.epic && row.item.id === parentId)
+      ? parentId
+      : null;
+  if (parentEpicId !== null) {
+    const siblings = rows.filter(
+      (row) => row.rowKind === RoadmapRowKind.child && row.parentEpicId === parentEpicId,
+    );
+    if (target.rowKind === RoadmapRowKind.epic && target.item.id === parentEpicId) {
+      if (siblings.length === 0) return null;
+      return {
+        afterId: null,
+        beforeId: siblings[0].item.id,
+        landing: { rowId: target.item.id, before: false },
+      };
+    }
+    if (target.rowKind !== RoadmapRowKind.child || target.parentEpicId !== parentEpicId) {
+      return null;
+    }
+    const neighbours = neighboursAround(siblings, target, before);
+    return neighbours && { ...neighbours, landing: { rowId: target.item.id, before } };
+  }
+  const siblings = rows.filter((row) => row.rowKind !== RoadmapRowKind.child);
+  if (target.rowKind === RoadmapRowKind.child) {
+    const epicIndex = rows.findIndex((row) => row.item.id === target.parentEpicId);
+    const epicRow = epicIndex >= 0 ? rows[epicIndex] : null;
+    if (!epicRow) return null;
+    // After the block: the last child that follows the epic in row order.
+    let last = epicIndex;
+    while (rows[last + 1]?.parentEpicId === epicRow.item.id) last++;
+    const neighbours = neighboursAround(siblings, epicRow, false);
+    return neighbours && { ...neighbours, landing: { rowId: rows[last].item.id, before: false } };
+  }
+  const neighbours = neighboursAround(siblings, target, before);
+  return neighbours && { ...neighbours, landing: { rowId: target.item.id, before } };
 }
 
 /** A bar-body reorder drag's hovered row half (spec 82 follow-up). */

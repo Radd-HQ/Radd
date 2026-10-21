@@ -37,6 +37,7 @@ import {
   roadmapRowMetrics,
   rowBarProgress,
   rowDropFromY,
+  trayDropPlacement,
   type RoadmapCycleBand,
   type RoadmapModel,
   type RoadmapRow,
@@ -112,7 +113,14 @@ interface RoadmapTimelineProps {
   onContextMenu: (row: RoadmapRow, x: number, y: number) => void;
   /** The tray item mid-HTML5-drag, if any — lanes accept it as a drop. */
   trayDragItem: Item | null;
-  onTrayDrop: (item: Item, dayIndex: number) => void;
+  /** A drop at `dayIndex`, with the row and half under the pointer when the
+   *  view is rank-ordered (RADD-1522); returns whether the item was placed
+   *  there — false means it was appended and the timeline reveals it. */
+  onTrayDrop: (
+    item: Item,
+    dayIndex: number,
+    placement: { target: RoadmapRow; before: boolean } | null,
+  ) => boolean;
   /** Raw estimate/logged seconds per leaf item id (progress tints + hover
    *  card) — undefined while pending/failed/disabled, degrading to no tint. */
   timelogByItem: TimelogBatchResponse | undefined;
@@ -162,7 +170,27 @@ export function RoadmapTimeline({
   const { rowH } = metrics;
   const rootRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  /** The rows block — a tray drop's y is measured against ITS top (RADD-1522). */
+  const rowsRef = useRef<HTMLDivElement>(null);
   const [trayDropDay, setTrayDropDay] = useState<number | null>(null);
+  // A tray drop the draft could not place (sorted view, header, cross-scope)
+  // appends its row; scroll to it rather than leave it off-screen.
+  const [revealId, setRevealId] = useState<string | null>(null);
+  useEffect(() => {
+    if (revealId === null) return;
+    const index = visibleRows.findIndex((row) => row.item.id === revealId);
+    if (index < 0) return;
+    setRevealId(null);
+    const pane = scrollRef.current;
+    if (!pane) return;
+    const header = roadmapAxisHeight(bands.length > 0);
+    const top = header + index * rowH;
+    const viewTop = pane.scrollTop + header;
+    const viewBottom = pane.scrollTop + pane.clientHeight;
+    if (top < viewTop || top + rowH > viewBottom) {
+      pane.scrollTop = Math.max(0, top - pane.clientHeight / 2);
+    }
+  }, [revealId, visibleRows, rowH, scrollRef, bands.length]);
 
   // Row reorder (spec 82): the label-dragged row + the hovered sibling's drop
   // indicator. HTML5 drag like ViewList rows — separate from the pointer-event
@@ -478,6 +506,18 @@ export function RoadmapTimeline({
     const x = Math.max(0, event.clientX - rect.left - labelWidth);
     return clampDay(dayFromX(x, dayWidth), model.domainDays);
   };
+  // The row and half under a tray drag (RADD-1522): only on rank-ordered views
+  // (`canReorder`), where the drop can take that row's place — the same
+  // `rowDropFromY` the bar-body reorder uses, so the two never disagree.
+  const rowAtEvent = (
+    event: ReactDragEvent<HTMLElement>,
+  ): { target: RoadmapRow; before: boolean } | null => {
+    if (!canReorder) return null;
+    const rect = rowsRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const hit = rowDropFromY(event.clientY - rect.top, visibleRows.length, rowH);
+    return hit ? { target: visibleRows[hit.index], before: hit.before } : null;
+  };
   const trayTargetProps =
     canEdit && trayDragItem
       ? {
@@ -487,16 +527,26 @@ export function RoadmapTimeline({
             event.preventDefault();
             event.dataTransfer.dropEffect = "move";
             setTrayDropDay(day);
+            // The insertion line marks where the item will LAND, which for a
+            // top-level item over a child row is after that epic's block.
+            const hit = rowAtEvent(event);
+            const placed =
+              hit && trayDropPlacement(visibleRows, trayDragItem, hit.target, hit.before);
+            setRowDrop(placed ? { id: placed.landing.rowId, before: placed.landing.before } : null);
           },
           onDragLeave: (event: ReactDragEvent<HTMLElement>) => {
             if (event.currentTarget.contains(event.relatedTarget as Node)) return;
             setTrayDropDay(null);
+            setRowDrop(null);
           },
           onDrop: (event: ReactDragEvent<HTMLElement>) => {
             event.preventDefault();
             const day = dayAtEvent(event);
+            const hit = rowAtEvent(event);
             setTrayDropDay(null);
-            if (day !== null) onTrayDrop(trayDragItem, day);
+            setRowDrop(null);
+            if (day === null) return;
+            if (!onTrayDrop(trayDragItem, day, hit)) setRevealId(trayDragItem.id);
           },
         }
       : {};
@@ -692,7 +742,7 @@ export function RoadmapTimeline({
           )}
         </div>
 
-        <div className="relative z-10">
+        <div ref={rowsRef} className="relative z-10">
           {visibleRows.map((row) => (
             <BarRow
               key={row.item.id}

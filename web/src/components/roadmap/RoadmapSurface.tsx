@@ -494,7 +494,7 @@ export function RoadmapSurface({
           },
           onDrop: (event: ReactDragEvent<HTMLElement>) => {
             event.preventDefault();
-            editing.scheduleFromTray(trayDragItem, null);
+            editing.scheduleFromTray(trayDragItem, null, null);
             setTrayDragItem(null);
           },
         }
@@ -910,9 +910,10 @@ export function RoadmapSurface({
                 }
               }}
               trayDragItem={trayDragItem}
-              onTrayDrop={(item, dayIndex) => {
-                editing.scheduleFromTray(item, dayIndex);
+              onTrayDrop={(item, dayIndex, placement) => {
+                const placed = editing.scheduleFromTray(item, dayIndex, placement);
                 setTrayDragItem(null);
+                return placed;
               }}
               timelogByItem={timelogBatch.data}
               rollupByItem={rollupByItem}

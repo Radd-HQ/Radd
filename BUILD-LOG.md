@@ -102,6 +102,16 @@ issues followed on 2026-10-21 from Hussein trying the build on real data and fro
   (`overflow-hidden` on the axis, `overflow-x-clip` on the row cell — `clip`, because `hidden` on one
   axis makes the other `auto` and every row a scroll container); and a dirty draft arms `beforeunload`,
   whose headless "leave site?" dialog blocks `Page.navigate` for ever — undo before reloading.
+- **RADD-1522** (Hussein: "when dragging something into the roadmap from the right panel I don't see
+  them right away or they get sent below"): the drop read x for the day and ignored y, and the draft's
+  INSERT appends, so a dropped item became the roadmap's last row — off-screen on 306 rows. The drop now
+  resolves the row and half under the pointer (`rowDropFromY`, the reorder's own hit test) and schedules
+  AND ranks in one compound op (`trayDropPlacement`: the dropped item's sibling scope comes from what it
+  is, the target is projected onto it — after an epic's block for a top-level item over a child, top of
+  the children for a child over its epic; a cross-scope target appends as before). The insertion line
+  marks the landing row while dragging; an unplaceable drop scrolls to its row. Four more proof checks;
+  the proof's own trap was assuming the row order — the default rank is newest FIRST, so the epics sat
+  below thirty leaves, and rows are located by key now.
 Traps: a drop earlier than every bar re-pads the domain by whole weeks and shifts every index (compare to
 the today line in proofs); the Bash harness here is zsh, not fish; pytest needs a reachable Postgres
 (`RADD_TEST_DATABASE_URL` at the clean stack's :5457 when the working one is down).
