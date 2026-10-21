@@ -12,13 +12,7 @@ import {
 import { useDurationConfig, usePeek } from "../../lib/hooks";
 import { useItemAttributeData } from "../../lib/item-attribute-data";
 import type { Item, ItemRollup, ItemTimelogBatchEntry } from "../../lib/types";
-import {
-  FlagBadge,
-  VisibilityBadge,
-  ItemKeyLink,
-  KindBadge,
-  TypeChip,
-} from "../items/ItemBadges";
+import { FlagBadge, ItemRowLead, TypeChip, VisibilityBadge } from "../items/ItemBadges";
 import { renderCardCell, type CardCellCtx } from "./card-cells";
 import { QuickStar } from "../items/QuickStar";
 import { CardChildren } from "./CardChildren";
@@ -213,8 +207,12 @@ export function BoardCard({
             }
           />
         )}
-        {item.type ? <TypeChip type={item.type} /> : <KindBadge kind={item.kind} size={13} />}
-        <ItemKeyLink itemKey={item.key} />
+        {/* The row lead on the card's header line (RADD-1519): type chip in the kind
+            slot, then the 16px priority icon, then the key. */}
+        <ItemRowLead
+          item={{ kind: item.kind, priority: item.priority, key: item.key }}
+          kindSlot={item.type ? <TypeChip type={item.type} /> : undefined}
+        />
         {headerStart.map(headerCell)}
         <span className="ml-auto flex items-center gap-1.5">
           <QuickStar item={item} />

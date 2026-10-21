@@ -34,12 +34,7 @@ import {
   CycleStatusPill,
   CycleHeaderProgress,
 } from "../cycles/CycleBadges";
-import {
-  FlagBadge,
-  VisibilityBadge,
-  ItemKeyLink,
-  KindBadge,
-} from "../items/ItemBadges";
+import { ItemRowLead } from "../items/ItemBadges";
 
 interface ViewListProps {
   loading?: BoardLoading;
@@ -538,10 +533,8 @@ function RowLeading({
       {onStar && (
         <QuickStar item={item} />
       )}
-      <KindBadge kind={item.kind} size={13} />
-      {item.flagged && <FlagBadge size={12} />}
-      <VisibilityBadge visibility={item.visibility} size={12} />
-      <ItemKeyLink itemKey={item.key} />
+      {/* kind · priority · key — the order every row shares (RADD-1519). */}
+      <ItemRowLead item={item} />
     </>
   );
 }

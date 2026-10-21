@@ -8,7 +8,7 @@ import { CATEGORY_META } from "../../lib/meta";
 import { itemsCountQuery, roadmapTrayItemsQuery } from "../../lib/queries";
 import { combineQueryWithFilters } from "../../lib/slq";
 import type { Item } from "../../lib/types";
-import { ItemKeyLink, KindBadge, PriorityIcon } from "../items/ItemBadges";
+import { ItemRowLead } from "../items/ItemBadges";
 import { Pager } from "@radd/plugin-sdk";
 
 /** Tray filter chips (spec 79): everything, or unscheduled epics only (the
@@ -197,9 +197,7 @@ export function UnscheduledTray({
                   }`}
                   title={item.title}
                 >
-                  <KindBadge kind={item.kind} size={13} />
-                  <PriorityIcon priority={item.priority} size={12} />
-                  <ItemKeyLink itemKey={item.key} />
+                  <ItemRowLead item={item} />
                   <span className="min-w-0 flex-1 truncate text-xs text-fg">
                     {item.title}
                   </span>

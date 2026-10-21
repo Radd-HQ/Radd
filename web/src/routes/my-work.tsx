@@ -15,12 +15,11 @@ import { listRecentItems } from "../lib/recent";
 import { RoutePath } from "../lib/constants";
 import { usePeek } from "../lib/hooks";
 import { notificationsQuery, itemsCountQuery } from "../lib/queries";
-import { PRIORITY_META } from "../lib/meta";
 import { combineQueryWithFilters, splitQueryOrder } from "../lib/slq";
 import { useSlqQueryState } from "../lib/slq-filter";
 import type { Item } from "../lib/types";
 import { Avatar } from "../components/Avatar";
-import { ItemKeyLink } from "../components/items/ItemBadges";
+import { ItemKeyLink, ItemRowLead } from "../components/items/ItemBadges";
 import { TopBarQuery } from "../components/shell/TopBarSlot";
 import { QueryBar } from "../components/views/QueryBar";
 import { groupNotificationBursts } from "../lib/notification-bursts";
@@ -155,7 +154,6 @@ function ItemRow({ item, showDue = false }: { item: Item; showDue?: boolean }) {
   const overdue = Boolean(
     showDue && item.target_date && item.target_date < todayIso(),
   );
-  const priority = PRIORITY_META[item.priority];
   return (
     <li>
       {/* div, not button: the key inside is a real link (anchors can't nest in buttons) */}
@@ -172,14 +170,8 @@ function ItemRow({ item, showDue = false }: { item: Item; showDue?: boolean }) {
         }
       >
         <QuickStar item={item} />
-        <ItemKeyLink
-          itemKey={item.key}
-          className="shrink-0 rounded bg-elevated px-1.5 font-mono text-meta text-fg-secondary hover:text-accent-text hover:underline"
-        />
+        <ItemRowLead item={item} />
         <span className="min-w-0 flex-1 truncate text-row text-fg">{item.title}</span>
-        {priority && (
-          <span className="shrink-0 text-meta text-fg-muted">{priority.label}</span>
-        )}
         <span className="shrink-0 rounded bg-elevated/80 px-1.5 py-px text-micro text-fg-secondary">
           {item.state.name}
         </span>

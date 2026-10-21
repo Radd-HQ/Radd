@@ -22,6 +22,8 @@ import {
   ParentTag,
   PointsChip,
   PriorityIcon,
+  ROW_LEAD_PRIORITY_PX,
+  ROW_LEAD_PRIORITY_STROKE,
   ReleaseChip,
   StatePill,
   TeamBadge,
@@ -29,7 +31,6 @@ import {
   UnassignedSlot,
 } from "../items/ItemBadges";
 import { RollupRowBar } from "../items/RollupBar";
-import { PRIORITY_META } from "../../lib/meta";
 
 /**
  * The list table's column machinery (spec 108): one aligned header row with
@@ -251,11 +252,12 @@ function CellContent({ column, item, maxLabels, rollup, loggedSeconds, usersById
     case "team":
       return item.team ? <TeamBadge team={item.team} /> : <Dash />;
     case "priority":
-      // RADD-1292: glyph AND word — the bars alone needed a legend.
+      // RADD-1519 (reversing RADD-1292's word): the 16px icon alone, its label in the
+      // tooltip — the row lead already carries the same icon, so the column is a
+      // sortable repeat, not the place for a legend.
       return (
-        <span className="inline-flex min-w-0 items-center gap-1" data-priority={item.priority}>
-          <PriorityIcon priority={item.priority} size={13} />
-          <span className="truncate text-xs text-fg-secondary">{PRIORITY_META[item.priority].label}</span>
+        <span className="inline-flex min-w-0 items-center" data-priority={item.priority}>
+          <PriorityIcon priority={item.priority} size={ROW_LEAD_PRIORITY_PX} strokeWidth={ROW_LEAD_PRIORITY_STROKE} />
         </span>
       );
     case "assignee":

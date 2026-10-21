@@ -16,6 +16,35 @@ Moved here from the CLAUDE.md preamble on 2026-09-27 (RADD-1441): one entry per 
 preamble narrated it at the time, so the working agreement stays rules-only. The tracker's RADD project
 and `docs/specs/` are the primary record; these entries are the per-wave summary.
 
+### UI legibility round — epic RADD-1516 (2026-10-21), on main, unreleased
+
+Aurelien's second post, after the roadmap round: the UI is "hard to read and distinguish all the
+different parts", "especially true in dark mode"; he zooms Chrome to 110–115%; the cycle view's status
+borders read as noise; the priority icon is "too small / shy"; the ticket reference is too small and too
+grey; and the column order differs between the cycle page and the planning view. Measured before touching
+anything: dark-mode TEXT was never the problem (body 12.9:1, headings 15:1) — SEPARATION was (panels
+1.09:1 on the page, subtle borders 1.3:1, strong 1.6:1, row separators 1.16:1), light mode only looks
+clearer because white panels on grey plus shadows separate for free. Row text was 13px, keys 11px, in
+1,039 pixel-locked utilities that no root size could move. Three issues, one proof
+(`web/scripts/ui-legibility-proof.mjs`, 17 measured checks, both themes), one guard test. Hussein's rules:
+sizing is palette-independent and changes once across the board; the bump is global, not per user.
+- **RADD-1517**: the eleven dark zinc values move so page/panel/elevated are a visible step apart
+  (1.14 each), the subtle border is 1.75:1 and the strong one 2.5:1 on the page, muted/faint text gain,
+  progress green and done slate nudged to hold ≥ 3:1 on the lighter elevated surface. Colours only, dark
+  block only. The cycle page's status boxes move to `border-strong`: a box that groups is information.
+- **RADD-1518**: one type ladder in `@theme`, rem, on the root and never in a theme block —
+  nano 10 / micro 11 / meta 12 / xs 13 / row 14 / sm 15; `text-xs`/`text-sm` are the presets moved the same
+  step so a preset label never sits a pixel under a token one. 1,039 arbitrary sizes in 315 files (SPA,
+  plugin SDK, the core plugins' bundled UIs — one host stylesheet covers all three) became the token one
+  step up. `type-scale.test.mjs` refuses a `text-[NNpx]` coming back. The rich-text document body stays.
+- **RADD-1519**: `ItemRowLead` (kind · priority · key) leads every row renderer — list, planning, cycle
+  page, My Work, roadmap tray, board card header and its designer preview — in the cycle page's order; the
+  priority is a 16px icon with a heavier stroke and its label in the tooltip, gone from rows and from the
+  Priority column (reversing RADD-1292's word); the key sits in secondary ink (7:1), one step under the
+  title. The roadmap label cell keeps chevron · kind · key · title: the bar carries the priority.
+Traps: Tailwind resolves the light panel token as `#fff`, three digits, which a six-digit-only parser
+reads as nothing — and a contrast of 0 then fails the "unchanged" check that was meant to pass.
+
 ### Roadmap feedback round — epic RADD-1504 (2026-10-20), on main, unreleased
 
 A colleague's first real session with the roadmap on the Cinesite instance came back as eight points: three

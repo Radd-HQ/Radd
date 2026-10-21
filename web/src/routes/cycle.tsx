@@ -18,13 +18,7 @@ import { QueryBar } from "../components/views/QueryBar";
 import { QueryError } from "../components/QueryError";
 import { DirectoryPager } from "../components/DirectoryPager";
 import type { PeopleChoice } from "../lib/queries/users";
-import {
-  AssigneeAvatar,
-  ItemKeyLink,
-  KindBadge,
-  PriorityIcon,
-  ReleaseChip,
-} from "../components/items/ItemBadges";
+import { AssigneeAvatar, ItemRowLead, ReleaseChip } from "../components/items/ItemBadges";
 import { CYCLE_STATUS_META } from "@radd-plugin-ui/cycles/status";
 import { cycleQuery } from "@radd-plugin-ui/cycles/directory-queries";
 import { CycleStatus } from "@radd-plugin-ui/cycles/types";
@@ -237,9 +231,7 @@ function CycleItemRow({ item }: { item: Item }) {
         }}
         className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-2.5 text-left hover:bg-surface/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
       >
-        <KindBadge kind={item.kind} size={13} />
-        <PriorityIcon priority={item.priority} size={13} />
-        <ItemKeyLink itemKey={item.key} />
+        <ItemRowLead item={item} />
         <span className="min-w-0 flex-1 truncate text-row text-heading">{item.title}</span>
         {item.target_date && (
           <span className="shrink-0 text-meta text-fg-muted">

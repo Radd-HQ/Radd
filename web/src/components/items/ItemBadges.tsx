@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { CalendarClock, CornerDownRight, EyeOff, Flag, Globe, RefreshCw, Rocket, Star, Users } from "lucide-react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { RoutePath } from "../../lib/constants";
 import { ItemVisibility, type ItemVisibilityValue } from "../../lib/types";
 import { shortDate } from "@radd/plugin-sdk";
@@ -34,7 +34,9 @@ export function ItemKeyLink({ itemKey, className }: { itemKey: string; className
       title={`Open ${itemKey}`}
       className={
         className ??
-        "shrink-0 font-mono text-meta text-fg-muted hover:text-accent-text hover:underline"
+        // Secondary ink, not muted (RADD-1519): the key sat in grey at 5:1 beside a
+        // 15:1 title and read as decoration; 7:1 now, one step under the title's size.
+        "shrink-0 font-mono text-meta text-fg-secondary hover:text-accent-text hover:underline"
       }
     >
       {itemKey}
@@ -172,10 +174,55 @@ export function VisibilityChip({
   );
 }
 
-export function PriorityIcon({ priority, size = 14 }: { priority: PriorityValue; size?: number }) {
+export function PriorityIcon({
+  priority,
+  size = 14,
+  strokeWidth,
+}: {
+  priority: PriorityValue;
+  size?: number;
+  /** Rows pass a heavier stroke with the 16px size (RADD-1519); the default is lucide's. */
+  strokeWidth?: number;
+}) {
   const meta = PRIORITY_META[priority];
   const Icon = meta.icon;
-  return <Icon size={size} className={meta.className} aria-label={`Priority: ${meta.label}`} />;
+  return (
+    <span className="inline-flex shrink-0" title={`Priority: ${meta.label}`}>
+      <Icon size={size} strokeWidth={strokeWidth} className={meta.className} aria-label={`Priority: ${meta.label}`} />
+    </span>
+  );
+}
+
+/** Row lead sizes (RADD-1519): the kind badge one step up from 13, the priority icon at 16 with a
+ *  heavier stroke — Aurelien's "too small / shy" was the 13px signal bars. */
+export const ROW_LEAD_KIND_PX = 14;
+export const ROW_LEAD_PRIORITY_PX = 16;
+export const ROW_LEAD_PRIORITY_STROKE = 2.25;
+
+/**
+ * The lead every item ROW shares (RADD-1519): kind · priority · key, the cycle page's order, so a
+ * reader finds the same thing in the same place in every list, planning view, tray and board card
+ * header. The priority is its icon alone — the label is the icon's tooltip and accessible name; it
+ * belongs in the detail panel, not in every row. Flag and visibility badges ride between the icons
+ * and the key, where they were.
+ */
+export function ItemRowLead({
+  item,
+  kindSlot,
+}: {
+  item: { kind?: ItemKindValue; priority: PriorityValue; key: string; flagged?: boolean; visibility?: ItemVisibilityValue };
+  /** A card substitutes its type chip for the kind badge; rows leave this out. */
+  kindSlot?: ReactNode;
+}) {
+  return (
+    <>
+      {kindSlot ?? <KindBadge kind={item.kind} size={ROW_LEAD_KIND_PX} />}
+      <PriorityIcon priority={item.priority} size={ROW_LEAD_PRIORITY_PX} strokeWidth={ROW_LEAD_PRIORITY_STROKE} />
+      {item.flagged && <FlagBadge size={12} />}
+      <VisibilityBadge visibility={item.visibility} size={12} />
+      <ItemKeyLink itemKey={item.key} />
+    </>
+  );
 }
 
 /**

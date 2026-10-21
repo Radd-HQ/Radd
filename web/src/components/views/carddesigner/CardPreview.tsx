@@ -12,7 +12,7 @@ import {
 import { startHorizontalDrag } from "../../../lib/drag";
 import { cellStyle, laneMargin } from "../../board/BoardCard";
 import { renderCardCell, type CardCellCtx } from "../../board/card-cells";
-import { FlagBadge, ItemKeyLink, KindBadge, StarBadge, TypeChip } from "../../items/ItemBadges";
+import { FlagBadge, ItemRowLead, StarBadge, TypeChip } from "../../items/ItemBadges";
 import { dropKey, type DesignerDrag, type DropTarget } from "./layout-ops";
 import { SAMPLE_ITEM, SAMPLE_ROLLUP, SAMPLE_TIMELOG, sampleCustomValue } from "./sample-item";
 import type { FieldDef } from "@radd-plugin-ui/fields/types";
@@ -234,13 +234,12 @@ export function CardPreview({
         {/* Fixed chrome + the header lane (row 0). */}
         <div className="relative">
           <div className="flex items-center gap-1.5">
-            {sampleItem.type ? (
-              <TypeChip type={sampleItem.type} />
-            ) : (
-              <KindBadge kind={sampleItem.kind} size={13} />
-            )}
-            <span className="pointer-events-none">
-              <ItemKeyLink itemKey={sampleItem.key} />
+            {/* Mirrors BoardCard's header lead (RADD-1519): type chip or kind, priority, key. */}
+            <span className="pointer-events-none flex items-center gap-1.5">
+              <ItemRowLead
+                item={{ kind: sampleItem.kind, priority: sampleItem.priority, key: sampleItem.key }}
+                kindSlot={sampleItem.type ? <TypeChip type={sampleItem.type} /> : undefined}
+              />
             </span>
             {(headerLane?.cells ?? [])
               .filter((cell) => cell.align !== "end")
