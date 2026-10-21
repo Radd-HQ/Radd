@@ -80,7 +80,7 @@ export function DownloadModal({
           ))}
         </SelectField>
         {spaces.isError && (
-          <p className="text-[12px] text-fg-muted">
+          <p className="text-xs text-fg-muted">
             Could not list spaces — check the connection above.
           </p>
         )}
@@ -105,10 +105,10 @@ export function DownloadModal({
           </div>
         )}
         {kind === ConfluenceScopeKind.pages && pageIds.length > 0 && (
-          <p className="text-[12px] text-fg-muted">{pageIds.length} page(s) selected</p>
+          <p className="text-xs text-fg-muted">{pageIds.length} page(s) selected</p>
         )}
 
-        <label className="flex items-center gap-2 text-[13px] text-fg-secondary">
+        <label className="flex items-center gap-2 text-row text-fg-secondary">
           <input
             type="checkbox"
             checked={includeHistory}
@@ -165,11 +165,11 @@ function PageBranch({
   const level = useQuery(treeQuery(spaceKey, parentId, connectionId || null));
 
   if (level.isLoading) {
-    return <p className="px-3 py-2 text-[13px] text-fg-faint">Loading…</p>;
+    return <p className="px-3 py-2 text-row text-fg-faint">Loading…</p>;
   }
   if (level.isError) {
     return (
-      <p className="px-3 py-2 text-[13px] text-fg-secondary">
+      <p className="px-3 py-2 text-row text-fg-secondary">
         Could not list these pages. The connection works, but the request failed.
       </p>
     );
@@ -177,7 +177,7 @@ function PageBranch({
   const nodes = level.data ?? [];
   if (!nodes.length) {
     return (
-      <p className="px-3 py-2 text-[13px] text-fg-faint">
+      <p className="px-3 py-2 text-row text-fg-faint">
         {depth === 0 ? "This space has no pages." : "No pages below this one."}
       </p>
     );
@@ -188,7 +188,7 @@ function PageBranch({
       {nodes.map((node) => (
         <div key={node.id}>
           <div
-            className="flex items-center gap-1.5 border-b border-subtle px-2 py-1.5 text-[13px] last:border-0 hover:bg-elevated"
+            className="flex items-center gap-1.5 border-b border-subtle px-2 py-1.5 text-row last:border-0 hover:bg-elevated"
             style={{ paddingLeft: `${8 + depth * 16}px` }}
           >
             <button

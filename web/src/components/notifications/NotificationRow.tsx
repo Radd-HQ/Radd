@@ -110,7 +110,7 @@ export function NotificationRow({
         <Icon size={15} aria-hidden />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[13px] text-fg">
+        <span className="block text-row text-fg">
           {notificationSummary(notification)}
           {notification.item_key && (
             <>
@@ -134,7 +134,7 @@ export function NotificationRow({
       </span>
       <span className="flex shrink-0 flex-col items-end gap-1">
         <time
-          className="text-[11px] text-fg-faint"
+          className="text-meta text-fg-faint"
           dateTime={notification.created_at}
           title={formatDateTime(notification.created_at)}
         >

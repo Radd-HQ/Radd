@@ -60,7 +60,7 @@ export function IssueTypesTable({
             </SelectField> : <label className="flex flex-col gap-1 text-xs text-fg-secondary">New RADD type name<input
               aria-label={`${entry.jira}: Radd type name`} value={entry.type_name}
               onChange={e => onChange(index, { type_name: e.target.value })}
-              className={`w-44 text-[13px] ${MAPPING_INPUT_CLASS}`} /></label>
+              className={`w-44 text-row ${MAPPING_INPUT_CLASS}`} /></label>
           )}
         </>
       )}
@@ -115,7 +115,7 @@ export function StatusesTable({
               </SelectField> : <label className="flex flex-col gap-1 text-xs text-fg-secondary">New RADD state name<input
                 aria-label={`${entry.jira}: Radd state name`} value={entry.state_name}
                 onChange={e => onChange(index, { state_name: e.target.value })}
-                className={`w-44 text-[13px] ${MAPPING_INPUT_CLASS}`} /></label>}
+                className={`w-44 text-row ${MAPPING_INPUT_CLASS}`} /></label>}
               <SelectField
                 label="Reporting category"
                 hint={entry.action === VocabAction.map ? "Uses the existing state’s category." : "Controls boards, reports and completed-work handling."}

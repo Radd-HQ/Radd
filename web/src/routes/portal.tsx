@@ -22,7 +22,7 @@ export function PortalPage() {
       <header className="flex flex-col gap-2 border-b border-subtle pb-4">
         <div className="flex items-center gap-2 text-accent-text">
           <ConciergeBell size={18} aria-hidden />
-          <span className="text-[11px] font-medium uppercase tracking-wide">Portal</span>
+          <span className="text-meta font-medium uppercase tracking-wide">Portal</span>
         </div>
         <h1 className="text-xl font-semibold text-heading">Submit a request</h1>
         <p className="text-sm text-fg-secondary">
@@ -57,7 +57,7 @@ function ProjectGroup({ group }: { group: PortalGroup }) {
   return (
     <section className="flex flex-col gap-2">
       <h2 className="flex items-center gap-2 text-sm font-medium text-fg">
-        <span className="rounded bg-elevated px-1 font-mono text-[11px] text-fg-secondary">
+        <span className="rounded bg-elevated px-1 font-mono text-meta text-fg-secondary">
           {group.project.key}
         </span>
         {group.project.name}

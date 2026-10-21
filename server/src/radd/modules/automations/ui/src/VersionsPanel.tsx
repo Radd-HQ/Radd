@@ -54,7 +54,7 @@ export function VersionsPanel({ ruleId, current, onRestored }: VersionsPanelProp
       <div className="flex items-center gap-2">
         <GitBranch size={14} className="text-accent-text" aria-hidden />
         <span className="text-xs font-medium text-fg">Versions</span>
-        <span className="text-[11px] text-fg-muted">
+        <span className="text-meta text-fg-muted">
           Every save that changed the graph or the name. Restoring writes a new version; nothing is lost.
         </span>
       </div>
@@ -80,19 +80,19 @@ export function VersionsPanel({ ruleId, current, onRestored }: VersionsPanelProp
                 >
                   <span className="font-medium text-fg">v{row.version}</span>
                   {row.version === current && (
-                    <span data-version-current className="rounded bg-status-success/15 px-1.5 py-px text-[10px] uppercase tracking-wide text-status-success-ink">
+                    <span data-version-current className="rounded bg-status-success/15 px-1.5 py-px text-micro uppercase tracking-wide text-status-success-ink">
                       current
                     </span>
                   )}
-                  <span className="text-[11px] text-fg-secondary" title={shortDateTime(row.created_at)}>
+                  <span className="text-meta text-fg-secondary" title={shortDateTime(row.created_at)}>
                     {relativeTime(row.created_at)}
                   </span>
-                  {row.created_by_name && <span className="text-[11px] text-fg-muted">by {row.created_by_name}</span>}
-                  <span className="text-[11px] text-fg-muted">{row.node_count} nodes · {row.name}</span>
+                  {row.created_by_name && <span className="text-meta text-fg-muted">by {row.created_by_name}</span>}
+                  <span className="text-meta text-fg-muted">{row.node_count} nodes · {row.name}</span>
                   {row.restored_from !== null && (
-                    <span className="text-[11px] text-fg-faint">restored from v{row.restored_from}</span>
+                    <span className="text-meta text-fg-faint">restored from v{row.restored_from}</span>
                   )}
-                  {row.note && <span className="w-full text-[11px] text-fg-secondary">{row.note}</span>}
+                  {row.note && <span className="w-full text-meta text-fg-secondary">{row.note}</span>}
                 </button>
                 {row.version !== current && (
                   <Button
@@ -115,7 +115,7 @@ export function VersionsPanel({ ruleId, current, onRestored }: VersionsPanelProp
 
       {selected !== null && detail.data && detail.data.version === selected && (
         <div data-version-preview={selected} className="flex flex-col gap-1">
-          <p className="text-[11px] uppercase tracking-wide text-fg-muted">
+          <p className="text-meta uppercase tracking-wide text-fg-muted">
             v{selected} — read only
           </p>
           <LazyGraphCanvas

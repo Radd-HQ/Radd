@@ -86,7 +86,7 @@ export function MoveJobProgress({
 
   return (
     <div className={`mt-3 rounded-lg border px-3 py-2.5 ${tone.border}`}>
-      <div className="flex items-center gap-2 text-[13px]">
+      <div className="flex items-center gap-2 text-row">
         <span className="font-medium text-heading">
           Moving {hostName(data.source_host_id)} → {hostName(data.target_host_id)}
         </span>

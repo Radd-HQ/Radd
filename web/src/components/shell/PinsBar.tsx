@@ -42,7 +42,7 @@ import { projectByIdQuery, projectByKeyQuery } from "@radd-plugin-ui/projects/di
 import type { Project } from "@radd-plugin-ui/projects/types";
 
 const tabBase =
-  "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-[13px] text-fg-secondary " +
+  "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-row text-fg-secondary " +
   "hover:bg-elevated hover:text-fg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus";
 const tabActive = "bg-elevated text-heading font-medium";
 

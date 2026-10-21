@@ -87,7 +87,7 @@ function CreatedTokenPanel({
 }) {
   return (
     <Callout kind={CalloutKind.warning} icon={null} className="mb-5 rounded-lg p-4">
-      <div className="mb-2 flex items-center gap-2 text-[13px] font-medium">
+      <div className="mb-2 flex items-center gap-2 text-row font-medium">
         <TriangleAlert size={15} aria-hidden />
         Copy “{created.name}” now — this token won't be shown again.
         <button

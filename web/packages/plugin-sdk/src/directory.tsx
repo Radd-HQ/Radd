@@ -61,7 +61,7 @@ function DirectoryChoices({ label, emptyLabel, clearLabel, noun, searchPlacehold
         : !rows.length ? <p className="py-4 text-sm text-fg-muted">No matches.</p>
         : <ul>{rows.map(row => <li key={row.id}><Button variant="ghost" className="w-full justify-start gap-2" onClick={() => onChange(row)}>
             <span className="truncate">{row.name}</span>
-            {row.hint && <span className="shrink-0 rounded bg-elevated px-1 py-px text-[10px] font-medium leading-3 text-fg-muted" data-directory-hint>{row.hint}</span>}
+            {row.hint && <span className="shrink-0 rounded bg-elevated px-1 py-px text-micro font-medium leading-3 text-fg-muted" data-directory-hint>{row.hint}</span>}
           </Button></li>)}</ul>}
     </div>
     <DirectoryPager page={page} pageSize={pageSize} total={total} busy={busy} onPage={setPage} label={noun} />

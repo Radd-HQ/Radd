@@ -119,21 +119,21 @@ function FormRow({
   return (
     <li className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
       <ClipboardList size={14} className="shrink-0 text-accent-text" aria-hidden />
-      <span className="truncate text-[13px] font-medium text-heading">{form.name}</span>
-      <span className="text-[11px] text-fg-faint">
+      <span className="truncate text-row font-medium text-heading">{form.name}</span>
+      <span className="text-meta text-fg-faint">
         {form.fields.length} field{form.fields.length === 1 ? "" : "s"}
       </span>
 
       <Link
         to={RoutePath.formSubmit}
         params={{ projectKey, formId: form.id }}
-        className="inline-flex items-center gap-1 text-[11px] text-accent-text hover:text-accent-text"
+        className="inline-flex items-center gap-1 text-meta text-accent-text hover:text-accent-text"
       >
         <ExternalLink size={11} aria-hidden />
         Submit page
       </Link>
 
-      <label className="ml-auto flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-fg-secondary">
+      <label className="ml-auto flex shrink-0 cursor-pointer items-center gap-1.5 text-meta text-fg-secondary">
         <input
           type="checkbox"
           checked={form.enabled}

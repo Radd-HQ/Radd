@@ -57,7 +57,7 @@ export function FieldOptionsSection({ field, canManage }: { field: ManagedField;
           {directory.rows.map((option) => (
             <span
               key={option}
-              className="flex min-w-0 items-center gap-1 rounded border border-strong bg-elevated/60 py-0.5 pl-1.5 pr-1 text-[11px] text-fg"
+              className="flex min-w-0 items-center gap-1 rounded border border-strong bg-elevated/60 py-0.5 pl-1.5 pr-1 text-meta text-fg"
             >
               <span className="min-w-0 break-words [overflow-wrap:anywhere]">{option || "(empty value)"}</span>
               {canManage && field.option_count > 1 && (
@@ -102,7 +102,7 @@ export function FieldOptionsSection({ field, canManage }: { field: ManagedField;
             </Button>
           </div>
           {add.isError && <ErrorText error={add.error} />}
-          <p className="text-[11px] text-fg-faint">
+          <p className="text-meta text-fg-faint">
             Adding an option is always safe. Removing one asks where its issues should go
             first. Renaming is not offered — every saved view, automation and form that
             names the old value would keep compiling and match nothing.
@@ -168,7 +168,7 @@ function RemoveOptionDialog({
   return (
     <Modal title={`Remove "${value}"`} onClose={onClose}>
       <div className="flex flex-col gap-3">
-        <p className="text-[13px] text-fg-secondary">
+        <p className="text-row text-fg-secondary">
           {usage.isError ? "The usage count could not be loaded. Retry before removing this option." : count === undefined
             ? "Counting the issues that use it…"
             : count === 0

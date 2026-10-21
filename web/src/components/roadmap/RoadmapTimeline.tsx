@@ -525,7 +525,7 @@ export function RoadmapTimeline({
           style={{ width: labelWidth }}
           // Sticky-left like the row labels below it — the corner cell caps
           // the gutter so month/week ticks slide under it, not through it.
-          className="sticky left-0 z-10 shrink-0 border-r border-subtle bg-base px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint"
+          className="sticky left-0 z-10 shrink-0 border-r border-subtle bg-base px-4 py-2 text-meta font-medium uppercase tracking-wide text-fg-faint"
         >
           Timeline
         </div>
@@ -541,7 +541,7 @@ export function RoadmapTimeline({
               key={band.id}
               data-cycle-band={band.id}
               title={`${band.name} · ${band.startIso} → ${band.endIso}`}
-              className="absolute truncate border-x border-accent/50 bg-accent/15 px-1 text-[10px] text-fg-secondary"
+              className="absolute truncate border-x border-accent/50 bg-accent/15 px-1 text-micro text-fg-secondary"
               style={{
                 top: ROADMAP_AXIS_H,
                 height: ROADMAP_CYCLE_STRIP_H,
@@ -556,7 +556,7 @@ export function RoadmapTimeline({
           {model.months.map((month) => (
             <span
               key={`m-${month.index}`}
-              className="absolute top-1 whitespace-nowrap border-l border-strong pl-1 text-[11px] font-semibold text-fg"
+              className="absolute top-1 whitespace-nowrap border-l border-strong pl-1 text-meta font-semibold text-fg"
               style={{ left: month.index * dayWidth }}
             >
               {month.label}
@@ -565,7 +565,7 @@ export function RoadmapTimeline({
           {weekTicks.map((week) => (
             <span
               key={`w-${week.index}`}
-              className="absolute top-5 whitespace-nowrap text-[10px] text-fg-muted"
+              className="absolute top-5 whitespace-nowrap text-micro text-fg-muted"
               style={{ left: week.index * dayWidth + 2 }}
             >
               {week.label}

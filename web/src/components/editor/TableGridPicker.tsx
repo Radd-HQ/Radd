@@ -60,7 +60,7 @@ export function TableGridPicker({
             </div>
           ))}
         </div>
-        <p className="mt-1.5 text-center text-[11px] tabular-nums text-fg-muted">
+        <p className="mt-1.5 text-center text-meta tabular-nums text-fg-muted">
           {hover.rows + 1} × {hover.cols + 1}
         </p>
       </div>

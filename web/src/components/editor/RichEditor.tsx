@@ -886,19 +886,19 @@ function RichEditorInner({
           {binding ? (
             // A textarea cannot bind: the plain mode is not offered to a
             // bound document rather than offered and refused.
-            <span className="text-[11px] text-fg-muted">{binding.label}</span>
+            <span className="text-meta text-fg-muted">{binding.label}</span>
           ) : (
             <button
               type="button"
               onClick={togglePlain}
-              className="cursor-pointer text-[11px] text-fg-muted hover:text-fg hover:underline"
+              className="cursor-pointer text-meta text-fg-muted hover:text-fg hover:underline"
             >
               {plain ? "Switch to rich text editing" : "Switch to plain text editing"}
             </button>
           )}
           <span
             title="Markdown is supported"
-            className="rounded border border-strong px-1 font-mono text-[10px] font-semibold text-fg-muted"
+            className="rounded border border-strong px-1 font-mono text-micro font-semibold text-fg-muted"
           >
             M↓
           </span>
@@ -935,7 +935,7 @@ function RichEditorInner({
             className="z-[60] max-h-56 w-72 overflow-auto rounded-md border border-strong bg-surface shadow-xl"
           >
             {popupHint && (
-              <li className="px-2.5 py-1.5 text-[11px] text-fg-muted">{popupHint}</li>
+              <li className="px-2.5 py-1.5 text-meta text-fg-muted">{popupHint}</li>
             )}
             {candidates.map((candidate, i) => (
               <li key={candidate.href}>
@@ -953,15 +953,15 @@ function RichEditorInner({
                 >
                   <span
                     className={
-                      "shrink-0 text-[13px] " +
+                      "shrink-0 text-row " +
                       (mention.type === "#"
-                        ? "font-mono text-[11px] text-sky-300"
+                        ? "font-mono text-meta text-sky-300"
                         : "text-fg")
                     }
                   >
                     {candidate.label}
                   </span>
-                  <span className="truncate text-[11px] text-fg-muted">{candidate.sub}</span>
+                  <span className="truncate text-meta text-fg-muted">{candidate.sub}</span>
                 </button>
               </li>
             ))}

@@ -35,7 +35,7 @@ const TYPE_LABELS: Record<StorageHostTypeValue, string> = {
   [StorageHostType.s3]: "S3",
 };
 
-const sectionHeadClasses = "mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted";
+const sectionHeadClasses = "mb-2 text-meta font-medium uppercase tracking-wide text-fg-muted";
 
 /**
  * The storage-host registry (spec 102): every place attachment bytes can live.
@@ -210,14 +210,14 @@ function HostRow({
           <span className="inline-flex items-center gap-1.5">
             {host.name}
             {host.email_images_allowed && (
-              <span className="rounded bg-elevated px-1.5 py-px text-[10px] font-normal text-fg-secondary"
+              <span className="rounded bg-elevated px-1.5 py-px text-micro font-normal text-fg-secondary"
                 title="Images from this host may be attached to public service-desk replies">
                 Email images
               </span>
             )}
             {host.is_default && (
               <span
-                className="rounded bg-accent/15 px-1.5 py-px text-[10px] font-normal text-accent-text"
+                className="rounded bg-accent/15 px-1.5 py-px text-micro font-normal text-accent-text"
                 title="Every upload lands here until a routing rule says otherwise"
               >
                 default
@@ -225,7 +225,7 @@ function HostRow({
             )}
             {host.source === StorageHostSource.env && (
               <span
-                className="rounded bg-elevated px-1.5 py-px text-[10px] font-normal text-fg-muted"
+                className="rounded bg-elevated px-1.5 py-px text-micro font-normal text-fg-muted"
                 title="Seeded from environment variables — editable like any other row"
               >
                 env
@@ -240,7 +240,7 @@ function HostRow({
         <Td>
           <span
             className={
-              "rounded px-1.5 py-px text-[11px] " +
+              "rounded px-1.5 py-px text-meta " +
               (host.delivery_mode === DeliveryMode.presigned
                 ? "bg-accent/15 text-accent-text"
                 : "bg-elevated text-fg-secondary")

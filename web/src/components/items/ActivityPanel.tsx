@@ -86,7 +86,7 @@ export function ActivityPanel({
               aria-selected={isActive}
               onClick={() => setTab(key)}
               className={
-                "-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2 text-[13px] cursor-pointer " +
+                "-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2 text-row cursor-pointer " +
                 (isActive
                   ? "border-accent-hover text-heading"
                   : "border-transparent text-fg-muted hover:text-fg")

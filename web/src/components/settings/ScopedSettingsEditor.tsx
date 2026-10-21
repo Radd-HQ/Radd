@@ -155,12 +155,12 @@ function SettingRow({
     <div className="rounded-lg border border-subtle p-3" data-setting={row.key}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[13px] font-medium text-heading">{row.label}</p>
+          <p className="text-row font-medium text-heading">{row.label}</p>
           <p className="text-xs text-fg-muted">{row.description}</p>
         </div>
         <span
           className={
-            "shrink-0 rounded px-1.5 py-px text-[10px] " +
+            "shrink-0 rounded px-1.5 py-px text-micro " +
             (row.set_here ? "bg-accent/15 text-accent-text" : "text-fg-faint")
           }
         >
@@ -231,7 +231,7 @@ function SettingRow({
               }
             }}
             disabled={disabled}
-            className="min-h-24 flex-1 rounded-md border border-strong bg-surface px-2.5 py-2 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-focus disabled:opacity-50"
+            className="min-h-24 flex-1 rounded-md border border-strong bg-surface px-2.5 py-2 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-focus disabled:opacity-50"
           />
         ) : row.secret ? (
           // RADD-1454: a secret never comes back from the server. The row says whether one
@@ -263,7 +263,7 @@ function SettingRow({
                 }
               }}
               disabled={disabled}
-              className="h-8 flex-1 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-focus disabled:opacity-50"
+              className="h-8 flex-1 rounded-md border border-strong bg-surface px-2 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-focus disabled:opacity-50"
             />
           </>
         ) : (
@@ -283,10 +283,10 @@ function SettingRow({
               }
             }}
             disabled={disabled}
-            className="h-8 flex-1 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading focus:outline-2 focus:outline-focus disabled:opacity-50"
+            className="h-8 flex-1 rounded-md border border-strong bg-surface px-2 text-row text-heading focus:outline-2 focus:outline-focus disabled:opacity-50"
           />
         )}
-        <span aria-live="polite" className="w-16 shrink-0 text-[11px] text-fg-muted" data-save-state={state}>
+        <span aria-live="polite" className="w-16 shrink-0 text-meta text-fg-muted" data-save-state={state}>
           {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : ""}
         </span>
         {row.set_here && (

@@ -22,7 +22,7 @@ export function sourceLabel(source: string): string {
 export function MirroredBadge({ source }: { source: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-px text-[11px] text-fg-secondary"
+      className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-px text-meta text-fg-secondary"
       title={`Mirrored from time logged on ${sourceLabel(source)}. Edit it there.`}
     >
       <GitMerge size={10} aria-hidden />

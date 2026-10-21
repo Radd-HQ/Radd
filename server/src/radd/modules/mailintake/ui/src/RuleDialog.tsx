@@ -143,10 +143,10 @@ export function RuleDialog({
               ))}
               {/* The answer the model is always offered but the admin cannot edit — shown so nobody fights or duplicates it. */}
               <div className="flex items-center gap-2 rounded-md border border-dashed border-subtle px-2 py-1.5">
-                <span className="flex-1 text-[13px] text-fg-secondary">
+                <span className="flex-1 text-row text-fg-secondary">
                   {MAIL_NO_MATCH_ANSWER}
                 </span>
-                <span className="shrink-0 text-[11px] text-fg-muted">
+                <span className="shrink-0 text-meta text-fg-muted">
                   always offered → this source's default project
                 </span>
               </div>

@@ -35,7 +35,7 @@ function MentionGroup({ label, links }: { label: string; links: ItemLink[] }) {
   if (links.length === 0) return null;
   return (
     <li>
-      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-fg-faint">{label}</p>
+      <p className="mb-1 text-meta font-medium uppercase tracking-wide text-fg-faint">{label}</p>
       <ul className="flex flex-col gap-1">
         {links.map((link) => (
           <li
@@ -45,9 +45,9 @@ function MentionGroup({ label, links }: { label: string; links: ItemLink[] }) {
             <Link
               to={RoutePath.issue}
               params={{ itemKey: link.item.key }}
-              className="flex min-w-0 flex-1 items-center gap-2 text-[13px] hover:underline"
+              className="flex min-w-0 flex-1 items-center gap-2 text-row hover:underline"
             >
-              <span className="shrink-0 font-mono text-[11px] text-fg-muted">{link.item.key}</span>
+              <span className="shrink-0 font-mono text-meta text-fg-muted">{link.item.key}</span>
               <span className="truncate text-fg">{link.item.title}</span>
             </Link>
           </li>

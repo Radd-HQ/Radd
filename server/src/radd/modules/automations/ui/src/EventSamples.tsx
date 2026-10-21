@@ -32,18 +32,18 @@ function PathRow({ path, many = false, detail, faint, icon, feedback, onCopy }: 
         title="Copy the token"
         className="flex w-full items-baseline gap-1.5 rounded-[4px] px-1.5 py-1 text-left hover:bg-elevated cursor-pointer"
       >
-        <code className="shrink-0 text-[11px] text-accent-text">{path}</code>
+        <code className="shrink-0 text-meta text-accent-text">{path}</code>
         {many && (
           <span
             title="Inside a list — a template reading it may render several values"
-            className="shrink-0 text-[9px] uppercase tracking-wide text-fg-faint"
+            className="shrink-0 text-nano uppercase tracking-wide text-fg-faint"
           >
             many
           </span>
         )}
-        <span className={`truncate text-[11px] ${faint ? "text-fg-faint" : "text-fg-secondary"}`}>{detail}</span>
+        <span className={`truncate text-meta ${faint ? "text-fg-faint" : "text-fg-secondary"}`}>{detail}</span>
         {feedback?.path === path ? (
-          <span className="ml-auto shrink-0 text-[10px] text-fg-muted">{feedback.ok ? "copied" : "select it above"}</span>
+          <span className="ml-auto shrink-0 text-micro text-fg-muted">{feedback.ok ? "copied" : "select it above"}</span>
         ) : icon ? (
           <Copy size={10} className="ml-auto shrink-0 text-fg-faint" aria-hidden />
         ) : null}
@@ -83,7 +83,7 @@ export function EventSamples({ eventType }: { eventType: string }) {
         type="button"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
-        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] uppercase tracking-wide text-fg-muted hover:text-heading cursor-pointer"
+        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-meta uppercase tracking-wide text-fg-muted hover:text-heading cursor-pointer"
       >
         <Braces size={12} aria-hidden />
         What this event carries
@@ -94,13 +94,13 @@ export function EventSamples({ eventType }: { eventType: string }) {
 
       {open && (
         <div className="flex flex-col gap-1.5 border-t border-subtle p-1.5">
-          {sample.isLoading && <p className="text-[11px] text-fg-muted">Reading recent events…</p>}
+          {sample.isLoading && <p className="text-meta text-fg-muted">Reading recent events…</p>}
 
           {/* DECLARED shape (RADD-923) — what the event promises, from the
               plugin that emits it. Shown whether or not it has ever fired, which
               is the half sampling cannot answer. */}
           {data && (data.subjects.length > 0 || Object.keys(data.declared_schema).length > 0) && (
-            <p className="text-[11px] text-fg-muted">
+            <p className="text-meta text-fg-muted">
               Declares{" "}
               {data.subjects.map((subject) => (
                 <code key={subject} className="mr-1 text-accent-text">
@@ -118,7 +118,7 @@ export function EventSamples({ eventType }: { eventType: string }) {
             // Honest rather than helpful-looking. A fabricated SAMPLE would be
             // worse than nothing because it would be believed — but a DECLARED
             // shape is a promise the emitter made, so it is shown above.
-            <p className="text-[11px] text-fg-muted">
+            <p className="text-meta text-fg-muted">
               No <code className="text-fg-secondary">{eventType}</code> events have been recorded on
               this instance yet, so there is nothing to sample. Real values appear once one fires.
             </p>
@@ -129,7 +129,7 @@ export function EventSamples({ eventType }: { eventType: string }) {
               schema paths carry none — nothing is invented. */}
           {declared.length > 0 && (
             <>
-              <p className="text-[11px] text-fg-faint">Declared by the event — click a path to use it.</p>
+              <p className="text-meta text-fg-faint">Declared by the event — click a path to use it.</p>
               <ul className="flex max-h-56 flex-col gap-0.5 overflow-y-auto" data-declared-paths>
                 {declared.map((entry) => (
                   <PathRow
@@ -148,7 +148,7 @@ export function EventSamples({ eventType }: { eventType: string }) {
 
           {data && data.sampled > 0 && (
             <>
-              <p className="text-[11px] text-fg-faint">
+              <p className="text-meta text-fg-faint">
                 From the {data.sampled} most recent — click a path to use it.
               </p>
               <ul className="flex max-h-56 flex-col gap-0.5 overflow-y-auto">
@@ -168,18 +168,18 @@ export function EventSamples({ eventType }: { eventType: string }) {
               </ul>
 
               {data.changed_fields.length > 0 && (
-                <p className="text-[11px] text-fg-muted">
+                <p className="text-meta text-fg-muted">
                   Fields seen changing:{" "}
                   <span className="text-fg-secondary">{data.changed_fields.join(", ")}</span>
                 </p>
               )}
 
               {data.example && (
-                <details className="text-[11px]">
+                <details className="text-meta">
                   <summary className="cursor-pointer text-fg-muted hover:text-heading">
                     One whole payload
                   </summary>
-                  <pre className="mt-1 max-h-48 overflow-auto rounded-[4px] bg-base p-1.5 text-[10px] text-fg-secondary">
+                  <pre className="mt-1 max-h-48 overflow-auto rounded-[4px] bg-base p-1.5 text-micro text-fg-secondary">
                     {JSON.stringify(data.example, null, 2)}
                   </pre>
                 </details>

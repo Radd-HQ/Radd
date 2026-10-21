@@ -47,7 +47,7 @@ export function SubscriptionList({
     <div className="flex flex-col gap-4">
       {confirmDialog}
       {rows.length === 0 && (
-        <p className="text-[13px] text-fg-muted">
+        <p className="text-row text-fg-muted">
           No subscriptions. Add one to hear about everything in a project, a wiki space, or a
           team — including issues nobody has assigned to you.
         </p>
@@ -63,13 +63,13 @@ export function SubscriptionList({
               {/* No label means the target is gone OR is no longer readable by
                   this account — the server refuses to name one it may not show
                   (notify/targets.py), and from here the two are the same fact. */}
-              <span className="text-[13px] font-medium text-heading">
+              <span className="text-row font-medium text-heading">
                 {rule.scope_label ?? "(unavailable)"}
               </span>
-              <span className="ml-2 rounded border border-subtle px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-fg-muted">
+              <span className="ml-2 rounded border border-subtle px-1.5 py-0.5 text-meta uppercase tracking-wide text-fg-muted">
                 {SCOPE_LABELS[rule.scope]}
               </span>
-              <p className="mt-0.5 text-[12px] leading-snug text-fg-muted">
+              <p className="mt-0.5 text-xs leading-snug text-fg-muted">
                 {SCOPE_HINTS[rule.scope]}
               </p>
             </div>
@@ -96,7 +96,7 @@ export function SubscriptionList({
               const cell = resolveSubscriptionCell(prefs, rule, kind.kind);
               return (
                 <span key={kind.kind} className="flex items-center gap-1.5">
-                  <span className="text-[12px] text-fg-secondary">{kind.label}</span>
+                  <span className="text-xs text-fg-secondary">{kind.label}</span>
                   <ChannelCell
                     label={`${rule.scope_label ?? SCOPE_LABELS[rule.scope]} — ${kind.label}`}
                     resolved={cell.channel}
@@ -168,7 +168,7 @@ function AddSubscription({
         <Plus size={14} aria-hidden />
         Add
       </Button>
-      <p className="basis-full text-[12px] leading-snug text-fg-muted">{SCOPE_HINTS[scope]}</p>
+      <p className="basis-full text-xs leading-snug text-fg-muted">{SCOPE_HINTS[scope]}</p>
     </div>
   );
 }

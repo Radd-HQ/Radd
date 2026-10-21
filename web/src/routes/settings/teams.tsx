@@ -37,7 +37,7 @@ export function TeamsSettingsPage() {
             <button type="button" onClick={() => setSelected(team)} aria-label={`Open ${team.name}`} aria-haspopup="dialog"
               className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-surface/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus cursor-pointer">
               <ChevronRight size={14} className="shrink-0 text-fg-muted" aria-hidden />
-              <span className="min-w-0 break-words text-[13px] font-medium text-heading">{team.name}</span>
+              <span className="min-w-0 break-words text-row font-medium text-heading">{team.name}</span>
               <span className="ml-auto shrink-0 text-xs text-fg-faint">{formatDate(team.created_at)}</span>
             </button>
           </li>)}

@@ -22,19 +22,19 @@ export function ChangeUrlDialog({
   return (
     <Modal title="Change URL" onClose={onClose}>
       <div className="flex flex-col gap-3">
-        <p className="text-[13px] text-fg-secondary">
+        <p className="text-row text-fg-secondary">
           The page moves to the new address immediately; links that used the page id keep
           working, links that used the old slug do not. If another page holds the URL, a
           numbered suffix is added.
         </p>
-        <div className="flex items-center gap-1 text-[13px]">
+        <div className="flex items-center gap-1 text-row">
           <span className="text-fg-muted">/pages/{spaceSlug}/</span>
           <input
             value={slug}
             onChange={(event) => setSlug(event.target.value)}
             aria-label="New URL segment"
             autoFocus
-            className="h-8 flex-1 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading focus:outline-2 focus:outline-focus"
+            className="h-8 flex-1 rounded-md border border-strong bg-surface px-2 text-row text-heading focus:outline-2 focus:outline-focus"
           />
         </div>
         <div className="flex justify-end gap-2">

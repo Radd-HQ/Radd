@@ -60,11 +60,11 @@ export function TopBar() {
         <button
           type="button"
           onClick={openCommandPalette}
-          className="flex min-w-0 flex-1 cursor-text items-center gap-2 rounded-md border border-subtle bg-surface px-3 py-1.5 text-left text-[13px] text-fg-faint transition-colors hover:border-strong focus-visible:outline-2 focus-visible:outline-focus"
+          className="flex min-w-0 flex-1 cursor-text items-center gap-2 rounded-md border border-subtle bg-surface px-3 py-1.5 text-left text-row text-fg-faint transition-colors hover:border-strong focus-visible:outline-2 focus-visible:outline-focus"
         >
           <Search size={13} aria-hidden className="shrink-0" />
           <span className="truncate">Search issues, docs — or ask…</span>
-          <kbd className="ml-auto shrink-0 rounded border border-strong px-1.5 font-mono text-[10px] text-fg-muted">
+          <kbd className="ml-auto shrink-0 rounded border border-strong px-1.5 font-mono text-micro text-fg-muted">
             {modShortcut('K')}
           </kbd>
         </button>
@@ -87,7 +87,7 @@ export function TopBar() {
         <Link
           to={RoutePath.login}
           search={{ next: currentPath() }}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-[13px] font-medium text-white hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-focus"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-row font-medium text-white hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-focus"
         >
           <LogIn size={14} aria-hidden />
           Sign in
@@ -111,7 +111,7 @@ function InboxBell() {
     >
       <Bell size={16} aria-hidden />
       {unread > 0 && (
-        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white">
+        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-micro font-semibold text-white">
           {unread > 99 ? "99+" : unread}
         </span>
       )}

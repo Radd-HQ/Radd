@@ -77,9 +77,9 @@ function remarkRaddTokens() {
 
 const HEADING = {
   h1: "mt-3 mb-1.5 text-base font-semibold text-heading",
-  h2: "mt-3 mb-1 text-[15px] font-semibold text-heading",
-  h3: "mt-2.5 mb-1 text-[13px] font-semibold text-fg",
-  h4: "mt-2 mb-1 text-[13px] font-semibold text-fg",
+  h2: "mt-3 mb-1 text-base font-semibold text-heading",
+  h3: "mt-2.5 mb-1 text-row font-semibold text-fg",
+  h4: "mt-2 mb-1 text-row font-semibold text-fg",
   h5: "mt-2 mb-0.5 text-xs font-semibold uppercase tracking-wide text-fg-secondary",
   h6: "mt-2 mb-0.5 text-xs font-semibold uppercase tracking-wide text-fg-muted",
 } as const;
@@ -215,7 +215,7 @@ const components = {
   ),
   table: ({ children }: { children?: ReactNode }) => (
     <div className="my-2 overflow-x-auto">
-      <table className="w-full border-collapse text-[13px]">{children}</table>
+      <table className="w-full border-collapse text-row">{children}</table>
     </div>
   ),
   th: ({ children }: { children?: ReactNode }) => (
@@ -299,7 +299,7 @@ export function Markdown({ text }: { text: string }) {
   return (
     <MarkdownSourceContext.Provider value={md}>
       <HeadingIdCtx.Provider value={headingIds}>
-        <div className="radd-markdown break-words text-[13px] leading-relaxed text-fg">
+        <div className="radd-markdown break-words text-row leading-relaxed text-fg">
           <ReactMarkdown remarkPlugins={[remarkGfm, remarkRaddTokens]} components={components}>
             {md}
           </ReactMarkdown>

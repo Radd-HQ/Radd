@@ -77,7 +77,7 @@ export function FindingsPanel({ findings, blocking, labelFor }: FindingsPanelPro
       }
     >
       <p
-        className={`flex items-center gap-2 text-[13px] font-medium ${
+        className={`flex items-center gap-2 text-row font-medium ${
           blocking ? "text-status-danger-ink" : "text-status-warning-ink"
         }`}
       >
@@ -97,7 +97,7 @@ export function FindingsPanel({ findings, blocking, labelFor }: FindingsPanelPro
             <li
               key={`${finding.node_id}-${index}`}
               data-finding-field={finding.field || undefined}
-              className="flex gap-2 text-[13px] text-fg"
+              className="flex gap-2 text-row text-fg"
             >
               <span aria-hidden className="select-none text-fg-faint">
                 •

@@ -44,25 +44,25 @@ export function PageVersionDiff({
           <ChevronLeft size={13} aria-hidden />
           Back
         </Button>
-        <span className="text-[13px] text-fg-secondary">
+        <span className="text-row text-fg-secondary">
           v{from} → {newerIsCurrent ? `v${page.version} (current)` : `v${to}`}
         </span>
-        <span className="ml-auto font-mono text-[11px]">
+        <span className="ml-auto font-mono text-meta">
           <span className="text-callout-success-ink">+{stats.added}</span>{" "}
           <span className="text-callout-danger-ink">−{stats.removed}</span>
         </span>
       </div>
 
       {stats.added === 0 && stats.removed === 0 ? (
-        <p className="text-[13px] text-fg-faint">These versions are identical.</p>
+        <p className="text-row text-fg-faint">These versions are identical.</p>
       ) : (
         <div className="overflow-x-auto rounded-md border border-subtle bg-surface">
-          <table className="w-full border-collapse font-mono text-[12px]">
+          <table className="w-full border-collapse font-mono text-xs">
             <tbody>
               {rows.map((row, index) =>
                 row.op === "skip" ? (
                   <tr key={`skip-${index}`}>
-                    <td colSpan={3} className="px-3 py-1 text-center text-[11px] text-fg-faint">
+                    <td colSpan={3} className="px-3 py-1 text-center text-meta text-fg-faint">
                       … {row.count} unchanged line{row.count === 1 ? "" : "s"} …
                     </td>
                   </tr>

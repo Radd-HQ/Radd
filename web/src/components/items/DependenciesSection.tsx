@@ -58,12 +58,12 @@ export function DependenciesSection({ project, item }: { project: Project; item:
   return (
     <div>
       {groups.length === 0 ? (
-        <p className="text-[13px] text-fg-faint">No dependencies yet.</p>
+        <p className="text-row text-fg-faint">No dependencies yet.</p>
       ) : (
         <ul className="flex flex-col gap-3">
           {groups.map((group) => (
             <li key={group.key}>
-              <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+              <p className="mb-1 text-meta font-medium uppercase tracking-wide text-fg-faint">
                 {group.label}
               </p>
               <ul className="flex flex-col gap-1">
@@ -75,9 +75,9 @@ export function DependenciesSection({ project, item }: { project: Project; item:
                     <Link
                       to={RoutePath.issue}
                       params={{ itemKey: link.item.key }}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-[13px] hover:underline"
+                      className="flex min-w-0 flex-1 items-center gap-2 text-row hover:underline"
                     >
-                      <span className="shrink-0 font-mono text-[11px] text-fg-muted">
+                      <span className="shrink-0 font-mono text-meta text-fg-muted">
                         {link.item.key}
                       </span>
                       <span className="truncate text-fg">{link.item.title}</span>
@@ -196,7 +196,7 @@ function AddLinkRow({
           onBlur={() => setTimeout(() => setOpen(false), 120)}
           autoComplete="off"
           placeholder="Search by title, number, or key — a project key narrows…"
-          className="h-8 rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+          className="h-8 rounded-md border border-strong bg-surface px-2.5 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
         />
         {suggestions.length > 0 && (
           <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-y-auto rounded-md border border-strong bg-surface py-1 shadow-xl">
@@ -211,9 +211,9 @@ function AddLinkRow({
                     event.preventDefault();
                     submitBody({ target_id: candidate.id, link_type: activeType });
                   }}
-                  className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[13px] hover:bg-elevated cursor-pointer"
+                  className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-row hover:bg-elevated cursor-pointer"
                 >
-                  <span className="shrink-0 font-mono text-[11px] text-fg-muted">
+                  <span className="shrink-0 font-mono text-meta text-fg-muted">
                     {candidate.key}
                   </span>
                   <span className="truncate text-fg">{candidate.title}</span>

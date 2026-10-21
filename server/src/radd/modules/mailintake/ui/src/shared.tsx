@@ -25,7 +25,7 @@ export function Chip({ children, tone }: { children: ReactNode; tone?: "muted" }
   return (
     <span
       className={
-        "rounded px-1.5 py-px text-[10px] uppercase tracking-wide " +
+        "rounded px-1.5 py-px text-micro uppercase tracking-wide " +
         (tone === "muted" ? "bg-elevated text-fg-faint" : "bg-elevated text-fg-secondary")
       }
     >
@@ -48,7 +48,7 @@ export function CheckboxField({
 }) {
   return (
     <div>
-      <label className="flex items-center gap-2 text-[13px] text-fg">
+      <label className="flex items-center gap-2 text-row text-fg">
         <input
           type="checkbox"
           checked={checked}
@@ -80,7 +80,7 @@ export function kindLabel(kinds: MailKindInfo[] | undefined, kind: string): stri
 export function KindGuidance({ info }: { info?: MailKindInfo }) {
   if (!info?.guidance) return null;
   return (
-    <p className="rounded-md border border-subtle bg-surface/60 px-3 py-2 text-[11px] text-fg-secondary">
+    <p className="rounded-md border border-subtle bg-surface/60 px-3 py-2 text-meta text-fg-secondary">
       {info.guidance}
       {info.help_url && (
         <>

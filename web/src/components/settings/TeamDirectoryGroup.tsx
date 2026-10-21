@@ -45,7 +45,7 @@ export function TeamGroupsSection({ team, canManage }: { team: Team; canManage: 
     },
   });
   return <section aria-label={`${team.name} directory groups`} className="mb-4">
-    <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">Directory groups</h4>
+    <h4 className="mb-2 text-meta font-medium uppercase tracking-wide text-fg-faint">Directory groups</h4>
     <TextField type="search" label="Find attached groups" value={held.filter}
       onChange={event => held.setFilter(event.target.value)} placeholder="Search by name or directory path…" />
     <div aria-busy={held.busy} className="mt-2">
@@ -54,9 +54,9 @@ export function TeamGroupsSection({ team, canManage }: { team: Team; canManage: 
           <Button variant="secondary" onClick={() => void held.refetch()}>Retry attached groups</Button></div>
         : !held.rows.length ? <p className="text-xs text-fg-muted">{held.q ? "No attached groups match your search." : "No groups attached."}</p>
         : <ul aria-label="Attached groups" className="max-h-[35dvh] space-y-1.5 overflow-y-auto">
-          {held.rows.map(group => <li key={group.group_id} className="flex flex-wrap items-center gap-2 py-1 text-[13px]">
-            <span className="min-w-0 break-words rounded border border-subtle bg-surface px-1.5 py-px text-[11px] text-fg-secondary" title={group.dn}>{group.name}</span>
-            {group.directory_missing_since && <span className="flex items-center gap-1 text-[11px] text-status-warning-ink"
+          {held.rows.map(group => <li key={group.group_id} className="flex flex-wrap items-center gap-2 py-1 text-row">
+            <span className="min-w-0 break-words rounded border border-subtle bg-surface px-1.5 py-px text-meta text-fg-secondary" title={group.dn}>{group.name}</span>
+            {group.directory_missing_since && <span className="flex items-center gap-1 text-meta text-status-warning-ink"
               title={`Missing since ${formatDateTime(group.directory_missing_since)} — renamed, moved, or deleted in AD. Its people are kept while it is missing.`}>
               <TriangleAlert size={12} aria-hidden />missing from AD
             </span>}

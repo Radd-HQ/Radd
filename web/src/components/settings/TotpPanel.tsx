@@ -75,7 +75,7 @@ function SetupPanel({ pending }: { pending: boolean }) {
   if (!setup) {
     return (
       <div className="flex flex-col items-start gap-3">
-        <p className="flex items-center gap-2 text-[13px] text-fg-secondary">
+        <p className="flex items-center gap-2 text-row text-fg-secondary">
           <ShieldOff size={15} className="shrink-0 text-fg-muted" aria-hidden />
           Two-factor authentication is off — sign-in only asks for your password.
         </p>
@@ -153,7 +153,7 @@ function EnabledPanel({ status }: { status: TotpStatus }) {
 
   return (
     <div className="flex flex-col items-start gap-3">
-      <p className="flex items-center gap-2 text-[13px] text-fg-secondary">
+      <p className="flex items-center gap-2 text-row text-fg-secondary">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300">
           <ShieldCheck size={13} aria-hidden />
           Enabled

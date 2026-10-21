@@ -67,7 +67,7 @@ function RatingForm({
   return (
     <div className="flex flex-col gap-5 rounded-xl border border-subtle bg-surface/40 p-6" data-csat-survey={token}>
       <header className="flex flex-col gap-1 border-b border-subtle pb-4">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-accent-text">
+        <p className="text-meta font-medium uppercase tracking-wide text-accent-text">
           Satisfaction survey · How did we do?
         </p>
         <h2 className="text-lg font-semibold text-heading">

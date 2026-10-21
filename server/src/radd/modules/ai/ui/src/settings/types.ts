@@ -102,4 +102,4 @@ export const AiPath = {
 export const AiEntity = { provider: "aiProvider", role: "aiRole", preset: "aiPreset" } as const;
 
 /** Section headings on the page share one style. */
-export const sectionHeadClasses = "mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted";
+export const sectionHeadClasses = "mb-2 text-meta font-medium uppercase tracking-wide text-fg-muted";

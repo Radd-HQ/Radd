@@ -76,7 +76,7 @@ export function ExtensionConfig({
           {isLoading ? (
             // Not the JSON editor: showing raw parameters while the schema is
             // still in flight teaches people the form does not exist.
-            <p className="text-[13px] text-fg-faint">Loading this extension's options…</p>
+            <p className="text-row text-fg-faint">Loading this extension's options…</p>
           ) : raw ? (
             <>
               <label className="text-xs font-medium text-fg-secondary">Parameters (JSON)</label>
@@ -86,7 +86,7 @@ export function ExtensionConfig({
                 spellCheck={false}
                 rows={10}
                 aria-label="Parameters as JSON"
-                className="w-full rounded-md border border-subtle bg-surface px-2.5 py-2 font-mono text-[12px] text-heading focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none"
+                className="w-full rounded-md border border-subtle bg-surface px-2.5 py-2 font-mono text-xs text-heading focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none"
               />
               {!parsed.ok && <ErrorText error={parsed.error} />}
               {!canForm && (
@@ -124,7 +124,7 @@ export function ExtensionConfig({
                 if (!raw) setDraft(nextBody);
                 setRawOverride(!raw);
               }}
-              className="self-start text-[11px] text-fg-muted hover:text-fg hover:underline cursor-pointer"
+              className="self-start text-meta text-fg-muted hover:text-fg hover:underline cursor-pointer"
             >
               {raw ? "Edit as a form" : "Edit as JSON"}
             </button>
@@ -135,12 +135,12 @@ export function ExtensionConfig({
           <p className="text-xs font-medium text-fg-secondary">Preview</p>
           <div className="rounded-md border border-subtle bg-base p-2">
             {!extension ? (
-              <p className="text-[13px] text-fg-faint">Nothing is registered for radd:{name}.</p>
+              <p className="text-row text-fg-faint">Nothing is registered for radd:{name}.</p>
             ) : parsed.ok ? (
               extension.render(parsed.params)
             ) : (
               <ExtensionCard>
-                <p className="text-[13px] text-fg-faint">Fix the parameters to see a preview.</p>
+                <p className="text-row text-fg-faint">Fix the parameters to see a preview.</p>
               </ExtensionCard>
             )}
           </div>
@@ -217,7 +217,7 @@ function Field({
           onChange={(event) => onChange(event.target.value)}
           rows={5}
           aria-label={field.label}
-          className="w-full rounded-md border border-subtle bg-surface px-2.5 py-2 text-[13px] text-heading focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none"
+          className="w-full rounded-md border border-subtle bg-surface px-2.5 py-2 text-row text-heading focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none"
         />
         {field.description && <p className="text-xs text-fg-muted">{field.description}</p>}
       </div>

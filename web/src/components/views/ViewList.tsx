@@ -282,7 +282,7 @@ export function ViewList({
                     </>
                   ) : (
                     group.detail && (
-                      <span className="truncate text-[11px] text-fg-muted">· {group.detail}</span>
+                      <span className="truncate text-meta text-fg-muted">· {group.detail}</span>
                     )
                   )}
                 </button>
@@ -483,7 +483,7 @@ function ListRow({
           onSelectToggle={onSelectToggle}
           onStar={onStar}
         />
-        <span className="min-w-0 flex-1 text-[13px] text-heading"><span className="block truncate">{item.title}</span>{sourceCycle && <span className="block truncate text-[11px] text-fg-muted">From {sourceCycle}</span>}</span>
+        <span className="min-w-0 flex-1 text-row text-heading"><span className="block truncate">{item.title}</span>{sourceCycle && <span className="block truncate text-meta text-fg-muted">From {sourceCycle}</span>}</span>
       </span>
       {listColumns.map((column) => (
         <ColumnCell

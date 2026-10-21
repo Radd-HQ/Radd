@@ -15,11 +15,11 @@ export function EmbeddingHealthCard() {
   if (!coverage.data.enabled) return null;
   const data = coverage.data;
   return <Card title={<span className="flex items-center gap-1.5"><Sparkles size={13} aria-hidden />Semantic index</span>}>
-    <div className="flex justify-between gap-4 py-1 text-[13px]">
+    <div className="flex justify-between gap-4 py-1 text-row">
       <span className="text-fg-secondary">Issues embedded</span>
       <span className="font-medium tabular-nums text-heading">{data.items_embedded.toLocaleString()} / {data.items_total.toLocaleString()}</span>
     </div>
-    <div className="flex justify-between gap-4 py-1 text-[13px]">
+    <div className="flex justify-between gap-4 py-1 text-row">
       <span className="text-fg-secondary">Pages embedded</span>
       <span className="font-medium tabular-nums text-heading">{data.docs_embedded.toLocaleString()} / {data.docs_total.toLocaleString()}</span>
     </div>

@@ -300,7 +300,7 @@ function ModeSetting({ projectId }: { projectId: string }) {
         </SelectField>
         <span
           className={
-            "mb-2 rounded px-1.5 py-px text-[10px] " +
+            "mb-2 rounded px-1.5 py-px text-micro " +
             (row.set_here ? "bg-accent/15 text-accent-text" : "text-fg-faint")
           }
         >
@@ -326,7 +326,7 @@ function ModeSetting({ projectId }: { projectId: string }) {
         )}
       </div>
       {row.description && (
-        <p className="mt-1 max-w-2xl text-[11px] text-fg-faint">{row.description}</p>
+        <p className="mt-1 max-w-2xl text-meta text-fg-faint">{row.description}</p>
       )}
     </div>
   );
@@ -492,7 +492,7 @@ function TransitionRow({
         />
         All threads must be resolved
       </label>
-      <p className="mt-1 text-[11px] text-fg-muted">
+      <p className="mt-1 text-meta text-fg-muted">
         Includes internal threads. Ordinary comments do not block the move.
         Use Applies when to limit this rule to issue types; add it to each status you want to protect.
       </p>
@@ -522,7 +522,7 @@ function TransitionRow({
         />
         Moves automatically when a release is published
       </label>
-      <p className="mt-1 text-[11px] text-fg-muted">
+      <p className="mt-1 text-meta text-fg-muted">
         Publishing a release — here, over the API, or from GitHub, GitLab or Forgejo — moves every
         issue in the From state along this transition and records the release on it. Merged pull
         requests move their issues into the From state. Needs a From state other than Any state.
@@ -604,9 +604,9 @@ function ConditionListEditor({
 
   return (
     <div className="mt-2 flex flex-col gap-1.5">
-      <span className="text-[11px] uppercase tracking-wide text-fg-faint">{label}</span>
+      <span className="text-meta uppercase tracking-wide text-fg-faint">{label}</span>
       {conditions.length === 0 && (
-        <p className="text-[11px] text-fg-faint">{emptyText}</p>
+        <p className="text-meta text-fg-faint">{emptyText}</p>
       )}
       {conditions.map((params, index) => (
         <ConditionRow
@@ -758,7 +758,7 @@ function ConditionRow({
           onChange={(values, display) => onChange({ ...params, values, display })}
         />
       )}
-      {incomplete && <span className="text-[11px] text-amber-400">choose a value</span>}
+      {incomplete && <span className="text-meta text-amber-400">choose a value</span>}
       {!disabled && (
         <IconButton
           danger

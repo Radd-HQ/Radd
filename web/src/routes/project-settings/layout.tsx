@@ -24,7 +24,7 @@ function useUrlProject() {
 }
 
 const navLinkClasses =
-  "flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-fg-secondary hover:bg-elevated " +
+  "flex items-center gap-2 rounded-md px-2 py-1.5 text-row text-fg-secondary hover:bg-elevated " +
   "hover:text-heading focus-visible:outline-2 focus-visible:outline-focus " +
   "[&.active]:bg-elevated [&.active]:text-heading";
 

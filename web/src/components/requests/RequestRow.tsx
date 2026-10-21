@@ -34,7 +34,7 @@ export function RequestRow({
       <button
         type="button"
         onClick={() => onOpen(request.key)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] cursor-pointer hover:bg-elevated focus-visible:outline-2 focus-visible:outline-focus"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-row cursor-pointer hover:bg-elevated focus-visible:outline-2 focus-visible:outline-focus"
       >
         {/*
           The "someone answered you" dot. Given a fixed 10px gutter rather than
@@ -49,7 +49,7 @@ export function RequestRow({
             />
           )}
         </span>
-        <span className="shrink-0 font-mono text-[11px] text-fg-muted">{request.key}</span>
+        <span className="shrink-0 font-mono text-meta text-fg-muted">{request.key}</span>
         <span
           className={
             "min-w-0 flex-1 truncate " +
@@ -61,7 +61,7 @@ export function RequestRow({
 
         {request.comment_count > 0 && (
           <span
-            className="flex shrink-0 items-center gap-0.5 text-[11px] text-fg-faint"
+            className="flex shrink-0 items-center gap-0.5 text-meta text-fg-faint"
             title={`${request.comment_count} ${request.comment_count === 1 ? "reply" : "replies"}`}
           >
             <MessageSquare size={11} aria-hidden />
@@ -70,7 +70,7 @@ export function RequestRow({
         )}
         {request.release && (
           <span
-            className="hidden shrink-0 items-center gap-1 rounded bg-elevated px-1.5 py-px text-[11px] text-fg-secondary sm:flex"
+            className="hidden shrink-0 items-center gap-1 rounded bg-elevated px-1.5 py-px text-meta text-fg-secondary sm:flex"
             title={`Shipped in ${request.release}`}
           >
             <Package size={10} aria-hidden />
@@ -78,7 +78,7 @@ export function RequestRow({
           </span>
         )}
         <span
-          className="hidden shrink-0 items-center gap-1 text-[11px] text-fg-faint sm:flex"
+          className="hidden shrink-0 items-center gap-1 text-meta text-fg-faint sm:flex"
           title={request.assignee ? `Assigned to ${request.assignee}` : "Nobody has picked this up yet"}
         >
           <UserRound size={11} aria-hidden />
@@ -86,14 +86,14 @@ export function RequestRow({
         </span>
         <span
           className={
-            "shrink-0 rounded border px-1.5 py-px text-[11px] " +
+            "shrink-0 rounded border px-1.5 py-px text-meta " +
             (CATEGORY_STYLE[request.state_category] ?? "border-strong text-fg-secondary")
           }
         >
           {request.state || "—"}
         </span>
         <span
-          className="hidden shrink-0 text-[11px] text-fg-faint md:inline"
+          className="hidden shrink-0 text-meta text-fg-faint md:inline"
           title={formatDateTime(request.updated_at)}
         >
           {relativeTime(request.updated_at)}

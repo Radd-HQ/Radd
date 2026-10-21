@@ -27,7 +27,7 @@ function timerStatus(timer: TimerState): { label: string; state: string; classNa
 export function SlaTimerChip({ timer, className = "" }: { timer: TimerState; className?: string }) {
   const status = timerStatus(timer);
   return (
-    <span data-sla-chip={status.state} className={`rounded px-1.5 py-px text-[10px] font-medium ${status.className} ${className}`}>
+    <span data-sla-chip={status.state} className={`rounded px-1.5 py-px text-micro font-medium ${status.className} ${className}`}>
       {status.label}
     </span>
   );

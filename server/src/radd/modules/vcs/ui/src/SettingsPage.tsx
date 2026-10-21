@@ -40,7 +40,7 @@ export function VcsSettingsPage() {
         {list.map((connector) => <button key={connector.provider} type="button" role="tab"
           id={`vcs-tab-${connector.provider}`} aria-controls={`vcs-panel-${connector.provider}`} aria-selected={connector === active}
           onClick={() => select(connector.provider)}
-          className={"-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] cursor-pointer focus-visible:outline-2 focus-visible:outline-focus " + (connector === active ? "border-accent-hover text-heading" : "border-transparent text-fg-muted hover:text-fg")}>
+          className={"-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-row cursor-pointer focus-visible:outline-2 focus-visible:outline-focus " + (connector === active ? "border-accent-hover text-heading" : "border-transparent text-fg-muted hover:text-fg")}>
           <GitBranch size={13} aria-hidden />{connector.title}
         </button>)}
       </div>

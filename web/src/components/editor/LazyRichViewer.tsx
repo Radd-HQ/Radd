@@ -12,7 +12,7 @@ const RichViewerImpl = lazy(() =>
  * comment threads cheap: it's also the pre-viewport placeholder. */
 function PlainFallback({ text }: { text: string }) {
   return (
-    <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-fg">{text}</div>
+    <div className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{text}</div>
   );
 }
 

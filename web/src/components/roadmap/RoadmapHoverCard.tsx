@@ -59,20 +59,20 @@ export function RoadmapHoverCard({ row, anchor, progress, timelog, rollup }: Roa
       style={{ left: pos.left, top: pos.top, width: CARD_WIDTH_PX }}
       className="pointer-events-none fixed z-50 rounded-lg border border-strong bg-surface p-3 shadow-xl shadow-black/40"
     >
-      <p className="font-mono text-[11px] text-fg-muted">{item.key}</p>
-      <p className="mt-0.5 line-clamp-2 text-[13px] font-medium leading-snug text-heading">
+      <p className="font-mono text-meta text-fg-muted">{item.key}</p>
+      <p className="mt-0.5 line-clamp-2 text-row font-medium leading-snug text-heading">
         {item.title}
       </p>
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <StatePill state={item.state} />
-        <span className="inline-flex items-center gap-1 text-[11px] text-fg-secondary">
+        <span className="inline-flex items-center gap-1 text-meta text-fg-secondary">
           <PriorityIcon priority={item.priority} size={13} />
           {PRIORITY_META[item.priority].label}
         </span>
       </div>
 
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-fg-secondary">
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-meta text-fg-secondary">
         {item.assignee ? (
           <span className="inline-flex items-center gap-1">
             <AssigneeAvatar assignee={item.assignee} />
@@ -85,7 +85,7 @@ export function RoadmapHoverCard({ row, anchor, progress, timelog, rollup }: Roa
       </div>
 
       {startIso && targetIso && (
-        <p className="mt-1.5 text-[11px] tabular-nums text-fg-secondary">
+        <p className="mt-1.5 text-meta tabular-nums text-fg-secondary">
           {shortDate(startIso)} → {shortDate(targetIso)}
           {row.derived && <span className="text-fg-faint"> · from children</span>}
         </p>
@@ -93,7 +93,7 @@ export function RoadmapHoverCard({ row, anchor, progress, timelog, rollup }: Roa
 
       {progress && (
         <div className="mt-2 flex flex-col gap-1">
-          <p className="text-[11px] tabular-nums text-fg-secondary">
+          <p className="text-meta tabular-nums text-fg-secondary">
             {isEpic && rollup
               ? `${rollup.done} of ${rollup.total} children done${elsewhereText(rollup, item)}`
               : timelog && (

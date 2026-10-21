@@ -57,7 +57,7 @@ export function PresetsSection() {
                   <div className="flex items-center gap-2">
                     <Switch checked={preset.enabled} onChange={() => toggle.mutate(preset)} disabled={toggle.isPending}
                       label={`Show ${preset.name} in the editor AI menu`} hideLabel />
-                    <span className={"flex-1 text-[13px] font-medium " + (preset.enabled ? "text-heading" : "text-fg-faint")}>
+                    <span className={"flex-1 text-row font-medium " + (preset.enabled ? "text-heading" : "text-fg-faint")}>
                       {preset.name}
                     </span>
                     <IconButton aria-label={`Edit ${preset.name}`}

@@ -20,7 +20,7 @@ export function MirroredGroupsSection({ directoryReady }: { directoryReady: bool
   return (
     <div className="mt-4 flex flex-col gap-3" data-mirrored-groups>
       <div>
-        <h3 className="text-[13px] font-semibold text-heading">Mirrored groups</h3>
+        <h3 className="text-row font-semibold text-heading">Mirrored groups</h3>
         <p className="mt-0.5 text-xs text-fg-muted">
           Membership and nesting are the directory's, read-only here. A grant to a group reaches every{" "}
           <strong>transitive</strong> member — the count below is that number, nesting included.
@@ -77,7 +77,7 @@ function MirroredRow({ group, canManage, expanded, onToggle }: {
         </Td>
         <Td>
           <span className="block text-heading">{group.name}</span>
-          <span className="block max-w-96 truncate font-mono text-[10px] text-fg-faint">{group.dn}</span>
+          <span className="block max-w-96 truncate font-mono text-micro text-fg-faint">{group.dn}</span>
         </Td>
         <Td>
           {group.transitive_member_count ?? group.direct_member_count}
@@ -87,13 +87,13 @@ function MirroredRow({ group, canManage, expanded, onToggle }: {
         <Td>{(group.child_names ?? []).join(", ") || "—"}</Td>
         <Td>
           {missing ? (
-            <span className="inline-flex items-center gap-1 rounded border border-status-warning/40 px-1.5 py-px text-[11px] text-status-warning-ink"
+            <span className="inline-flex items-center gap-1 rounded border border-status-warning/40 px-1.5 py-px text-meta text-status-warning-ink"
               title={`Missing since ${formatDateTime(missing)}. Memberships and access are retained until reviewed.`}>
               <AlertTriangle size={11} aria-hidden />
               missing in AD
             </span>
           ) : (
-            <span className="text-[11px] text-fg-faint">OK</span>
+            <span className="text-meta text-fg-faint">OK</span>
           )}
         </Td>
       </tr>

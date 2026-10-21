@@ -130,14 +130,14 @@ export function SlaSettingsPage({ project }: { project: Project }) {
                       </span>
                     )}
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[13px] font-medium text-heading">{policy.name}</span>
+                      <span className="block text-row font-medium text-heading">{policy.name}</span>
                       <span className="block text-xs text-fg-muted">{summary(policy)}</span>
                     </span>
                     {canManage ? (
                       <>
                         <button type="button" onClick={() => toggle.mutate(policy)} role="switch" aria-checked={policy.enabled}
                           className={
-                            "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide cursor-pointer " +
+                            "rounded-full px-2 py-0.5 text-micro font-medium uppercase tracking-wide cursor-pointer " +
                             (policy.enabled ? "bg-status-success/15 text-status-success-ink" : "bg-elevated text-fg-muted")
                           }>
                           {policy.enabled ? "Enabled" : "Disabled"}
@@ -155,7 +155,7 @@ export function SlaSettingsPage({ project }: { project: Project }) {
                         </button>
                       </>
                     ) : (
-                      !policy.enabled && <span className="text-[10px] uppercase text-fg-faint">Disabled</span>
+                      !policy.enabled && <span className="text-micro uppercase text-fg-faint">Disabled</span>
                     )}
                   </li>
                   {editingId === policy.id && (
@@ -172,7 +172,7 @@ export function SlaSettingsPage({ project }: { project: Project }) {
 
           {/* The survey fires when the timed item resolves — the other half of this loop. */}
           <section aria-label="Satisfaction surveys" className="mt-8">
-            <h3 className="text-[13px] font-semibold text-heading">After resolution</h3>
+            <h3 className="text-row font-semibold text-heading">After resolution</h3>
             <p className="mb-3 mt-0.5 text-xs text-fg-muted">What happens once the timers above stop.</p>
             <ScopedSettings scope="project" scopeId={projectId} section={AFTER_RESOLUTION_SECTION}
               emptyLabel="No post-resolution settings — the CSAT plugin is disabled." />

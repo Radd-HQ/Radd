@@ -38,7 +38,7 @@ export function ConnectionsPanel() {
       <header className="mb-3 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-heading">Connections</h2>
-          <p className="text-[13px] text-fg-muted">
+          <p className="text-row text-fg-muted">
             Confluence Server or Data Center. A personal access token is the usual
             choice; basic auth works where tokens are disabled.
           </p>
@@ -49,12 +49,12 @@ export function ConnectionsPanel() {
       </header>
 
       {status.data && !status.data.configured && (
-        <p className="mb-3 rounded-lg border border-subtle bg-elevated px-3 py-2 text-[13px] text-fg-secondary">
+        <p className="mb-3 rounded-lg border border-subtle bg-elevated px-3 py-2 text-row text-fg-secondary">
           No connection yet — add one to begin.
         </p>
       )}
       {status.data?.configured && (
-        <p className="mb-3 flex items-center gap-1.5 text-[13px]">
+        <p className="mb-3 flex items-center gap-1.5 text-row">
           {status.data.ok ? (
             <>
               <CheckCircle2 className="size-4 text-accent-text" aria-hidden />
@@ -78,15 +78,15 @@ export function ConnectionsPanel() {
           {rows.map((connection) => (
             <li key={connection.id} className="flex items-center gap-3 py-2">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium text-heading">
+                <p className="truncate text-row font-medium text-heading">
                   {connection.name}
                   {connection.is_default && (
-                    <span className="ml-2 rounded bg-elevated px-1.5 py-0.5 text-[11px] text-fg-muted">
+                    <span className="ml-2 rounded bg-elevated px-1.5 py-0.5 text-meta text-fg-muted">
                       default
                     </span>
                   )}
                 </p>
-                <p className="truncate text-[12px] text-fg-muted">
+                <p className="truncate text-xs text-fg-muted">
                   {connection.base_url} · {connection.auth_mode}
                   {connection.has_credential ? "" : " · no credential"}
                 </p>
@@ -225,7 +225,7 @@ function ConnectionModal({
           onChange={(e) => setCredential(e.target.value)}
           hint={connection ? "Leave empty to keep the stored credential." : undefined}
         />
-        <label className="flex items-center gap-2 text-[13px] text-fg-secondary">
+        <label className="flex items-center gap-2 text-row text-fg-secondary">
           <input
             type="checkbox"
             checked={verifySsl}
@@ -233,7 +233,7 @@ function ConnectionModal({
           />
           Verify the TLS certificate
         </label>
-        <label className="flex items-center gap-2 text-[13px] text-fg-secondary">
+        <label className="flex items-center gap-2 text-row text-fg-secondary">
           <input
             type="checkbox"
             checked={isDefault}

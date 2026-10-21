@@ -85,10 +85,10 @@ export function BulkParentDialog({
           </label>
           {pick ? (
             <div
-              className="flex h-8 items-center gap-2 rounded-md border border-strong bg-surface px-2.5 text-[13px]"
+              className="flex h-8 items-center gap-2 rounded-md border border-strong bg-surface px-2.5 text-row"
               data-bulk-parent-pick={pick.key}
             >
-              <span className="shrink-0 font-mono text-[11px] text-fg-muted">{pick.key}</span>
+              <span className="shrink-0 font-mono text-meta text-fg-muted">{pick.key}</span>
               <span className="min-w-0 flex-1 truncate text-fg">{pick.title}</span>
               <IconButton aria-label={`Change ${thing}`} onClick={() => setPick(null)} disabled={pending}>
                 <X size={13} aria-hidden />

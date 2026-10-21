@@ -74,7 +74,7 @@ export function RoleGlobalGrants({ roleId, editable }: { roleId: string; editabl
 
   return (
     <section aria-label="Instance-wide holders" className="rounded-md border border-subtle p-3">
-      <h4 className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+      <h4 className="mb-1 flex items-center gap-1.5 text-meta font-medium uppercase tracking-wide text-fg-faint">
         <Globe size={12} aria-hidden />
         Granted instance-wide
       </h4>

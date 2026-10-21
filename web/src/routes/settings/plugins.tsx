@@ -27,7 +27,7 @@ const STATE_STYLES: Record<string, string> = {
 function StateBadge({ state }: { state: string }) {
   const cls = STATE_STYLES[state] ?? STATE_STYLES.discovered;
   return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ring-1 ${cls}`}>
+    <span className={`rounded-full px-2 py-0.5 text-meta font-medium capitalize ring-1 ${cls}`}>
       {state}
     </span>
   );
@@ -101,14 +101,14 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-[13px] font-medium text-heading">{plugin.id}</span>
-            <span className="text-[11px] text-fg-muted">v{plugin.version}</span>
+            <span className="truncate text-row font-medium text-heading">{plugin.id}</span>
+            <span className="text-meta text-fg-muted">v{plugin.version}</span>
             {applying || failed ? (
-              <span className="rounded-full bg-callout-warning-fill px-2 py-0.5 text-[11px] font-medium text-callout-warning-ink ring-1 ring-callout-warning-border/60">
+              <span className="rounded-full bg-callout-warning-fill px-2 py-0.5 text-meta font-medium text-callout-warning-ink ring-1 ring-callout-warning-border/60">
                 {failed ? "Apply failed" : "Applying…"}
               </span>
             ) : <StateBadge state={plugin.state} />}
-            <span className="text-[11px] text-fg-muted">{plugin.origin === "package" ? "Package" : "Built in"}</span>
+            <span className="text-meta text-fg-muted">{plugin.origin === "package" ? "Package" : "Built in"}</span>
             {/* Connector configured-ness (env token present) — the home for
                 per-connector status since the 2026-08-01 reorg; the Server
                 Overview keeps only a summary count. */}
@@ -117,7 +117,7 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
               .map((cap) => (
                 <span
                   key={cap.key}
-                  className={`rounded-full px-1.5 py-px text-[10px] font-medium ring-1 ${
+                  className={`rounded-full px-1.5 py-px text-micro font-medium ring-1 ${
                     cap.enabled
                       ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30"
                       : "bg-emphasis/20 text-fg-secondary ring-emphasis/30"
@@ -133,20 +133,20 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
               ))}
           </div>
           {plugin.description && (
-            <p className="mt-0.5 truncate text-[12px] text-fg-muted">{plugin.description}</p>
+            <p className="mt-0.5 truncate text-xs text-fg-muted">{plugin.description}</p>
           )}
-          <p className="mt-1 text-[12px] text-fg-muted">
+          <p className="mt-1 text-xs text-fg-muted">
             {applying ? `${enabled ? "Enabling" : "Disabling"} across running servers and workers…`
               : failed ? "The change could not be applied to every process. It will be retried."
               : plugin.active ? "Active" : "Inactive"}
             {!!plugin.pending_processes && ` · ${plugin.pending_processes} process(es) pending`}
           </p>
-          {plugin.runtime_errors?.map(message => <p key={message} role="alert" className="mt-1 text-[12px] text-callout-warning-ink">{message}</p>)}
-          {plugin.dependencies?.length > 0 && <p className="mt-1 text-[12px] text-fg-muted">
+          {plugin.runtime_errors?.map(message => <p key={message} role="alert" className="mt-1 text-xs text-callout-warning-ink">{message}</p>)}
+          {plugin.dependencies?.length > 0 && <p className="mt-1 text-xs text-fg-muted">
             Requires: {plugin.dependencies.join(", ")}
           </p>}
-          {plugin.problems?.map((problem) => <p key={problem} className="mt-1 text-[12px] text-fg">{problem}</p>)}
-          {actionError && <p role="alert" className="mt-1 text-[12px] text-fg">{actionError.message}</p>}
+          {plugin.problems?.map((problem) => <p key={problem} className="mt-1 text-xs text-fg">{problem}</p>)}
+          {actionError && <p role="alert" className="mt-1 text-xs text-fg">{actionError.message}</p>}
         </div>
         {/* RADD-928: a plugin that owns a settings tab links to it from here, so
             "where do I configure this?" is answered on the plugin's own row —
@@ -155,18 +155,18 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
         {plugin.active && settingsLink && (
           <Link
             to={settingsLink.to}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-accent-text hover:bg-elevated hover:text-accent-text-strong focus-visible:outline-2 focus-visible:outline-focus"
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-accent-text hover:bg-elevated hover:text-accent-text-strong focus-visible:outline-2 focus-visible:outline-focus"
           >
             <SlidersHorizontal size={12} aria-hidden />
             {settingsLink.label}
           </Link>
         )}
         {plugin.core ? (
-          <span className="flex items-center gap-1 text-[12px] text-fg-muted">
+          <span className="flex items-center gap-1 text-xs text-fg-muted">
             <Lock size={12} aria-hidden /> Core
           </span>
         ) : !plugin.can_toggle ? (
-          <span className="text-[12px] text-fg-muted">Package needs attention</span>
+          <span className="text-xs text-fg-muted">Package needs attention</span>
         ) : plugin.state === "discovered" ? (
           <>
             <Button size="sm" disabled={busy} onClick={() => install.mutate()}>
@@ -212,7 +212,7 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
       {confirmDialog}
       {open && hasSection && (
         <div className="border-t border-subtle/40 bg-base/30 px-4 py-3 pl-11">
-          <p className="mb-2 text-[11px] text-fg-muted">
+          <p className="mb-2 text-meta text-fg-muted">
             Availability of this plugin's UI components — applies to <strong>everyone</strong>. Off
             here also removes it from the per-user controls on Profile.
           </p>
@@ -248,7 +248,7 @@ function PackageUpload() {
     onSettled: () => client.invalidateQueries({queryKey: queryKeys.plugins}),
     onSuccess: () => {setFile(null); if (input.current) input.current.value = "";},
   });
-  return <div className="mb-4 rounded-lg border border-subtle bg-surface p-4 text-[13px] text-fg-secondary">
+  return <div className="mb-4 rounded-lg border border-subtle bg-surface p-4 text-row text-fg-secondary">
     <p className="font-medium text-heading">Upload a plugin package</p>
     <p className="mt-1">Choose a built Python wheel (.whl), up to 32 MiB. Code and UI are stored in the shared plugin directory; no new RADD image is needed.</p>
     <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -324,7 +324,7 @@ export function PluginsSettingsPage() {
         <QueryError label="plugins" error={error} />
       ) : (
         <ul className="overflow-hidden rounded-lg border border-subtle/80 bg-surface/40">
-          {visible.length === 0 && <li className="px-4 py-3 text-[13px] text-fg-muted">No plugins match your search.</li>}
+          {visible.length === 0 && <li className="px-4 py-3 text-row text-fg-muted">No plugins match your search.</li>}
           {visible.map((p) => (
             <PluginRow key={p.id} plugin={p} />
           ))}

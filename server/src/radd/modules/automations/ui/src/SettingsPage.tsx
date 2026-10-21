@@ -153,12 +153,12 @@ function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: () => void }) {
   return (
     <li className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
       <Workflow size={14} className="shrink-0 text-accent-text" aria-hidden />
-      <span className="truncate text-[13px] font-medium text-heading">{rule.name}</span>
+      <span className="truncate text-row font-medium text-heading">{rule.name}</span>
       {/* Every trigger, not just one: a graph may fire from several, and showing
           the first would misdescribe when this automation actually runs. */}
       {rule.triggers.length === 0 ? (
         <span
-          className="rounded border border-strong px-1.5 py-px text-[10px] uppercase tracking-wide text-fg-faint"
+          className="rounded border border-strong px-1.5 py-px text-micro uppercase tracking-wide text-fg-faint"
           title="No trigger node — this automation can never run"
         >
           no trigger
@@ -167,22 +167,22 @@ function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: () => void }) {
         rule.triggers.map((trigger) => (
           <span
             key={trigger.node_id}
-            className="shrink-0 rounded border border-strong px-1.5 py-px text-[10px] uppercase tracking-wide text-fg-secondary"
+            className="shrink-0 rounded border border-strong px-1.5 py-px text-micro uppercase tracking-wide text-fg-secondary"
           >
             {triggerLabel(trigger.event_type, catalog.data)}
           </span>
         ))
       )}
-      <span className="shrink-0 text-[11px] text-fg-faint">
+      <span className="shrink-0 text-meta text-fg-faint">
         {actionCount} action{actionCount === 1 ? "" : "s"}
       </span>
       {nextRun && rule.enabled && (
-        <span className="shrink-0 text-[11px] text-fg-muted">next {shortDateTime(nextRun)}</span>
+        <span className="shrink-0 text-meta text-fg-muted">next {shortDateTime(nextRun)}</span>
       )}
       {/* The newest recorded run (RADD-1266): the one-glance answer to "is this
           thing actually firing". */}
       {rule.last_run_at && (
-        <span className="flex shrink-0 items-center gap-1 text-[11px] text-fg-muted" data-last-run>
+        <span className="flex shrink-0 items-center gap-1 text-meta text-fg-muted" data-last-run>
           <RunStatusChip status={rule.last_run_status} />
           {relativeTime(rule.last_run_at)}
         </span>
@@ -255,7 +255,7 @@ function TemplatePicker({
   const groups = groupBy(templates.data ?? [], (template) => template.group);
   return (
     <Modal title="Start from a template" onClose={onClose} wide>
-      <p className="mb-3 text-[13px] text-fg-secondary">
+      <p className="mb-3 text-row text-fg-secondary">
         Opens as a draft, switched off. Adjust it, then save and enable it — nothing runs until you do.
       </p>
       {templates.isPending ? (
@@ -268,7 +268,7 @@ function TemplatePicker({
         <div className="flex flex-col gap-4">
           {groups.map(([group, entries]) => (
             <section key={group} className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">{group}</span>
+              <span className="text-meta font-medium uppercase tracking-wide text-fg-muted">{group}</span>
               {entries.map((template) => (
                 <button
                   key={template.key}
@@ -277,7 +277,7 @@ function TemplatePicker({
                   onClick={() => onPick(template)}
                   className="flex flex-col items-start gap-0.5 rounded-[8px] border border-subtle bg-surface px-3 py-2 text-left hover:border-strong hover:bg-elevated cursor-pointer"
                 >
-                  <span className="text-[13px] font-medium text-heading">{template.name}</span>
+                  <span className="text-row font-medium text-heading">{template.name}</span>
                   <span className="text-xs text-fg-secondary">{template.description}</span>
                 </button>
               ))}

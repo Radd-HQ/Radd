@@ -293,7 +293,7 @@ async function main() {
     "and not the private one": !teammate.seesPrivate && teammate.privateStatus === 404,
     // RADD-799
     "My Work shows requests": myWork.hasMyRequests && myWork.rowCount >= 1,
-    "with Portal's section chrome": myWork.headingSize === "11px"
+    "with Portal's section chrome": myWork.headingSize === "12px" // text-meta since RADD-1518's one-step bump
       && myWork.headingTransform === "uppercase",
     // RADD-804
     "the Portal leads with the forms": layout.formsBeforeRequests === true,

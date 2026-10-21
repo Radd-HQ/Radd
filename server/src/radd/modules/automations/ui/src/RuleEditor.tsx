@@ -181,7 +181,7 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
           maxLength={2000}
           className="w-full"
         /></div>
-        {persistedId && <span className="pb-2 text-[11px] text-fg-muted">v{current}</span>}
+        {persistedId && <span className="pb-2 text-meta text-fg-muted">v{current}</span>}
       </div>
 
       <div className="flex flex-col gap-2">

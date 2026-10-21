@@ -150,7 +150,7 @@ export const FieldRow = memo(function FieldRow({
               aria-label={`${entry.jira_name}: new field label`}
               value={entry.create_name}
               onChange={(e) => set({ create_name: e.target.value })}
-              className={`w-40 text-[13px] ${MAPPING_INPUT_CLASS}`}
+              className={`w-40 text-row ${MAPPING_INPUT_CLASS}`}
             />
             </label>
             <label className="flex flex-col gap-1 text-xs text-fg-secondary">Field key
@@ -158,7 +158,7 @@ export const FieldRow = memo(function FieldRow({
               aria-label={`${entry.jira_name}: new field key`}
               value={entry.target_key}
               onChange={(e) => set({ target_key: e.target.value.toLowerCase() })}
-              className={`w-40 font-mono text-[12px] ${MAPPING_INPUT_CLASS}`}
+              className={`w-40 font-mono text-xs ${MAPPING_INPUT_CLASS}`}
             />
             </label>
             <SelectField

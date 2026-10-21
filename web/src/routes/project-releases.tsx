@@ -185,9 +185,9 @@ function ReleaseRow({
         <ChevronRight size={13} aria-hidden className={open ? "rotate-90 transition-transform" : "transition-transform"} />
       </button>
       <span className={`size-2 shrink-0 rounded-full ${status.dotClassName}`} aria-hidden />
-      <span className="font-mono text-[13px] text-heading">{release.version}</span>
-      <span className="truncate text-[13px] text-fg-secondary">{release.name}</span>
-      <span className="rounded border border-strong px-1.5 py-px text-[10px] uppercase tracking-wide text-fg-secondary">
+      <span className="font-mono text-row text-heading">{release.version}</span>
+      <span className="truncate text-row text-fg-secondary">{release.name}</span>
+      <span className="rounded border border-strong px-1.5 py-px text-micro uppercase tracking-wide text-fg-secondary">
         {status.label}
       </span>
       <span className="ml-auto shrink-0 text-xs text-fg-muted">
@@ -326,7 +326,7 @@ function ReleaseModal({
             onChange={(event) => setDescription(event.target.value)}
             rows={3}
             placeholder="What's in this release"
-            className="rounded-md border border-strong bg-surface px-2.5 py-1.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+            className="rounded-md border border-strong bg-surface px-2.5 py-1.5 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
           />
         </div>
         {save.isError && <ErrorText error={save.error} />}
@@ -352,7 +352,7 @@ function ShippingSummary({ projectId, projectKey }: { projectId: string; project
   const shipping = (transitions.data ?? []).filter((row) => row.on_release && row.from_state_id);
   return (
     <section aria-label="How releases ship" className="mt-8" data-release-shipping>
-      <h3 className="text-[13px] font-semibold text-heading">How releases ship</h3>
+      <h3 className="text-row font-semibold text-heading">How releases ship</h3>
       {shipping.length === 0 ? (
         <p className="mt-0.5 text-xs text-fg-muted">
           Publishing a release records it but moves nothing. To ship finished work automatically,
@@ -366,7 +366,7 @@ function ShippingSummary({ projectId, projectKey }: { projectId: string; project
           <p className="mt-0.5 text-xs text-fg-muted">
             Publishing a release — here, over the API, or from GitHub, GitLab or Forgejo — moves:
           </p>
-          <ul className="mt-2 flex flex-col gap-1 text-[13px] text-fg">
+          <ul className="mt-2 flex flex-col gap-1 text-row text-fg">
             {shipping.map((row) => (
               <li key={row.id} data-release-move={row.id}>
                 {name.get(row.from_state_id ?? "") ?? "?"} → {name.get(row.to_state_id) ?? "?"}
@@ -410,7 +410,7 @@ function ReleaseIssues({ projectId, release }: { projectId: string; release: Rel
   return (
     <ul className="flex flex-col gap-1 px-11 pb-3" data-release-issues={release.version}>
       {issues.data.map((item) => (
-        <li key={item.id} className="flex items-center gap-2 text-[13px]">
+        <li key={item.id} className="flex items-center gap-2 text-row">
           <Link to={RoutePath.issue} params={{ itemKey: item.key }} className="font-mono text-xs text-fg-muted hover:text-accent-text">
             {item.key}
           </Link>

@@ -68,7 +68,7 @@ export function ValidateTriggerFields({
       </p>
 
       <div className="flex flex-col gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-fg-secondary">
+        <span className="text-meta font-medium uppercase tracking-wide text-fg-secondary">
           What it checks
         </span>
         {targets.length === 0 && (

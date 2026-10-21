@@ -86,7 +86,7 @@ function VcsRow({ link, canWrite }: { link: VcsLink; canWrite: boolean }) {
         target="_blank"
         rel="noreferrer"
         title={visual.label}
-        className="flex min-w-0 flex-1 items-center gap-2 text-[13px] hover:underline"
+        className="flex min-w-0 flex-1 items-center gap-2 text-row hover:underline"
       >
         <span className="truncate text-fg">{link.title}</span>
         <ExternalLink size={11} className="shrink-0 text-fg-faint" aria-hidden />
@@ -99,7 +99,7 @@ function VcsRow({ link, canWrite }: { link: VcsLink; canWrite: boolean }) {
           target="_blank"
           rel="noreferrer"
           title={`Reported CI: ${ci.label}. ${Object.entries(link.ci_reports ?? {}).map(([name, report]) => `${name}: ${report.state}`).join("; ")} This summarizes received reports, not required-check approval.`}
-          className={`flex shrink-0 items-center gap-1 rounded border px-1.5 py-px text-[11px] ${ci.className}`}
+          className={`flex shrink-0 items-center gap-1 rounded border px-1.5 py-px text-meta ${ci.className}`}
         >
           <CiIcon size={11} aria-hidden />
           <span>Reported CI</span>
@@ -107,12 +107,12 @@ function VcsRow({ link, canWrite }: { link: VcsLink; canWrite: boolean }) {
       )}
       {link.status && (
         <span
-          className={`shrink-0 rounded border px-1.5 py-px text-[11px] ${visual.pillClassName}`}
+          className={`shrink-0 rounded border px-1.5 py-px text-meta ${visual.pillClassName}`}
         >
           {link.status}
         </span>
       )}
-      <span className="shrink-0 text-[11px] text-fg-faint">
+      <span className="shrink-0 text-meta text-fg-faint">
         {VCS_PROVIDER_LABELS[link.provider] ?? link.provider}
       </span>
       {canWrite && (
@@ -184,7 +184,7 @@ function AddVcsForm({ itemId }: { itemId: string }) {
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Title (e.g. feature/login or !42)"
-          className="h-8 min-w-40 flex-1 rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+          className="h-8 min-w-40 flex-1 rounded-md border border-strong bg-surface px-2.5 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
         />
       </div>
       <input
@@ -192,7 +192,7 @@ function AddVcsForm({ itemId }: { itemId: string }) {
         onChange={(event) => setUrl(event.target.value)}
         placeholder="URL"
         type="url"
-        className="h-8 w-full rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+        className="h-8 w-full rounded-md border border-strong bg-surface px-2.5 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
       />
       {create.isError && <ErrorText error={create.error} />}
       <div className="flex justify-end gap-2">

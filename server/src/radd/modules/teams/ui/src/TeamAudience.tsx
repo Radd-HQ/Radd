@@ -19,7 +19,7 @@ export function TeamAudience({ value, onChange, emptyText = "No teams selected."
     if (page > 0 && page * TEAMS_PAGE_SIZE >= value.length) setPage(Math.max(0, Math.ceil(value.length / TEAMS_PAGE_SIZE) - 1));
   }, [page, value.length]);
   return <div className="w-full min-w-0 space-y-2">
-    {value.length === 0 ? <p className="text-[11px] text-fg-muted">{emptyText}</p> : <>
+    {value.length === 0 ? <p className="text-meta text-fg-muted">{emptyText}</p> : <>
       <p className="text-xs text-fg-secondary">{value.length} selected team{value.length === 1 ? "" : "s"}</p>
       <ul aria-label="Selected audience teams" className="flex max-h-40 flex-wrap gap-1 overflow-y-auto">{ids.map(id => {
         const team = names.get(id);
@@ -30,7 +30,7 @@ export function TeamAudience({ value, onChange, emptyText = "No teams selected."
         </li>;
       })}</ul>
       <DirectoryPager page={page} pageSize={TEAMS_PAGE_SIZE} total={value.length} busy={references.isFetching} onPage={setPage} label="audience teams" />
-      {hint && <p className="text-[11px] text-fg-muted">{hint}</p>}
+      {hint && <p className="text-meta text-fg-muted">{hint}</p>}
     </>}
     {references.isError && <div><QueryError label="audience teams" error={references.error} /><Button variant="ghost" size="sm" onClick={() => void references.refetch()}>Retry audience teams</Button></div>}
     {onChange && <Button variant="secondary" size="sm" aria-haspopup="dialog" onClick={() => setChoosing(true)}>{addLabel}</Button>}

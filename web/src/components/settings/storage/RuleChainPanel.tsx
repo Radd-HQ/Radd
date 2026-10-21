@@ -26,7 +26,7 @@ const TYPE_LABELS: Record<StorageRuleTypeValue, string> = {
   [StorageRuleType.llm]: "AI classifier",
 };
 
-const sectionHeadClasses = "mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted";
+const sectionHeadClasses = "mb-2 text-meta font-medium uppercase tracking-wide text-fg-muted";
 
 /** One-line gloss of what a rule does, from its config. */
 function ruleSummary(rule: StorageRuleRead, hostName: (id: string) => string): string {
@@ -167,18 +167,18 @@ export function RuleChainPanel() {
                 <span className="flex items-center gap-2">
                   <span
                     className={
-                      "text-[13px] font-medium " +
+                      "text-row font-medium " +
                       (rule.enabled ? "text-heading" : "text-fg-faint")
                     }
                   >
                     {rule.name}
                   </span>
-                  <span className="rounded bg-elevated px-1.5 py-px text-[10px] text-fg-secondary">
+                  <span className="rounded bg-elevated px-1.5 py-px text-micro text-fg-secondary">
                     {TYPE_LABELS[rule.rule_type] ?? rule.rule_type}
                   </span>
                   {unavailable(rule) && (
                     <span
-                      className="text-[10px] text-fg-muted"
+                      className="text-micro text-fg-muted"
                       title="The plugin that provides this rule type is disabled, so uploads skip this rule."
                     >
                       Unavailable · skipped
@@ -212,7 +212,7 @@ export function RuleChainPanel() {
             </li>
           ))}
           {/* The terminal pseudo-row: what happens when no rule answered. */}
-          <li className="flex items-center gap-2 px-3 py-2 text-[13px] text-fg-muted">
+          <li className="flex items-center gap-2 px-3 py-2 text-row text-fg-muted">
             <CornerDownRight size={13} className="shrink-0 text-fg-faint" aria-hidden />
             <span>Everything else</span>
             <span aria-hidden>→</span>

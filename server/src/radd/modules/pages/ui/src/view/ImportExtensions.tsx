@@ -29,12 +29,12 @@ function UnsupportedMacro({ params }: { params: Record<string, unknown> }) {
       <div className="flex items-start gap-2">
         <Puzzle className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] text-fg-secondary">
+          <p className="text-row text-fg-secondary">
             This page used the Confluence <code className="text-fg">{macro}</code> macro,
             which Radd does not render yet. Its content is kept below so nothing is lost.
           </p>
           {entries.length > 0 && (
-            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px]">
+            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
               {entries.map(([key, value]) => (
                 <div key={key} className="contents">
                   <dt className="text-fg-faint">{key}</dt>
@@ -68,7 +68,7 @@ function Expand({ params }: { params: Record<string, unknown> }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-[13px] font-medium text-heading hover:bg-elevated"
+        className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-row font-medium text-heading hover:bg-elevated"
       >
         <ChevronRight
           className={`size-4 shrink-0 text-fg-muted transition-transform ${open ? "rotate-90" : ""}`}
@@ -114,12 +114,12 @@ function ItemsTable({ params }: { params: Record<string, unknown> }) {
         <div className="flex items-start gap-2">
           <OctagonAlert className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
           <div className="min-w-0">
-            <p className="text-[13px] text-fg-secondary">
+            <p className="text-row text-fg-secondary">
               This came from a Jira query that could not be translated to SLQ. The original
               is kept so it can be rewritten by hand.
             </p>
             {sourceJql && (
-              <pre className="mt-2 overflow-x-auto rounded bg-elevated px-2 py-1 text-[12px] text-fg-secondary">
+              <pre className="mt-2 overflow-x-auto rounded bg-elevated px-2 py-1 text-xs text-fg-secondary">
                 {sourceJql}
               </pre>
             )}
@@ -132,14 +132,14 @@ function ItemsTable({ params }: { params: Record<string, unknown> }) {
   if (result.isLoading) {
     return (
       <ExtensionCard label="Issues">
-        <p className="text-[13px] text-fg-faint">Loading…</p>
+        <p className="text-row text-fg-faint">Loading…</p>
       </ExtensionCard>
     );
   }
   if (result.isError) {
     return (
       <ExtensionCard label="Issues">
-        <p className="text-[13px] text-fg-faint">
+        <p className="text-row text-fg-faint">
           That query could not be run: <code className="text-fg-secondary">{query}</code>
         </p>
       </ExtensionCard>
@@ -150,7 +150,7 @@ function ItemsTable({ params }: { params: Record<string, unknown> }) {
   if (!items.length) {
     return (
       <ExtensionCard label="Issues">
-        <p className="text-[13px] text-fg-faint">No issues match this query.</p>
+        <p className="text-row text-fg-faint">No issues match this query.</p>
       </ExtensionCard>
     );
   }
@@ -158,7 +158,7 @@ function ItemsTable({ params }: { params: Record<string, unknown> }) {
   return (
     <ExtensionCard label={`Issues · ${items.length}`}>
       <div className="overflow-x-auto">
-        <table className="w-full text-[13px]">
+        <table className="w-full text-row">
           <tbody>
             {items.map((item) => (
               <tr key={item.id} className="border-b border-subtle last:border-0">
@@ -166,13 +166,13 @@ function ItemsTable({ params }: { params: Record<string, unknown> }) {
                   <Link
                     to={ISSUE_ROUTE}
                     params={{ itemKey: item.key }}
-                    className="font-mono text-[12px] text-accent-text hover:underline"
+                    className="font-mono text-xs text-accent-text hover:underline"
                   >
                     {item.key}
                   </Link>
                 </td>
                 <td className="py-1 pr-3 align-top text-fg">{item.title}</td>
-                <td className="py-1 align-top text-[12px] text-fg-muted">
+                <td className="py-1 align-top text-xs text-fg-muted">
                   {item.state?.name ?? ""}
                 </td>
               </tr>
@@ -196,7 +196,7 @@ function Media({ params }: { params: Record<string, unknown> }) {
   if (!src) {
     return (
       <ExtensionCard label="Media">
-        <p className="text-[13px] text-fg-faint">This block names no file to play.</p>
+        <p className="text-row text-fg-faint">This block names no file to play.</p>
       </ExtensionCard>
     );
   }
@@ -219,7 +219,7 @@ function Media({ params }: { params: Record<string, unknown> }) {
         </video>
       )}
       {title && (
-        <figcaption className="mt-1 flex items-center gap-1.5 text-[12px] text-fg-muted">
+        <figcaption className="mt-1 flex items-center gap-1.5 text-xs text-fg-muted">
           <Play className="size-3.5" aria-hidden />
           <a href={src} className="truncate hover:underline" download>
             {title}

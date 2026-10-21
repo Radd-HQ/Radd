@@ -12,8 +12,8 @@ import { usePersonIndicators } from "./PersonName";
  */
 
 const SIZES = {
-  xs: "size-5 text-[9px]",
-  sm: "size-6 text-[10px]",
+  xs: "size-5 text-nano",
+  sm: "size-6 text-micro",
   md: "size-8 text-xs",
   lg: "size-16 text-xl",
 } as const;

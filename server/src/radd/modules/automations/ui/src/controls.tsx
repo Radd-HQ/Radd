@@ -20,7 +20,7 @@ export function CheckField({ label, hint, checked, onChange, className = "", ...
   className?: string;
 } & { [attribute: `data-${string}`]: string | boolean | undefined }) {
   return (
-    <label className={`flex w-fit cursor-pointer gap-2 text-[13px] text-fg ${hint ? "items-start" : "items-center"} ${className}`}>
+    <label className={`flex w-fit cursor-pointer gap-2 text-row text-fg ${hint ? "items-start" : "items-center"} ${className}`}>
       <input
         type="checkbox"
         {...data}

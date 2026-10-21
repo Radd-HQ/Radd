@@ -135,7 +135,7 @@ function DeleteProjectDialog({ project, onClose }: { project: Project; onClose: 
               <p className="text-xs text-fg-muted">It holds no issues, comments, attachments or worklogs.</p>
             ) : (
               <div className="rounded-md border border-subtle p-2.5">
-                <p className="mb-1 text-[11px] uppercase tracking-wide text-fg-faint">Destroyed with it</p>
+                <p className="mb-1 text-meta uppercase tracking-wide text-fg-faint">Destroyed with it</p>
                 <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-fg">
                   {destroyed.map(([key, label]) => (
                     <li key={key}>

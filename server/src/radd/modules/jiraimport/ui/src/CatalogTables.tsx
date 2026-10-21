@@ -48,7 +48,7 @@ export function LinkTypesTable({
               aria-label={`${entry.jira}: Radd link-type key`}
               value={entry.key}
               onChange={(e) => onChange(index, { key: e.target.value.toLowerCase() })}
-              className={`w-40 font-mono text-[12px] ${MAPPING_INPUT_CLASS}`}
+              className={`w-40 font-mono text-xs ${MAPPING_INPUT_CLASS}`}
             />
           )}
         </>

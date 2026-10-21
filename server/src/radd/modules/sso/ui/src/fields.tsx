@@ -18,7 +18,7 @@ export function CheckboxField({
 }) {
   return (
     <div>
-      <label className="flex items-center gap-2 text-[13px] text-fg">
+      <label className="flex items-center gap-2 text-row text-fg">
         <input
           type="checkbox"
           checked={checked}
@@ -38,7 +38,7 @@ export function RedirectUriField({ uri }: { uri: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div>
-      <div className="mb-1 text-[13px] text-fg">Redirect URI</div>
+      <div className="mb-1 text-row text-fg">Redirect URI</div>
       <div className="flex items-center gap-2">
         <code className="min-w-0 flex-1 truncate rounded-md border border-subtle bg-base px-2 py-1.5 text-xs text-fg-secondary">
           {uri}

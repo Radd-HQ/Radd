@@ -199,9 +199,9 @@ export function TimesheetPage() {
           >
             <ChevronRight size={16} />
           </button>
-          <span className="ml-1 text-[13px] text-fg">{periodLabel(period, start, end)}</span>
+          <span className="ml-1 text-row text-fg">{periodLabel(period, start, end)}</span>
         </div>
-        <span className="ml-auto text-[13px] text-fg-secondary">
+        <span className="ml-auto text-row text-fg-secondary">
           Total:{" "}
           <span className="font-semibold text-heading">
             {formatDuration(timesheet.data?.total_seconds ?? 0, durationConfig)}
@@ -273,7 +273,7 @@ export function TimesheetPage() {
           {byCategory.map((row) => (
             <span
               key={row.name}
-              className="inline-flex items-center gap-1.5 rounded border border-strong bg-elevated/60 px-2 py-px text-[11px] leading-4 text-fg"
+              className="inline-flex items-center gap-1.5 rounded border border-strong bg-elevated/60 px-2 py-px text-meta leading-4 text-fg"
             >
               {row.name}
               <span className="font-semibold text-heading">
@@ -579,7 +579,7 @@ function TimesheetGrid({
                       {row.label}
                     </button>
                   ) : row.isCategory ? (
-                    <span className="inline-flex items-center gap-1 rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-px text-[11px] leading-4 text-amber-200">
+                    <span className="inline-flex items-center gap-1 rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-px text-meta leading-4 text-amber-200">
                       <Tag size={10} aria-hidden />
                       {row.label}
                     </span>
@@ -620,7 +620,7 @@ function TimesheetGrid({
                   <td className="sticky left-0 z-10 bg-surface/40 px-2 py-1 pl-6 text-fg-secondary">
                     {entryLabel(entry, groupBy)}
                     {entry.category && groupBy !== TimesheetGroupBy.category && (
-                      <span className="ml-1.5 rounded bg-elevated px-1 py-px text-[10px] text-amber-200/80">
+                      <span className="ml-1.5 rounded bg-elevated px-1 py-px text-micro text-amber-200/80">
                         {entry.category.name}
                       </span>
                     )}
@@ -647,7 +647,7 @@ function TimesheetGrid({
         ))}
       </TBody>
       <tfoot>
-        <tr className="border-t border-strong text-[13px] font-semibold text-fg">
+        <tr className="border-t border-strong text-row font-semibold text-fg">
           <td className="sticky left-0 z-10 bg-base px-3 py-2">Total</td>
           {columnTotals.map((total, index) => (
             <td key={days[index]} className="tnum px-3 py-2 text-right">

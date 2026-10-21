@@ -107,7 +107,7 @@ export function RuleTestPanel({ ruleId, name = "Preview", edges = [], triggers =
       <div className="flex items-center gap-2">
         <FlaskConical size={14} className="text-accent-text" aria-hidden />
         <span className="text-xs font-medium text-fg">Dry run</span>
-        <span className="text-[11px] text-fg-muted">
+        <span className="text-meta text-fg-muted">
           Previews the current draft without applying actions. Scripts and branches needing newly created objects are reported as unavailable.
         </span>
       </div>
@@ -241,7 +241,7 @@ export function RunResultView({
             // less to do are indistinguishable otherwise.
             <ul className="flex flex-col gap-0.5 rounded border border-status-warning/30 bg-status-warning/10 px-2 py-1.5">
               {result.dropped.map((line, index) => (
-                <li key={index} className="text-[11px] text-status-warning-ink">
+                <li key={index} className="text-meta text-status-warning-ink">
                   {line}
                 </li>
               ))}
@@ -257,7 +257,7 @@ export function RunResultView({
               className="flex flex-col gap-0.5 rounded border border-status-danger/30 bg-status-danger/5 px-2 py-1.5"
             >
               {result.findings.map((finding, index) => (
-                <li key={index} className="text-[11px] text-fg">
+                <li key={index} className="text-meta text-fg">
                   <span className="font-mono text-fg-muted">{finding.node_id}</span>
                   {finding.field && <span className="text-fg-muted"> · {finding.field}</span>}{" "}
                   {finding.message}
@@ -274,7 +274,7 @@ export function RunResultView({
 
           {result.would_apply.length > 0 ? (
             <>
-              <p className="text-[11px] uppercase tracking-wide text-fg-muted">
+              <p className="text-meta uppercase tracking-wide text-fg-muted">
                 {applied ? "Actions" : "Would apply"}
               </p>
               <ul className="flex flex-col gap-1">
@@ -284,7 +284,7 @@ export function RunResultView({
               </ul>
             </>
           ) : (
-            <p className="flex items-center gap-1.5 text-[13px]">
+            <p className="flex items-center gap-1.5 text-row">
               <CircleSlash size={14} className="text-fg-muted" aria-hidden />
               <span className="text-fg-secondary">
                 {applied ? "No action reached an issue on this run" : "Nothing would apply on this run"}
@@ -304,14 +304,14 @@ function NodeRow({ node, type }: { node: NodeResult; type?: string }) {
       }`}
     >
       <span className="font-medium text-fg">{node.node_id}</span>
-      <span className="text-[11px] text-fg-muted">{type ?? node.type}</span>
+      <span className="text-meta text-fg-muted">{type ?? node.type}</span>
       {!node.ran ? (
         // Never reached — detached from the trigger, or out of budget. Distinct
         // from a node that ran and produced nothing.
-        <span className="text-[11px] text-fg-faint">did not run</span>
+        <span className="text-meta text-fg-faint">did not run</span>
       ) : (
         <>
-          <span className="text-[11px] text-fg-secondary" title={node.incoming_sample.join(", ")}>
+          <span className="text-meta text-fg-secondary" title={node.incoming_sample.join(", ")}>
             in {node.incoming}
             {node.incoming_sample.length > 0 && ` (${node.incoming_sample.slice(0, 4).join(", ")})`}
           </span>
@@ -320,7 +320,7 @@ function NodeRow({ node, type }: { node: NodeResult; type?: string }) {
               key={port.port}
               data-port-result={port.port}
               title={port.sample.join(", ")}
-              className={`text-[11px] ${port.taken ? "" : "line-through opacity-60"}`}
+              className={`text-meta ${port.taken ? "" : "line-through opacity-60"}`}
               style={{ color: port.taken ? PORT_TONE[port.port] : undefined }}
             >
               {port.port} {port.taken ? port.count : "not taken"}
@@ -337,7 +337,7 @@ function NodeRow({ node, type }: { node: NodeResult; type?: string }) {
               className="flex w-full flex-col gap-0.5 pt-0.5"
             >
               {node.produced.map((entry) => (
-                <li key={entry.name} className="flex items-baseline gap-1.5 text-[11px]">
+                <li key={entry.name} className="flex items-baseline gap-1.5 text-meta">
                   <code className={entry.token ? "text-accent-text-strong" : "text-fg-faint"}>
                     {entry.token || `${entry.name} (name this node to use it)`}
                   </code>
@@ -370,7 +370,7 @@ function ActionPreviewRow({ preview, applied = false }: { preview: ActionPreview
       <div className="flex items-center gap-2">
         <span
           className={
-            "shrink-0 rounded px-1.5 py-px text-[10px] uppercase tracking-wide " +
+            "shrink-0 rounded px-1.5 py-px text-micro uppercase tracking-wide " +
             (preview.resolves
               ? "bg-status-success/15 text-status-success-ink"
               : (preview.refused || preview.failed)
@@ -385,9 +385,9 @@ function ActionPreviewRow({ preview, applied = false }: { preview: ActionPreview
         </span>
         {/* Which node, against which item — a graph runs the same action type
             from several nodes and, per item, once each. */}
-        {preview.node_id && <span className="text-[11px] text-fg-faint">{preview.node_id}</span>}
+        {preview.node_id && <span className="text-meta text-fg-faint">{preview.node_id}</span>}
         {preview.item_key && (
-          <span className="text-[11px] text-fg-secondary">{preview.item_key}</span>
+          <span className="text-meta text-fg-secondary">{preview.item_key}</span>
         )}
       </div>
       {/* The reason, in full rather than truncated: when this row says Skipped,
@@ -402,7 +402,7 @@ function ActionPreviewRow({ preview, applied = false }: { preview: ActionPreview
         // the line someone is looking for.
         <ul data-action-resolved className="flex flex-col gap-0.5">
           {resolved.map(([token, value]) => (
-            <li key={token} className="flex items-baseline gap-1.5 text-[11px]">
+            <li key={token} className="flex items-baseline gap-1.5 text-meta">
               <code className="shrink-0 text-accent-text-strong">{token}</code>
               <span className="text-fg-faint">&rarr;</span>
               <span className="min-w-0 truncate text-fg-secondary">{value}</span>

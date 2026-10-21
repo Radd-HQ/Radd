@@ -30,7 +30,7 @@ function TableOfContents({ params }: { params: Record<string, unknown> }) {
   if (!headings.length && !subpages.length) {
     return (
       <ExtensionCard label="On this page">
-        <p className="text-[13px] text-fg-faint">
+        <p className="text-row text-fg-faint">
           {withSubpages
             ? "No headings on this page, and nothing beneath it yet."
             : "No headings on this page yet."}
@@ -47,7 +47,7 @@ function TableOfContents({ params }: { params: Record<string, unknown> }) {
             <li key={heading.id} style={{ paddingLeft: `${(heading.level - 1) * 12}px` }}>
               <a
                 href={`#${heading.id}`}
-                className="text-[13px] text-accent-text hover:underline"
+                className="text-row text-accent-text hover:underline"
               >
                 {heading.text}
               </a>
@@ -57,7 +57,7 @@ function TableOfContents({ params }: { params: Record<string, unknown> }) {
       )}
       {subpages.length > 0 && (
         <div className={headings.length ? "mt-2 border-t border-subtle pt-2" : ""}>
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+          <p className="mb-1 text-meta font-semibold uppercase tracking-wide text-fg-muted">
             Pages below this one
           </p>
           <PageLinkList icon={ChevronRight}
@@ -89,7 +89,7 @@ function ChildPages({ params }: { params: Record<string, unknown> }) {
       <div className="flex flex-col gap-1">
         {list.length === 0 && (
           <ExtensionCard label="Child pages">
-            <p className="text-[13px] text-fg-faint">No child pages yet.</p>
+            <p className="text-row text-fg-faint">No child pages yet.</p>
           </ExtensionCard>
         )}
         {list.map(({ page }) => (
@@ -111,7 +111,7 @@ function ChildPages({ params }: { params: Record<string, unknown> }) {
   return (
     <ExtensionCard label="Child pages">
       {list.length === 0 ? (
-        <p className="text-[13px] text-fg-faint">No child pages yet.</p>
+        <p className="text-row text-fg-faint">No child pages yet.</p>
       ) : (
         <PageLinkList icon={ListTree}
           rows={list.map(({ page, level }) => ({ ...page, spaceSlug: ctx.spaceSlug ?? "", level }))} />

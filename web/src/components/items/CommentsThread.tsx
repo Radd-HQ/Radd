@@ -40,7 +40,7 @@ interface CommentsThreadProps {
 /** Amber "Internal" chip on comments only comment.read_internal holders see. */
 function InternalBadge() {
   return (
-    <span className="inline-flex items-center gap-1 rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-px text-[10px] font-medium text-amber-300">
+    <span className="inline-flex items-center gap-1 rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-px text-micro font-medium text-amber-300">
       <EyeOff size={9} aria-hidden />
       Internal
     </span>
@@ -165,7 +165,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                     {internal && <InternalBadge />}
                     <ThreadBadge comment={comment} />
                     {internal && comment.visible_to_teams.length > 0 && (
-                      <span className="text-[10px] text-amber-300/80">
+                      <span className="text-micro text-amber-300/80">
                         · <CommentAudienceNames ids={comment.visible_to_teams} names={teamNames} />
                       </span>
                     )}
@@ -348,10 +348,10 @@ function CommentActions({
         <Trash2 size={11} aria-hidden />
       </IconButton>
       {remove.isError && (
-        <span role="alert" className="text-[11px] text-status-danger-ink">{errorMessage(remove.error)}</span>
+        <span role="alert" className="text-meta text-status-danger-ink">{errorMessage(remove.error)}</span>
       )}
       {startThread.isError && (
-        <span role="alert" className="text-[11px] text-status-danger-ink">{errorMessage(startThread.error)}</span>
+        <span role="alert" className="text-meta text-status-danger-ink">{errorMessage(startThread.error)}</span>
       )}
       {confirmDialog}
     </span>

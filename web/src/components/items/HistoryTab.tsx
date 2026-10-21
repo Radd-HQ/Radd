@@ -41,7 +41,7 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
   const durationConfig = useDurationConfig();
   return (
     <li className="flex gap-2.5">
-      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-strong text-[10px] font-semibold text-fg">
+      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-strong text-micro font-semibold text-fg">
         {initials(who)}
       </span>
       <div className="min-w-0 flex-1">
@@ -172,14 +172,14 @@ function refTypeLabel(detail: Record<string, unknown>): string {
 function SecondaryLine({ entry }: { entry: HistoryEntry }) {
   const detail = entry.detail ?? {};
   if (entry.type.startsWith("comment.") && detail.visibility === "internal") {
-    return <p className="mt-0.5 text-[11px] text-amber-300/80">Internal note</p>;
+    return <p className="mt-0.5 text-meta text-amber-300/80">Internal note</p>;
   }
   // A delivery failure says WHAT the relay said and whether anyone will try
   // again — the two facts an agent needs before re-answering by hand (RADD-984).
   if (entry.type === "mail.failed") {
     const error = typeof detail.error === "string" ? detail.error : "";
     return (
-      <p className="mt-0.5 text-[11px] text-status-danger-ink">
+      <p className="mt-0.5 text-meta text-status-danger-ink">
         {detail.given_up ? "Delivery failed — no further attempts." : "Delivery failed."}
         {error ? ` ${error}` : ""}
       </p>
@@ -193,7 +193,7 @@ function SecondaryLine({ entry }: { entry: HistoryEntry }) {
         href={url}
         target="_blank"
         rel="noreferrer"
-        className="mt-0.5 block truncate text-[13px] text-accent-text hover:underline"
+        className="mt-0.5 block truncate text-row text-accent-text hover:underline"
       >
         {title}
       </a>

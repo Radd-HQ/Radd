@@ -57,7 +57,7 @@ export function PageHistory({ page, canWrite }: { page: Page; canWrite: boolean 
         v{page.version} is the current version{list.length > 0 ? "; earlier versions:" : "."}
       </p>
       {list.length === 0 ? (
-        <p className="px-1 text-[13px] text-fg-faint">No earlier versions yet.</p>
+        <p className="px-1 text-row text-fg-faint">No earlier versions yet.</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {list.map((version) => (
@@ -67,13 +67,13 @@ export function PageHistory({ page, canWrite }: { page: Page; canWrite: boolean 
                 onClick={() => setViewing(version.version)}
                 className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-subtle bg-surface/50 px-2.5 py-1.5 text-left hover:border-strong cursor-pointer"
               >
-                <span className="rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
+                <span className="rounded bg-elevated px-1.5 py-px font-mono text-micro text-fg-secondary">
                   v{version.version}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[13px] text-fg">
+                <span className="min-w-0 flex-1 truncate text-row text-fg">
                   {version.title}
                 </span>
-                <span className="shrink-0 text-[11px] text-fg-muted">
+                <span className="shrink-0 text-meta text-fg-muted">
                   {users?.find((user) => user.id === version.author_id)?.name ?? "someone"} ·{" "}
                   <span title={version.created_at}>{relativeTime(version.created_at)}</span>
                 </span>
@@ -125,7 +125,7 @@ function VersionViewer({
           <ChevronLeft size={13} aria-hidden />
           All versions
         </button>
-        <span className="rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
+        <span className="rounded bg-elevated px-1.5 py-px font-mono text-micro text-fg-secondary">
           v{version}
         </span>
         {canWrite && (
@@ -154,7 +154,7 @@ function VersionViewer({
           {content.data.body ? (
             <Markdown text={content.data.body} />
           ) : (
-            <p className="text-[13px] text-fg-faint">This version had no content.</p>
+            <p className="text-row text-fg-faint">This version had no content.</p>
           )}
         </div>
       )}

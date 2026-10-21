@@ -59,7 +59,7 @@ function Section({
 }) {
   return (
     <section aria-label={title} className="mb-8 last:mb-0">
-      <h3 className="text-[13px] font-semibold text-heading">{title}</h3>
+      <h3 className="text-row font-semibold text-heading">{title}</h3>
       <p className="mb-3 mt-0.5 text-xs text-fg-muted">{hint}</p>
       {children}
     </section>
@@ -124,13 +124,13 @@ function CategoryRow({
             if (trimmed && trimmed !== category.name) patch.mutate({ name: trimmed });
             else setName(category.name);
           }}
-          className="flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-[13px] text-heading hover:border-subtle focus:border-strong focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+          className="flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-row text-heading hover:border-subtle focus:border-strong focus:outline-2 focus:outline-offset-1 focus:outline-focus"
         />
       ) : (
-        <span className="flex-1 text-[13px] text-fg">{category.name}</span>
+        <span className="flex-1 text-row text-fg">{category.name}</span>
       )}
       {category.archived && (
-        <span className="rounded border border-strong px-1.5 py-px text-[10px] uppercase tracking-wide text-fg-muted">
+        <span className="rounded border border-strong px-1.5 py-px text-micro uppercase tracking-wide text-fg-muted">
           Archived
         </span>
       )}

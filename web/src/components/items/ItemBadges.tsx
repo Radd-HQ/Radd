@@ -34,7 +34,7 @@ export function ItemKeyLink({ itemKey, className }: { itemKey: string; className
       title={`Open ${itemKey}`}
       className={
         className ??
-        "shrink-0 font-mono text-[11px] text-fg-muted hover:text-accent-text hover:underline"
+        "shrink-0 font-mono text-meta text-fg-muted hover:text-accent-text hover:underline"
       }
     >
       {itemKey}
@@ -132,7 +132,7 @@ export function PublicProjectChip() {
   return (
     <span
       title="Public project — its public issues are readable without signing in"
-      className="inline-flex items-center gap-1 rounded-md border border-subtle bg-surface px-1.5 py-0.5 text-[11px] text-fg-secondary"
+      className="inline-flex items-center gap-1 rounded-md border border-subtle bg-surface px-1.5 py-0.5 text-meta text-fg-secondary"
     >
       <Globe size={11} aria-hidden />
       Public
@@ -216,7 +216,7 @@ export function TypeChip({ type, withLabel = false }: { type: TypeRef; withLabel
 /** A label chip's skin per variant: `quiet` sits a step back from the coloured meta chips (board
  *  cards, where labels are context, not signal). */
 const LABEL_SKIN = {
-  pill: "rounded-full border border-strong bg-elevated/60 px-1.5 py-px text-[11px] leading-4",
+  pill: "rounded-full border border-strong bg-elevated/60 px-1.5 py-px text-meta leading-4",
   quiet: "rounded border border-subtle/70 bg-surface/70 px-1.5 py-px font-mono text-[10.5px] leading-4",
 } as const;
 
@@ -276,7 +276,7 @@ export function StatePill({ state }: { state: StateRef }) {
   return (
     <span
       title={`State: ${state.name}`}
-      className={`inline-flex w-[6.5rem] shrink-0 items-center justify-center gap-1.5 rounded border px-2 py-px text-[11px] leading-4 ${meta.pillClassName}`}
+      className={`inline-flex w-[6.5rem] shrink-0 items-center justify-center gap-1.5 rounded border px-2 py-px text-meta leading-4 ${meta.pillClassName}`}
     >
       <span className={`size-1.5 shrink-0 rounded-full ${meta.dotClassName}`} aria-hidden />
       <span className="truncate">{state.name}</span>
@@ -290,7 +290,7 @@ export function DueBadge({ date, overdue }: { date: string; overdue: boolean }) 
     <span
       title={`Target date: ${date}`}
       className={
-        "inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-px text-[11px] leading-4 " +
+        "inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-px text-meta leading-4 " +
         (overdue ? "bg-red-500/10 text-red-300" : "bg-elevated text-fg-secondary")
       }
     >
@@ -315,7 +315,7 @@ export function UnassignedSlot({ size = 5 }: { size?: 5 | 6 }) {
     <span
       title="Unassigned"
       className={
-        (size === 6 ? "size-6 text-[11px]" : "size-5 text-[10px]") +
+        (size === 6 ? "size-6 text-meta" : "size-5 text-micro") +
         " inline-flex shrink-0 items-center justify-center rounded-full border border-dashed border-strong text-fg-faint"
       }
     >
@@ -328,7 +328,7 @@ export function TeamBadge({ team }: { team: TeamRef }) {
   return (
     <span
       title={`Team: ${team.name}`}
-      className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-px text-[11px] leading-4 text-fg-secondary"
+      className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-px text-meta leading-4 text-fg-secondary"
     >
       <Users size={11} aria-hidden />
       {team.name}
@@ -341,7 +341,7 @@ export function ParentTag({ parent }: { parent: ItemParentRef }) {
   return (
     <span
       title={`Parent: ${parent.key} ${parent.title}`}
-      className="inline-flex items-center gap-0.5 rounded bg-purple-500/15 px-1.5 py-px font-mono text-[11px] leading-4 text-purple-300"
+      className="inline-flex items-center gap-0.5 rounded bg-purple-500/15 px-1.5 py-px font-mono text-meta leading-4 text-purple-300"
     >
       <CornerDownRight size={11} aria-hidden />
       {parent.key}
@@ -355,7 +355,7 @@ export function HiddenParentTag({ text }: { text: string }) {
     <span
       title={text}
       data-parent-hidden-tag
-      className="inline-flex items-center gap-1 rounded border border-subtle bg-elevated px-1.5 py-px text-[11px] leading-4 text-fg-muted"
+      className="inline-flex items-center gap-1 rounded border border-subtle bg-elevated px-1.5 py-px text-meta leading-4 text-fg-muted"
     >
       <EyeOff size={11} aria-hidden />
       {text}
@@ -369,7 +369,7 @@ export function ReleaseChip({ release }: { release: ReleaseRef }) {
   return (
     <span
       title={`Release: ${release.version} (${meta.label})`}
-      className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-px text-[11px] leading-4 text-fg"
+      className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-px text-meta leading-4 text-fg"
     >
       <Rocket size={11} aria-hidden />
       {release.version}
@@ -384,7 +384,7 @@ export function CycleChip({ cycle }: { cycle: CycleRef }) {
   return (
     <span
       title={`Cycle: ${cycle.name} (${meta.label})`}
-      className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-px text-[11px] leading-4 text-fg"
+      className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-px text-meta leading-4 text-fg"
     >
       <RefreshCw size={10} aria-hidden />
       <span className="max-w-24 truncate">{cycle.name}</span>
@@ -403,7 +403,7 @@ export function PointsChip({ points }: { points: number }) {
   return (
     <span
       title={`Story points: ${formatPoints(points)}`}
-      className="inline-flex items-center rounded bg-teal-500/15 px-1.5 py-px text-[11px] leading-4 tabular-nums text-teal-300"
+      className="inline-flex items-center rounded bg-teal-500/15 px-1.5 py-px text-meta leading-4 tabular-nums text-teal-300"
     >
       {formatPoints(points)}p
     </span>
@@ -413,7 +413,7 @@ export function PointsChip({ points }: { points: number }) {
 /** Epic progress ("3 children") shown on epic cards. */
 export function ChildCount({ count }: { count: number }) {
   return (
-    <span className="inline-flex items-center rounded bg-purple-500/15 px-1.5 py-px text-[11px] leading-4 text-purple-300">
+    <span className="inline-flex items-center rounded bg-purple-500/15 px-1.5 py-px text-meta leading-4 text-purple-300">
       {count} {count === 1 ? "child" : "children"}
     </span>
   );

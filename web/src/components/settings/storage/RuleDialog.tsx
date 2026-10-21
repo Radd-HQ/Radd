@@ -39,7 +39,7 @@ const PREFIX_OPTIONS: TokenOption[] = [
 /** Row input matching TextField's styling, for the repeatable builders where a
  * label per row would be noise (the FormEditor idiom). */
 const rowInputClasses =
-  "h-8 min-w-0 flex-1 rounded-md border border-subtle bg-surface px-2.5 text-[13px] " +
+  "h-8 min-w-0 flex-1 rounded-md border border-subtle bg-surface px-2.5 text-row " +
   "text-heading placeholder:text-fg-faint focus:border-accent focus:outline-none " +
   "focus:ring-2 focus:ring-accent/30";
 
@@ -225,7 +225,7 @@ export function RuleDialog({
                 rows={3}
                 required
                 placeholder="Is this a production render frame, or an ordinary screenshot/document?"
-                className="rounded-md border border-strong bg-surface px-2.5 py-2 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+                className="rounded-md border border-strong bg-surface px-2.5 py-2 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
               />
               <p className="text-xs text-fg-muted">
                 The model must answer with one of the mapped answers below — it cannot invent

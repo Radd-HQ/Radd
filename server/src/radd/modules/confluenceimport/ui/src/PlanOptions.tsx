@@ -13,8 +13,8 @@ export function PlanOptions({
   const set = (changes: Partial<ConfluencePlanOptions>) => onChange({ ...options, ...changes });
   return (
     <fieldset className="mt-4 rounded-lg border border-subtle p-3">
-      <legend className="px-1 text-[12px] font-medium text-fg-secondary">Options</legend>
-      <div className="flex flex-col gap-2 text-[13px] text-fg-secondary">
+      <legend className="px-1 text-xs font-medium text-fg-secondary">Options</legend>
+      <div className="flex flex-col gap-2 text-row text-fg-secondary">
         <label className="flex items-center gap-2">
           <input
             type="checkbox"

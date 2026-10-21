@@ -132,7 +132,7 @@ function RoleRow({ role, label, blurb, providers, assignment }: {
             if (event.key === "Enter") saveModel();
           }}
           placeholder={selectedProvider?.default_model || "provider default"} disabled={!assignment || busy}
-          className="h-8 w-full rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-focus disabled:cursor-not-allowed disabled:opacity-50" />
+          className="h-8 w-full rounded-md border border-strong bg-surface px-2.5 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-focus disabled:cursor-not-allowed disabled:opacity-50" />
       </Td>
     </tr>
   );

@@ -37,7 +37,7 @@ export function FieldScopeEditor({
         allowGlobal={allowGlobal}
         disabled={!canManage || save.isPending}
       />
-      <p className="mt-1.5 text-[11px] text-fg-faint">
+      <p className="mt-1.5 text-meta text-fg-faint">
         {field.project_ids.length === 0
           ? "No projects selected — the field is available everywhere. This controls WHERE the field exists; who may read or write it is \u201cRestricted on\u201d below."
           : "The field exists only on the selected projects and vanishes elsewhere. Who may read or write it where it exists is \u201cRestricted on\u201d below."}

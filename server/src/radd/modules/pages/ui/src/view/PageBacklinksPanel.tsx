@@ -20,7 +20,7 @@ export function PageBacklinksPanel({ pageId }: { pageId: string }) {
       <h3 className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
         <Link2 size={12} aria-hidden />
         Linked from
-        <span className="rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
+        <span className="rounded bg-elevated px-1.5 py-px font-mono text-micro text-fg-secondary">
           {data.length}
         </span>
       </h3>
@@ -29,11 +29,11 @@ export function PageBacklinksPanel({ pageId }: { pageId: string }) {
           <li key={page.id} className="flex items-baseline gap-2">
             <Link
               {...pageLink(page.space_slug, page.path)}
-              className="text-[13px] text-accent-text hover:underline"
+              className="text-row text-accent-text hover:underline"
             >
               {page.title}
             </Link>
-            <span className="text-[11px] text-fg-faint" title={page.updated_at}>
+            <span className="text-meta text-fg-faint" title={page.updated_at}>
               {relativeTime(page.updated_at)}
             </span>
           </li>

@@ -72,10 +72,10 @@ export function PageMeta({
         Updated by {author?.name ?? "someone"}{" "}
         <span title={page.updated_at}>{relativeTime(page.updated_at)}</span>
       </span>
-      <span className="shrink-0 rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">v{page.version}</span>
+      <span className="shrink-0 rounded bg-elevated px-1.5 py-px font-mono text-micro text-fg-secondary">v{page.version}</span>
       {/* RADD-1233: the page's number IS its permalink, one right-click away beside the version. */}
       <Link {...pagePermalink(page.number)} data-page-number={page.number} title="Permanent link — survives renames and moves"
-        className="shrink-0 rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary hover:text-fg">
+        className="shrink-0 rounded bg-elevated px-1.5 py-px font-mono text-micro text-fg-secondary hover:text-fg">
         #{page.number}
       </Link>
       <span className="ml-1 empty:hidden">{presence}</span>
@@ -137,7 +137,7 @@ function TabButton({ active, onClick, label, icon }: {
 }) {
   return (
     <button type="button" onClick={onClick}
-      className={"flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium cursor-pointer " +
+      className={"flex items-center gap-1 rounded px-2 py-0.5 text-meta font-medium cursor-pointer " +
         (active ? "bg-elevated text-heading" : "text-fg-muted hover:text-fg")}>
       {icon}
       {label}

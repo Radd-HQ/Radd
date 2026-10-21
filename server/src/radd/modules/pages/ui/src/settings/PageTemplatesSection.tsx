@@ -35,8 +35,8 @@ export function PageTemplatesSection() {
       </div> : templates.rows.length === 0 ? <p className="flex items-center gap-2 text-xs text-fg-muted"><LayoutTemplate size={13} aria-hidden />{templates.filter.trim() ? "No templates match this search." : "No templates yet."}</p>
         : <ul aria-label="Page templates" className="rounded-lg border border-subtle">{templates.rows.map(template => <li key={template.id} className="border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="min-w-0 break-words text-[13px] font-medium text-heading">{template.icon ? `${template.icon} ` : ""}{template.name}</span>
-            <span className="min-w-0 break-words text-[11px] text-fg-faint">{template.space_id === null ? "Every space" : template.space_name ?? "Unavailable space"}</span>
+            <span className="min-w-0 break-words text-row font-medium text-heading">{template.icon ? `${template.icon} ` : ""}{template.name}</span>
+            <span className="min-w-0 break-words text-meta text-fg-faint">{template.space_id === null ? "Every space" : template.space_name ?? "Unavailable space"}</span>
             <span className="flex-1" />
             <IconButton aria-label={`Edit ${template.name}`} onClick={() => setEditing(template.id)}><Pencil size={13} aria-hidden /></IconButton>
             <IconButton danger disabled={remove.isPending} aria-label={`Delete ${template.name}`} onClick={() => {
@@ -132,7 +132,7 @@ function TemplateForm({
           rows={8}
           spellCheck={false}
           placeholder={"# {{title}}\n\nDate: {{date}} — Owner: {{author}}\n\n## Agenda\n\n- "}
-          className="rounded-md border border-strong bg-base px-3 py-2 font-mono text-[12px] leading-relaxed text-fg outline-focus"
+          className="rounded-md border border-strong bg-base px-3 py-2 font-mono text-xs leading-relaxed text-fg outline-focus"
         />
       </label>
       <div className="flex flex-wrap items-center gap-2">

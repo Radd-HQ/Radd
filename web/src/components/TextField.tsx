@@ -21,7 +21,7 @@ export function TextField({ label, hint, error, className = "", ...props }: Text
         aria-describedby={hint || error ? hintId : undefined}
         {...props}
         className={
-          "h-8 rounded-md border bg-surface px-2.5 text-[13px] text-heading " +
+          "h-8 rounded-md border bg-surface px-2.5 text-row text-heading " +
           "placeholder:text-fg-faint focus:outline-none focus:ring-2 " +
           "disabled:cursor-not-allowed disabled:opacity-70 " +
           (error

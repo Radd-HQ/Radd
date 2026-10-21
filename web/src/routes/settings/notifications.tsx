@@ -144,7 +144,7 @@ function Editor({
           A periodic email batching whatever reached your inbox and has not been emailed
           individually. Turning it off leaves those notifications in the inbox only.
         </p>
-        <label className="flex items-center gap-2 text-[13px] text-fg">
+        <label className="flex items-center gap-2 text-row text-fg">
           <input
             type="checkbox"
             checked={prefs.email_digest}

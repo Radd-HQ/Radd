@@ -74,9 +74,9 @@ function InboxWidget() {
           <header className="mb-2 flex items-center gap-2">
             <Inbox size={12} className="text-fg-muted" aria-hidden />
             {/* RADD-1294: the same heading as every other My Work section. */}
-            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">Inbox</h2>
+            <h2 className="text-meta font-semibold uppercase tracking-wide text-fg-muted">Inbox</h2>
             {(notifications.data?.unread_count ?? 0) > 0 && (
-              <span className="rounded-full bg-accent/20 px-1.5 py-px text-[10px] font-medium text-accent-text">
+              <span className="rounded-full bg-accent/20 px-1.5 py-px text-micro font-medium text-accent-text">
                 {notifications.data?.unread_count}
               </span>
             )}
@@ -174,20 +174,20 @@ function ItemRow({ item, showDue = false }: { item: Item; showDue?: boolean }) {
         <QuickStar item={item} />
         <ItemKeyLink
           itemKey={item.key}
-          className="shrink-0 rounded bg-elevated px-1.5 font-mono text-[11px] text-fg-secondary hover:text-accent-text hover:underline"
+          className="shrink-0 rounded bg-elevated px-1.5 font-mono text-meta text-fg-secondary hover:text-accent-text hover:underline"
         />
-        <span className="min-w-0 flex-1 truncate text-[13px] text-fg">{item.title}</span>
+        <span className="min-w-0 flex-1 truncate text-row text-fg">{item.title}</span>
         {priority && (
-          <span className="shrink-0 text-[11px] text-fg-muted">{priority.label}</span>
+          <span className="shrink-0 text-meta text-fg-muted">{priority.label}</span>
         )}
-        <span className="shrink-0 rounded bg-elevated/80 px-1.5 py-px text-[10px] text-fg-secondary">
+        <span className="shrink-0 rounded bg-elevated/80 px-1.5 py-px text-micro text-fg-secondary">
           {item.state.name}
         </span>
         {item.assignee && !showDue && <Avatar user={item.assignee} size="xs" />}
         {showDue && item.target_date && (
           <span
             className={
-              "shrink-0 text-[11px] " + (overdue ? "font-medium text-red-300" : "text-fg-muted")
+              "shrink-0 text-meta " + (overdue ? "font-medium text-red-300" : "text-fg-muted")
             }
           >
             {overdue ? "Overdue · " : "Due "}

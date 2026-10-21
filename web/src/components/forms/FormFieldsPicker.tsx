@@ -78,11 +78,11 @@ export function FormFieldsPicker({ available, value, onChange }: FormFieldsPicke
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-2.5">
                 <div className="flex items-center gap-2">
-                  <span className="rounded bg-elevated px-1 font-mono text-[11px] text-fg">
+                  <span className="rounded bg-elevated px-1 font-mono text-meta text-fg">
                     {field.field_key}
                   </span>
                   {definition && (
-                    <span className="text-[11px] text-fg-muted">
+                    <span className="text-meta text-fg-muted">
                       {definition.name} · {FIELD_TYPE_LABELS[definition.type]}
                     </span>
                   )}

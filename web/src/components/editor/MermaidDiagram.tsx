@@ -30,7 +30,7 @@ export function MermaidDiagram({ source }: { source: string }) {
   if (error) {
     return (
       <div className="my-2 rounded-lg border border-subtle bg-surface p-3">
-        <p className="flex items-start gap-1.5 text-[13px] text-fg-secondary">
+        <p className="flex items-start gap-1.5 text-row text-fg-secondary">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />
           <span>
             This diagram could not be drawn.{" "}
@@ -43,7 +43,7 @@ export function MermaidDiagram({ source }: { source: string }) {
 
   if (pending && !svg) {
     return (
-      <div className="my-2 rounded-lg border border-subtle bg-surface px-3 py-6 text-center text-[13px] text-fg-faint">
+      <div className="my-2 rounded-lg border border-subtle bg-surface px-3 py-6 text-center text-row text-fg-faint">
         Drawing…
       </div>
     );

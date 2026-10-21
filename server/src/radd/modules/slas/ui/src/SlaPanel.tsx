@@ -12,7 +12,7 @@ export function SlaPanel({ itemId }: { itemId: string }) {
       <div className="flex flex-col gap-2">
         {data.entries.map((entry) => (
           <div key={entry.policy_id}>
-            <p className="mb-1 text-[11px] text-fg-muted">{entry.policy_name}</p>
+            <p className="mb-1 text-meta text-fg-muted">{entry.policy_name}</p>
             <ul className="flex flex-col gap-1">
               {entry.timers.map((timer) => (
                 <li key={timer.kind} className="flex items-center gap-2 text-xs">

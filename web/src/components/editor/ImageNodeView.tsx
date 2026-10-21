@@ -133,7 +133,7 @@ export function ImageNodeView({ upload }: { upload?: ImageUploader }) {
             }}
             className="absolute top-1/2 right-0 h-10 w-2.5 -translate-y-1/2 cursor-ew-resize rounded-l bg-accent opacity-0 transition-opacity group-hover:opacity-90 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-focus"
           />
-          <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] tabular-nums text-white opacity-0 transition-opacity group-hover:opacity-100">
+          <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-micro tabular-nums text-white opacity-0 transition-opacity group-hover:opacity-100">
             {width ? `${width}px` : "full size"}
           </span>
           {width && (
@@ -143,7 +143,7 @@ export function ImageNodeView({ upload }: { upload?: ImageUploader }) {
               onClick={reset}
               title="Reset to full size"
               aria-label="Reset image to full size"
-              className="absolute top-1 right-1 cursor-pointer rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              className="absolute top-1 right-1 cursor-pointer rounded bg-black/70 px-1.5 py-0.5 text-micro text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
             >
               Reset
             </button>
@@ -225,7 +225,7 @@ function ImageEmptyState({
             </Button>
           </>
         )}
-        <span className="text-[11px] leading-tight text-fg-muted">
+        <span className="text-meta leading-tight text-fg-muted">
           {upload ? "or drop / paste an image" : "Paste an image URL"}
         </span>
       </span>
@@ -242,7 +242,7 @@ function ImageEmptyState({
             event.preventDefault();
             onPick(url.trim());
           }}
-          className="h-7 min-w-0 flex-1 rounded-md border border-subtle bg-surface px-2 text-[12px] text-heading placeholder:text-fg-faint focus:border-accent focus:outline-none"
+          className="h-7 min-w-0 flex-1 rounded-md border border-subtle bg-surface px-2 text-xs text-heading placeholder:text-fg-faint focus:border-accent focus:outline-none"
         />
         <Button
           size="sm"
@@ -254,7 +254,7 @@ function ImageEmptyState({
           Add
         </Button>
       </span>
-      {error && <span className="text-[11px] text-red-400">{error}</span>}
+      {error && <span className="text-meta text-red-400">{error}</span>}
     </span>
   );
 }

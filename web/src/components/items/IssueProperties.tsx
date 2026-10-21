@@ -420,7 +420,7 @@ function MoreFields({ count, children }: { count: number; children: ReactNode })
       >
         <Chevron size={13} aria-hidden />
         More fields
-        <span className="ml-1 rounded bg-elevated px-1.5 text-[11px] text-fg-secondary">{count}</span>
+        <span className="ml-1 rounded bg-elevated px-1.5 text-meta text-fg-secondary">{count}</span>
       </button>
       {open && (
         <div className="flex flex-col divide-y divide-subtle border-t border-subtle/60">
@@ -541,7 +541,7 @@ function PointsField({ item, onPatch }: PickerProps) {
         onKeyDown={(event) => {
           if (event.key === "Enter") event.currentTarget.blur();
         }}
-        className="h-8 w-full rounded-md border border-strong bg-surface px-2 text-[13px] text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+        className="h-8 w-full rounded-md border border-strong bg-surface px-2 text-row text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus"
       />
     </div>
   );
@@ -565,7 +565,7 @@ function peopleOptions(users: UserSummary[]) {
     >
       <PersonName user={user} />
       {user.external && (
-        <span className="ml-1.5 shrink-0 rounded bg-elevated px-1 py-px text-[10px] font-medium leading-3 text-fg-muted">
+        <span className="ml-1.5 shrink-0 rounded bg-elevated px-1 py-px text-micro font-medium leading-3 text-fg-muted">
           external
         </span>
       )}

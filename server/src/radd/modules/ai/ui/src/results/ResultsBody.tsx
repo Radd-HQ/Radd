@@ -151,7 +151,7 @@ export function AiResultsBody({ request, onOpen }: { request: AiResultRequest; o
           })}
         />
         {reasoning && (
-          <p className="mt-2 flex items-center gap-1.5 text-[11px] text-fg-faint">
+          <p className="mt-2 flex items-center gap-1.5 text-meta text-fg-faint">
             <Sparkles size={11} aria-hidden className="animate-pulse" />
             Reasoning about matches…
           </p>

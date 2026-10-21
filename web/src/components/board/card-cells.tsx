@@ -41,7 +41,7 @@ function PriorityTag({ priority }: { priority: PriorityValue }) {
   return (
     <span
       title={`Priority: ${meta.label}`}
-      className={`shrink-0 font-mono text-[10px] font-semibold uppercase tracking-wider ${meta.className}`}
+      className={`shrink-0 font-mono text-micro font-semibold uppercase tracking-wider ${meta.className}`}
     >
       {meta.short}
     </span>
@@ -54,7 +54,7 @@ function EpicChip({ parent }: { parent: ItemParentRef }) {
   return (
     <span
       title={`Parent: ${parent.key} ${parent.title}`}
-      className="inline-flex min-w-0 max-w-40 items-center gap-1 rounded bg-purple-500/15 px-1.5 py-px text-[11px] leading-4 text-purple-300"
+      className="inline-flex min-w-0 max-w-40 items-center gap-1 rounded bg-purple-500/15 px-1.5 py-px text-meta leading-4 text-purple-300"
     >
       <CornerDownRight size={11} className="shrink-0" aria-hidden />
       <span className="truncate">{parent.title || parent.key}</span>
@@ -204,7 +204,7 @@ export function renderCardCell(attr: string, ctx: CardCellCtx): ReactNode {
               ? `Logged ${formatSeconds(seconds)} of ${formatSeconds(ctx.timelog.estimate_seconds)} estimated`
               : `Logged ${formatSeconds(seconds)}`
           }
-          className="font-mono text-[11px] tabular-nums text-fg-muted"
+          className="font-mono text-meta tabular-nums text-fg-muted"
         >
           {formatSeconds(seconds)}
         </span>

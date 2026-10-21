@@ -5,7 +5,7 @@ export function PublicBadge() {
   return (
     <span
       title="Readable without login at /kb"
-      className="inline-flex items-center gap-1 rounded bg-status-success/15 px-1.5 py-px text-[10px] font-medium text-status-success-ink"
+      className="inline-flex items-center gap-1 rounded bg-status-success/15 px-1.5 py-px text-micro font-medium text-status-success-ink"
     >
       <Globe size={10} aria-hidden />
       Public

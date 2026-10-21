@@ -162,7 +162,7 @@ export function BulkActionBar({
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
       <div className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-lg border border-strong bg-surface/95 px-3 py-2 shadow-2xl shadow-black/40 backdrop-blur">
-        <span className="text-[13px] font-medium text-fg">
+        <span className="text-row font-medium text-fg">
           {selectedIds.size} selected
         </span>
         {matching && matching.total > selectedIds.size && (

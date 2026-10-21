@@ -151,7 +151,7 @@ export function CreateItemFields({ params, pickers, onChange }: CreateItemFields
       >
         <div className="flex flex-col gap-2">
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-fg-secondary">
+            <span className="text-meta font-medium uppercase tracking-wide text-fg-secondary">
               Labels
             </span>
             <TokenMultiSelect
@@ -196,7 +196,7 @@ function CustomFieldRows({
   const unused = fields.filter((key) => !(key in value));
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-fg-secondary">
+      <span className="text-meta font-medium uppercase tracking-wide text-fg-secondary">
         Custom fields
       </span>
       {entries.map(([key, current]) => (

@@ -148,7 +148,7 @@ function LabelRow({
             aria-label={`Rename ${label.name}`}
             maxLength={100}
             autoFocus
-            className="h-7 flex-1 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+            className="h-7 flex-1 rounded-md border border-strong bg-surface px-2 text-row text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus"
           />
           <IconButton onClick={commit} disabled={save.isPending} aria-label="Save label">
             <Check size={13} />
@@ -164,8 +164,8 @@ function LabelRow({
             style={label.color ? { backgroundColor: label.color } : undefined}
             aria-hidden
           />
-          <span className="flex-1 text-[13px] text-heading">{label.name}</span>
-          <span className="font-mono text-[11px] text-fg-faint">{label.color ?? "—"}</span>
+          <span className="flex-1 text-row text-heading">{label.name}</span>
+          <span className="font-mono text-meta text-fg-faint">{label.color ?? "—"}</span>
           <span className="text-xs text-fg-faint">
             {formatDate(label.created_at)}
           </span>

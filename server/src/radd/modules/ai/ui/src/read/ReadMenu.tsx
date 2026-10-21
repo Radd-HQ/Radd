@@ -129,7 +129,7 @@ export function AiReadMenu({ text, context, transform, subject, className = "" }
                   {canQuery && canTransform && <hr className="border-subtle" />}
                   {canTransform && editorAi && (
                     <>
-                      <p className="px-2 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
+                      <p className="px-2 pt-0.5 text-micro font-semibold uppercase tracking-wide text-fg-faint">
                         Edit with AI
                       </p>
                       <AiActionPicker
@@ -148,7 +148,7 @@ export function AiReadMenu({ text, context, transform, subject, className = "" }
                     <button
                       type="button"
                       onClick={() => setView("menu")}
-                      className="flex items-center gap-1 rounded px-1 py-0.5 text-[11px] text-fg-muted hover:bg-elevated hover:text-fg cursor-pointer"
+                      className="flex items-center gap-1 rounded px-1 py-0.5 text-meta text-fg-muted hover:bg-elevated hover:text-fg cursor-pointer"
                     >
                       <ArrowLeft size={11} aria-hidden />
                       {view.kind === "similar" ? "Similar issues" : "Summary"}

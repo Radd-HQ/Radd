@@ -50,14 +50,14 @@ export function BreadcrumbCrumb({
         className="max-h-72 w-56 overflow-y-auto py-1"
       >
         {siblings.length === 0 ? (
-          <p className="px-3 py-1.5 text-[12px] text-fg-faint">Nothing else at this level.</p>
+          <p className="px-3 py-1.5 text-xs text-fg-faint">Nothing else at this level.</p>
         ) : (
           siblings.map((sibling) => (
             <Link
               key={sibling.id}
               {...pageLink(spaceSlug, sibling.path)}
               onClick={() => setOpen(false)}
-              className="block truncate px-3 py-1.5 text-[13px] text-fg hover:bg-elevated"
+              className="block truncate px-3 py-1.5 text-row text-fg hover:bg-elevated"
             >
               {sibling.title}
             </Link>

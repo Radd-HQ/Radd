@@ -96,7 +96,7 @@ export function ConnectionsPanel() {
                       {connection.is_default && (
                         <span
                           title="Used when an import does not name a connection"
-                          className="rounded bg-overlay px-1.5 py-0.5 text-[10px] text-fg-secondary"
+                          className="rounded bg-overlay px-1.5 py-0.5 text-micro text-fg-secondary"
                         >
                           default
                         </span>
@@ -104,7 +104,7 @@ export function ConnectionsPanel() {
                       {connection.source === JiraConnectionSource.env && (
                         <span
                           title="Seeded from RADD_JIRA_* on first startup. Editing it here is safe — it is never re-seeded."
-                          className="rounded bg-overlay px-1.5 py-0.5 text-[10px] text-fg-faint"
+                          className="rounded bg-overlay px-1.5 py-0.5 text-micro text-fg-faint"
                         >
                           from env
                         </span>
@@ -117,7 +117,7 @@ export function ConnectionsPanel() {
                       {!connection.verify_ssl && (
                         <span
                           title="TLS certificate verification is off for this connection"
-                          className="shrink-0 whitespace-nowrap rounded bg-status-warning/10 px-1.5 py-0.5 text-[10px] text-status-warning-ink"
+                          className="shrink-0 whitespace-nowrap rounded bg-status-warning/10 px-1.5 py-0.5 text-micro text-status-warning-ink"
                         >
                           no TLS check
                         </span>

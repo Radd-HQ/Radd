@@ -20,7 +20,7 @@ export function ContributedNodeFields({ node, entry, onChange, showProvider = fa
   const fallback = (
     <>
       {showProvider && (
-        <p data-node-provider={entry?.plugin ?? ""} className="text-[11px] text-fg-muted">
+        <p data-node-provider={entry?.plugin ?? ""} className="text-meta text-fg-muted">
           {entry
             ? `Provided by the ${entry.plugin} plugin.`
             : "Provided by a plugin that is not enabled here. Its settings are kept; saving asks the server whether it can run."}

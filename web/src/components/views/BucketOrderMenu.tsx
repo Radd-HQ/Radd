@@ -65,7 +65,7 @@ export function BucketOrderMenu({
     hideable = false,
   ) => (
     <div className="flex flex-col gap-0.5">
-      <p className="px-1 text-[10px] font-medium uppercase tracking-wide text-fg-faint">{label}</p>
+      <p className="px-1 text-micro font-medium uppercase tracking-wide text-fg-faint">{label}</p>
       {buckets.map((bucket, index) => (
         <div
           key={bucket.key}
@@ -127,10 +127,10 @@ export function BucketOrderMenu({
               className="size-3.5 accent-accent"
             />
             Collapse empty columns
-            <span className="text-[10px] text-fg-faint">— a rail that still takes drops</span>
+            <span className="text-micro text-fg-faint">— a rail that still takes drops</span>
           </label>
           {lanes.length > 0 && section("Swimlanes", lanes, onReorderLanes)}
-          <p className="px-1 text-[10px] text-fg-faint">
+          <p className="px-1 text-micro text-fg-faint">
             Saved on this view for everyone who sees it. New buckets appear at the end.
           </p>
         </div>

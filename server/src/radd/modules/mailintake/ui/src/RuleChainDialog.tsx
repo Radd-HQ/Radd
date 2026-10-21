@@ -54,7 +54,7 @@ export function RuleChainDialog({
   return (
     <Modal title={`Routing — ${source.name}`} onClose={onClose} wide>
       <div className="flex flex-col gap-3">
-        <p className="text-[11px] text-fg-muted">
+        <p className="text-meta text-fg-muted">
           Checked top to bottom; the first match decides the project and stops the chain. Anything
           unmatched falls to this source's default. Keep the AI rule last — the rules above it cost
           nothing, and only mail none of them claimed pays for an inference.
@@ -71,12 +71,12 @@ export function RuleChainDialog({
                 key={rule.id}
                 className="flex items-center gap-2 rounded-md border border-subtle bg-surface/60 px-3 py-2"
               >
-                <span className="w-5 shrink-0 text-center font-mono text-[11px] text-fg-faint">
+                <span className="w-5 shrink-0 text-center font-mono text-meta text-fg-faint">
                   {index + 1}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] text-fg">{rule.name}</span>
-                  <span className="block truncate text-[11px] text-fg-faint">
+                  <span className="block truncate text-row text-fg">{rule.name}</span>
+                  <span className="block truncate text-meta text-fg-faint">
                     {RULE_LABELS[rule.rule_type]} →{" "}
                     {(projects.data ?? []).find((p) => p.id === rule.project_id)?.key ?? "—"}
                   </span>

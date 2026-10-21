@@ -47,7 +47,7 @@ export function ApprovalRuleEditor({ rules, onChange, canManage, saving }: Trans
       </label>
       {rule && (
         <div className="mt-2 flex flex-col gap-1.5 rounded-md border border-subtle bg-surface/40 px-3 py-2">
-          <span className="text-[11px] uppercase tracking-wide text-fg-faint">
+          <span className="text-meta uppercase tracking-wide text-fg-faint">
             Approvers — every entry must be satisfied
           </span>
           {entries.map((entry, index) => (
@@ -57,7 +57,7 @@ export function ApprovalRuleEditor({ rules, onChange, canManage, saving }: Trans
                 : <UserIcon size={13} className="text-fg-muted" aria-hidden />}
               <span>{entry.name ?? entry.id}</span>
               {entry.kind === "team" && (
-                <label className="flex items-center gap-1.5 text-[11px] text-fg-secondary">
+                <label className="flex items-center gap-1.5 text-meta text-fg-secondary">
                   — requires
                   <input
                     type="number"

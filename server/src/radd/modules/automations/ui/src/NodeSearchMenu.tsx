@@ -90,7 +90,7 @@ export function NodeSearchMenu({ templates, at, onPick, onClose }: NodeSearchMen
         }}
         placeholder="Add a node…"
         aria-label="Search nodes"
-        className="h-9 w-full border-b border-subtle bg-transparent px-3 text-[13px] text-fg outline-none placeholder:text-fg-faint"
+        className="h-9 w-full border-b border-subtle bg-transparent px-3 text-row text-fg outline-none placeholder:text-fg-faint"
       />
       <ul ref={listRef} className="max-h-[300px] overflow-y-auto py-1">
         {matches.length === 0 && (
@@ -104,7 +104,7 @@ export function NodeSearchMenu({ templates, at, onPick, onClose }: NodeSearchMen
                 type="button"
                 onMouseEnter={() => setActive(index)}
                 onClick={() => onPick(template)}
-                className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] cursor-pointer ${
+                className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-row cursor-pointer ${
                   index === active ? "bg-elevated text-heading" : "text-fg"
                 }`}
               >
@@ -115,7 +115,7 @@ export function NodeSearchMenu({ templates, at, onPick, onClose }: NodeSearchMen
                   aria-hidden
                 />
                 <span className="truncate">{template.label}</span>
-                <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide text-fg-faint">
+                <span className="ml-auto shrink-0 text-micro uppercase tracking-wide text-fg-faint">
                   {template.group.replace(/^Triggers · /, "")}
                 </span>
               </button>

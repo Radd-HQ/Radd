@@ -147,7 +147,7 @@ export function ExtensionCard({
   return (
     <div className="my-2 rounded-lg border border-subtle bg-surface" {...rest}>
       {label && (
-        <div className="border-b border-subtle px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+        <div className="border-b border-subtle px-3 py-1.5 text-meta font-semibold uppercase tracking-wide text-fg-muted">
           {label}
         </div>
       )}
@@ -159,7 +159,7 @@ export function ExtensionCard({
 export function UnknownExtension({ name }: { name: string }) {
   return (
     <ExtensionCard label="Unknown extension" data-extension-unknown>
-      <p className="text-[13px] text-fg-secondary">
+      <p className="text-row text-fg-secondary">
         Nothing is registered for <code className="font-mono text-fg">radd:{name}</code>. The
         plugin that provides it may be disabled.
       </p>
@@ -170,7 +170,7 @@ export function UnknownExtension({ name }: { name: string }) {
 export function ExtensionError({ name, error }: { name: string; error: string }) {
   return (
     <ExtensionCard label={`radd:${name}`} data-extension-error>
-      <p className="text-[13px] text-status-danger-ink">Could not read this block's parameters: {error}</p>
+      <p className="text-row text-status-danger-ink">Could not read this block's parameters: {error}</p>
     </ExtensionCard>
   );
 }

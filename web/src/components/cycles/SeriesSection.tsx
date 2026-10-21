@@ -92,7 +92,7 @@ function SeriesRow({ series, canManage, canDelete }: { series: CycleSeries; canM
 
   return (
     <li className="flex flex-wrap items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
-      <span className="text-[13px] font-medium text-heading">{series.label}</span>
+      <span className="text-row font-medium text-heading">{series.label}</span>
       <label className="ml-auto flex items-center gap-1.5 text-xs text-fg-secondary">
         Starts
         <Select
@@ -131,7 +131,7 @@ function SeriesRow({ series, canManage, canDelete }: { series: CycleSeries; canM
           value={draftsAhead}
           onChange={(event) => setValue("draftsAhead", event.target.value)}
           disabled={!canManage}
-          className="h-7 w-16 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading disabled:opacity-60"
+          className="h-7 w-16 rounded-md border border-strong bg-surface px-2 text-row text-heading disabled:opacity-60"
         />
       </label>
       <label className="flex items-center gap-1.5 text-xs text-fg-secondary">
@@ -142,7 +142,7 @@ function SeriesRow({ series, canManage, canDelete }: { series: CycleSeries; canM
           value={nextNumber}
           onChange={(event) => setValue("nextNumber", event.target.value)}
           disabled={!canManage}
-          className="h-7 w-20 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading disabled:opacity-60"
+          className="h-7 w-20 rounded-md border border-strong bg-surface px-2 text-row text-heading disabled:opacity-60"
         />
       </label>
       {canManage && (

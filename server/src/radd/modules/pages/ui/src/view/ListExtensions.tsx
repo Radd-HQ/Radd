@@ -19,7 +19,7 @@ export function PageLinkList({ rows, icon: Icon }: {
         <li key={row.id} style={row.level === undefined ? undefined : { paddingLeft: `${row.level * 12}px` }}>
           <Link
             {...pageLink(row.spaceSlug, row.path)}
-            className="flex items-center gap-1 text-[13px] text-accent-text hover:underline"
+            className="flex items-center gap-1 text-row text-accent-text hover:underline"
           >
             <Icon size={11} aria-hidden className="shrink-0 text-fg-faint" />
             {row.title}
@@ -43,9 +43,9 @@ export function Backlinks() {
   return (
     <ExtensionCard label="Linked from">
       {isLoading ? (
-        <p className="text-[13px] text-fg-faint">Loading…</p>
+        <p className="text-row text-fg-faint">Loading…</p>
       ) : !data?.length ? (
-        <p className="text-[13px] text-fg-faint">Nothing links to this page yet.</p>
+        <p className="text-row text-fg-faint">Nothing links to this page yet.</p>
       ) : (
         <PageLinkList icon={Link2} rows={data.map((page) => ({ ...page, spaceSlug: page.space_slug }))} />
       )}
@@ -67,7 +67,7 @@ export function LabelList({ params }: { params: Record<string, unknown> }) {
   if (!label) {
     return (
       <ExtensionCard label="Pages by label">
-        <p className="text-[13px] text-fg-secondary">
+        <p className="text-row text-fg-secondary">
           Set <code className="font-mono">label</code> to the label to list.
         </p>
       </ExtensionCard>
@@ -76,9 +76,9 @@ export function LabelList({ params }: { params: Record<string, unknown> }) {
   return (
     <ExtensionCard label={`Pages labelled ${label}`}>
       {isLoading ? (
-        <p className="text-[13px] text-fg-faint">Loading…</p>
+        <p className="text-row text-fg-faint">Loading…</p>
       ) : !data?.length ? (
-        <p className="text-[13px] text-fg-faint">
+        <p className="text-row text-fg-faint">
           No pages carry <span className="font-medium">{label}</span>
           {space ? ` in ${space}` : ""} yet.
         </p>
@@ -132,7 +132,7 @@ export function Callout({ params }: { params: Record<string, unknown> }) {
       <Icon size={15} aria-hidden className={`mt-0.5 shrink-0 ${meta.ink}`} />
       <div className="min-w-0 flex-1">
         {title && (
-          <p data-callout-title className={`text-[13px] font-semibold ${meta.ink}`}>
+          <p data-callout-title className={`text-row font-semibold ${meta.ink}`}>
             {title}
           </p>
         )}

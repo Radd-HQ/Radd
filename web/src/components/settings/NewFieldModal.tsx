@@ -134,7 +134,7 @@ export function NewFieldModal({ onClose, allowGlobal, onCreated }: NewFieldModal
         <div>
           <p className="mb-1.5 text-xs font-medium text-fg-secondary">Scope</p>
           <FieldProjectScope value={projectIds} onChange={setProjectIds} permission="field.create" allowGlobal={allowGlobal} />
-          <p className="mt-1.5 text-[11px] text-fg-faint">
+          <p className="mt-1.5 text-meta text-fg-faint">
             A global field applies everywhere; a scoped field applies only to the projects you
             pick. You can widen a field's scope later.
           </p>
@@ -155,7 +155,7 @@ export function NewFieldModal({ onClose, allowGlobal, onCreated }: NewFieldModal
           />
         )}
 
-        <label className="flex items-center gap-2 text-[13px] text-fg">
+        <label className="flex items-center gap-2 text-row text-fg">
           <input
             type="checkbox"
             checked={required}
@@ -172,7 +172,7 @@ export function NewFieldModal({ onClose, allowGlobal, onCreated }: NewFieldModal
               value={defaultValue}
               onChange={setDefaultValue}
             />
-            <p className="mt-1 text-[11px] text-fg-faint">
+            <p className="mt-1 text-meta text-fg-faint">
               Seeded onto new issues when this field is left blank on create.
             </p>
           </div>

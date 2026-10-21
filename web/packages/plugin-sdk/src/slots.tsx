@@ -583,14 +583,14 @@ function ToggleList({
   onSet: (slot: string, id: string, enabled: boolean) => void;
   empty: string;
 }): ReactNode {
-  if (items.length === 0) return <p className="text-[13px] text-fg-faint">{empty}</p>;
+  if (items.length === 0) return <p className="text-row text-fg-faint">{empty}</p>;
   return (
     <ul className="flex flex-col gap-2">
       {items.map((c) => (
         <li key={`${c.slot}:${c.id}`} className="flex items-center justify-between gap-4">
-          <span className="text-[13px] text-fg">
+          <span className="text-row text-fg">
             {c.label}
-            <span className="ml-1.5 text-[11px] text-fg-faint">({c.slot})</span>
+            <span className="ml-1.5 text-meta text-fg-faint">({c.slot})</span>
           </span>
           <Switch checked={c.enabled} label={c.label} hideLabel onChange={(on) => onSet(c.slot, c.id, on)} />
         </li>

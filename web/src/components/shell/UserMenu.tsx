@@ -66,8 +66,8 @@ export function UserMenu() {
         >
           <Avatar user={user} size="sm" />
           <span className="min-w-0">
-            <span className="block truncate text-[13px] text-fg">{user.name}</span>
-            <span className="block truncate text-[11px] text-fg-muted">{user.email}</span>
+            <span className="block truncate text-row text-fg">{user.name}</span>
+            <span className="block truncate text-meta text-fg-muted">{user.email}</span>
           </span>
         </button>
       )}

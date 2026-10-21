@@ -37,9 +37,9 @@ export function SidebarProjectRow({ project, expanded, permissions, onToggle, on
                       to={RoutePath.project}
                       params={{ projectKey: project.key }}
                       activeOptions={{ exact: true }}
-                      className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 pr-7 text-[13px] text-fg-secondary hover:bg-overlay hover:text-heading focus-visible:outline-2 focus-visible:outline-focus"
+                      className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 pr-7 text-row text-fg-secondary hover:bg-overlay hover:text-heading focus-visible:outline-2 focus-visible:outline-focus"
                     >
-                      <span className="rounded bg-elevated px-1 font-mono text-[11px] text-fg-secondary">
+                      <span className="rounded bg-elevated px-1 font-mono text-meta text-fg-secondary">
                         {project.key}
                       </span>
                       <span className="truncate">{project.name}</span>
@@ -132,7 +132,7 @@ function ProjectViewLinks({ project }: { project: Project }) {
     ? current.data : null;
   return <SidebarDirectory directory={directory} label={`${project.key} views`}>
     {contextView && <div className="border-b border-subtle pb-1">
-      <span className="px-2 text-[11px] text-fg-muted">Current view</span>
+      <span className="px-2 text-meta text-fg-muted">Current view</span>
       <Link to={RoutePath.projectView} params={{ projectKey: project.key, viewId: contextView.id }} className={subLinkClasses}>
         <ViewRowContent view={contextView} small />
       </Link>

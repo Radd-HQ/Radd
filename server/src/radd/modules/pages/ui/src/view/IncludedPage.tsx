@@ -36,7 +36,7 @@ export function IncludedPage({ params }: { params: Record<string, unknown> }) {
   if (!raw) {
     return (
       <ExtensionCard label="Include">
-        <p className="text-[13px] text-fg-secondary">
+        <p className="text-row text-fg-secondary">
           Set <code className="font-mono">page</code> to the path of the page to include
           (<code className="font-mono">parent/child</code>), its number, or{" "}
           <code className="font-mono">space:path</code> for a page in another space.
@@ -50,7 +50,7 @@ export function IncludedPage({ params }: { params: Record<string, unknown> }) {
   if (data && above.includes(data.id)) {
     return (
       <ExtensionCard label="Include">
-        <p className="text-[13px] text-fg-secondary">
+        <p className="text-row text-fg-secondary">
           <span className="font-semibold">{data.title}</span> already contains this include —
           rendering it here would loop forever.
         </p>
@@ -61,14 +61,14 @@ export function IncludedPage({ params }: { params: Record<string, unknown> }) {
   if (isLoading) {
     return (
       <ExtensionCard label="Include">
-        <p className="text-[13px] text-fg-faint">Loading {raw}…</p>
+        <p className="text-row text-fg-faint">Loading {raw}…</p>
       </ExtensionCard>
     );
   }
   if (isError || !data) {
     return (
       <ExtensionCard label="Include">
-        <p className="text-[13px] text-fg-secondary">
+        <p className="text-row text-fg-secondary">
           Could not show <code className="font-mono">{raw}</code>
           {error instanceof Error && error.message.includes("403")
             ? " — you do not have access to it."
@@ -84,12 +84,12 @@ export function IncludedPage({ params }: { params: Record<string, unknown> }) {
           written here — otherwise an edit to the source silently rewrites what
           looks like this page's own words. */}
       <div className="flex items-center gap-1.5 border-b border-dashed border-strong px-3 py-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+        <span className="text-meta font-semibold uppercase tracking-wide text-fg-muted">
           Included from
         </span>
         <Link
           {...pageLink(data.space.slug, data.path)}
-          className="flex items-center gap-1 text-[12px] text-accent-text hover:underline"
+          className="flex items-center gap-1 text-xs text-accent-text hover:underline"
         >
           {data.title}
           <ExternalLink size={10} aria-hidden />

@@ -41,7 +41,7 @@ export function SnapshotsPanel({
       <header className="mb-3 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-heading">Downloads</h2>
-          <p className="text-[13px] text-fg-muted">
+          <p className="text-row text-fg-muted">
             A whole space, a section and everything under it, or a set of pages.
           </p>
         </div>
@@ -52,7 +52,7 @@ export function SnapshotsPanel({
 
       {(cancel.isError || remove.isError) && <QueryError label="download action" error={cancel.error ?? remove.error}/>}
       {snapshots.isError ? <QueryError label="downloads" error={snapshots.error}/> : snapshots.isPending ? <p>Loading downloads…</p> : rows.length === 0 ? (
-        <p className="text-[13px] text-fg-faint">Nothing downloaded yet.</p>
+        <p className="text-row text-fg-faint">Nothing downloaded yet.</p>
       ) : (
         <ul className="divide-y divide-subtle">
           {rows.map((snapshot) => {
@@ -60,10 +60,10 @@ export function SnapshotsPanel({
             return (
               <li key={snapshot.id} className="flex items-center gap-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-medium text-heading">
+                  <p className="truncate text-row font-medium text-heading">
                     {snapshot.name}
                   </p>
-                  <p className="truncate text-[12px] text-fg-muted">
+                  <p className="truncate text-xs text-fg-muted">
                     {CONFLUENCE_STAGE_LABELS[snapshot.stage] ?? snapshot.stage}
                     {snapshot.page_count > 0 && ` · ${snapshot.page_count} pages`}
                     {snapshot.include_history && " · with history"}
@@ -71,7 +71,7 @@ export function SnapshotsPanel({
                       ` · ${snapshot.problems.length} problem(s)`}
                   </p>
                   {!terminal && (
-                    <p className="mt-1 text-[12px] text-fg-faint">
+                    <p className="mt-1 text-xs text-fg-faint">
                       {Object.entries(snapshot.counts)
                         .filter(([key]) => CONFLUENCE_COUNT_LABELS[key])
                         .map(([key, value]) => `${CONFLUENCE_COUNT_LABELS[key]}: ${value}`)
@@ -82,7 +82,7 @@ export function SnapshotsPanel({
                   {snapshot.problems.length > 0 && (
                     <ul className="mt-1 space-y-0.5">
                       {snapshot.problems.slice(0, 3).map((problem, index) => (
-                        <li key={index} className="text-[12px] text-fg-secondary">
+                        <li key={index} className="text-xs text-fg-secondary">
                           {problem.message}
                           {problem.detail && (
                             <span className="text-fg-faint"> — {problem.detail}</span>
@@ -90,7 +90,7 @@ export function SnapshotsPanel({
                         </li>
                       ))}
                       {snapshot.problems.length > 3 && (
-                        <li className="text-[12px] text-fg-faint">
+                        <li className="text-xs text-fg-faint">
                           …and {snapshot.problems.length - 3} more
                         </li>
                       )}

@@ -135,9 +135,9 @@ function TypeRow({
         </span>
       )}
       <ValueChip label={issueType.name} color={issueType.color} icon={issueType.icon} size={18} />
-      <span className="flex-1 text-[13px] text-heading">{issueType.name}</span>
+      <span className="flex-1 text-row text-heading">{issueType.name}</span>
       {issueType.is_default ? (
-        <span className="inline-flex items-center gap-1 rounded border border-accent/40 px-1.5 py-px text-[11px] text-accent-text">
+        <span className="inline-flex items-center gap-1 rounded border border-accent/40 px-1.5 py-px text-meta text-accent-text">
           <Star size={10} fill="currentColor" aria-hidden />
           Default
         </span>
@@ -146,7 +146,7 @@ function TypeRow({
           <button
             type="button"
             onClick={() => save.mutate({ is_default: true })}
-            className="text-[11px] text-fg-muted hover:text-accent-text cursor-pointer"
+            className="text-meta text-fg-muted hover:text-accent-text cursor-pointer"
           >
             Make default
           </button>
@@ -162,7 +162,7 @@ function TypeRow({
           aria-expanded={templateOpen}
           title={hasTemplate ? "Edit description template" : "Add a description template"}
           className={
-            "flex items-center gap-1 rounded border px-1.5 py-px text-[11px] cursor-pointer " +
+            "flex items-center gap-1 rounded border px-1.5 py-px text-meta cursor-pointer " +
             (hasTemplate
               ? "border-accent/40 text-accent-text hover:border-accent-hover"
               : "border-strong text-fg-muted hover:border-emphasis hover:text-fg")
@@ -192,7 +192,7 @@ function TypeRow({
         </IconButton>
       )}
       {(save.isError || remove.isError) && (
-        <span className="text-[11px] text-red-400">
+        <span className="text-meta text-red-400">
           {errorMessage(save.error ?? remove.error)}
         </span>
       )}
@@ -236,7 +236,7 @@ function TypeRow({
               Remove template
             </button>
           )}
-          <span className="ml-auto text-[11px] text-fg-faint">
+          <span className="ml-auto text-meta text-fg-faint">
             Markdown — prefilled into new issues of this type.
           </span>
         </div>

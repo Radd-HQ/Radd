@@ -13,7 +13,7 @@ export function LazyRichEditor(props: ComponentProps<typeof RichEditor>) {
   return (
     <Suspense
       fallback={
-        <div className="min-h-24 animate-pulse rounded-md border border-strong bg-surface px-3 py-2 text-[13px] text-fg-faint">
+        <div className="min-h-24 animate-pulse rounded-md border border-strong bg-surface px-3 py-2 text-row text-fg-faint">
           Loading editor…
         </div>
       }

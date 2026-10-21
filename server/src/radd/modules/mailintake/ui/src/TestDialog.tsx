@@ -24,7 +24,7 @@ export function TestDialog({ sender, onClose }: { sender: MailSender; onClose: (
         {send.data?.ok && (
           <Callout kind={CalloutKind.success}>
             Sent. The relay used Message-ID{" "}
-            <code className="font-mono text-[11px]">{send.data.message_id}</code> — that is the
+            <code className="font-mono text-meta">{send.data.message_id}</code> — that is the
             value replies thread against.
           </Callout>
         )}

@@ -43,7 +43,7 @@ export function RequestPanelBody({ requestKey }: { requestKey: string }) {
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3">
       <h1 className="text-base font-semibold text-heading">{request.title}</h1>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-fg-secondary">
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-meta text-fg-secondary">
         <span className="rounded border border-strong px-1.5 py-px">{request.state || "—"}</span>
         <span className="flex items-center gap-1">
           <UserRound size={11} aria-hidden />
@@ -68,7 +68,7 @@ export function RequestPanelBody({ requestKey }: { requestKey: string }) {
       )}
 
       <section className="mt-4 flex flex-col gap-2" aria-label="Conversation">
-        <h2 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+        <h2 className="flex items-center gap-1.5 text-meta font-semibold uppercase tracking-wide text-fg-muted">
           <MessageSquare size={12} aria-hidden />
           Conversation
         </h2>
@@ -92,7 +92,7 @@ export function RequestPanelBody({ requestKey }: { requestKey: string }) {
           rows={3}
           placeholder="Add a reply…"
           aria-label="Reply to this request"
-          className="w-full rounded-md border border-subtle bg-base px-3 py-2 text-[13px] text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-focus"
+          className="w-full rounded-md border border-subtle bg-base px-3 py-2 text-row text-fg placeholder:text-fg-faint focus-visible:outline-2 focus-visible:outline-focus"
         />
         {send.isError && <ErrorText error={send.error} />}
         <div className="flex justify-end">
@@ -117,7 +117,7 @@ function CommentBubble({ comment, requestKey }: { comment: PortalRequestComment;
             "border-accent/40 bg-surface")
       }
     >
-      <div className="mb-1 flex items-baseline gap-2 text-[11px]">
+      <div className="mb-1 flex items-baseline gap-2 text-meta">
         <span className="font-medium text-fg">
           {comment.author_is_me ? "You" : comment.author}
         </span>

@@ -20,7 +20,7 @@ function PublicPagesLinkRow({ spaceSlug }: { spaceSlug: string }) {
         readOnly
         value={url}
         onFocus={(event) => event.target.select()}
-        className="h-7 min-w-0 flex-1 rounded-md border border-strong bg-surface px-2 font-mono text-[12px] text-fg"
+        className="h-7 min-w-0 flex-1 rounded-md border border-strong bg-surface px-2 font-mono text-xs text-fg"
       />
       <Button size="sm" variant="secondary" className="shrink-0" onClick={copy}>
         {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
@@ -94,7 +94,7 @@ export function SpaceForm({
       />
       {existing && (
         <div className="flex flex-col gap-2 rounded-lg border border-subtle bg-surface/40 p-3">
-          <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-fg">
+          <label className="flex w-fit cursor-pointer items-center gap-2 text-row text-fg">
             <input
               type="checkbox"
               checked={isPublic}

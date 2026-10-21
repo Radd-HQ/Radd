@@ -131,7 +131,7 @@ function SnapshotRow({
           >
             {snapshot.name}
           </button>
-          <div className="mt-0.5 font-mono text-[11px] text-fg-faint">{snapshot.jql}</div>
+          <div className="mt-0.5 font-mono text-meta text-fg-faint">{snapshot.jql}</div>
         </Td>
         <Td className="whitespace-nowrap text-xs text-fg-secondary">
           {running && total > 0 ? `${done} / ${total}` : snapshot.issue_count}

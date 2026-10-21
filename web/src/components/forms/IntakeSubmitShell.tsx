@@ -178,7 +178,7 @@ export function IntakeSubmitShell({
                   {created.key}
                 </Link>
               </p>
-              <p className="text-[13px] text-fg-secondary">{created.title}</p>
+              <p className="text-row text-fg-secondary">{created.title}</p>
               <Button variant="ghost" onClick={reset}>
                 {resetLabel}
               </Button>

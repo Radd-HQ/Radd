@@ -132,7 +132,7 @@ export function CardDesignerModal({
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="mb-2 text-[11px] text-fg-muted">
+          <p className="mb-2 text-meta text-fg-muted">
             {canEdit
               ? "Drag attributes onto the card; drag cells to move them. The top row sits beside the key; chips keep their natural width — the span handle mainly sizes title and labels."
               : "The card layout is part of this view — only view editors change it."}

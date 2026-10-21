@@ -35,7 +35,7 @@ export function FormSharing({ formId, projectId }: { formId: string; projectId: 
     onSuccess: refresh,
   });
   return <section aria-label="Portal sharing" className="flex min-w-0 flex-col gap-2 rounded-lg border border-subtle bg-surface/40 p-3">
-    <p className="text-[13px] text-fg">Portal sharing</p>
+    <p className="text-row text-fg">Portal sharing</p>
     <p className="text-xs text-fg-muted">People and teams listed here see this form on the Portal and can submit it without other permissions. Sharing changes save immediately.</p>
     <TextField type="search" label="Find portal shares" value={directory.filter} onChange={event => directory.setFilter(event.target.value)} />
     {directory.isPending ? <Spinner label="Loading portal shares…" /> : directory.isError ? <div>

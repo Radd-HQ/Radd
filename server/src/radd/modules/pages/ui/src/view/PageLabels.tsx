@@ -37,7 +37,7 @@ export function PageLabels({
         {labels.map((label) => (
           <span
             key={label}
-            className="rounded bg-elevated px-1.5 py-px text-[11px] text-fg-secondary"
+            className="rounded bg-elevated px-1.5 py-px text-meta text-fg-secondary"
           >
             {label}
           </span>
@@ -46,7 +46,7 @@ export function PageLabels({
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="rounded px-1 text-[11px] text-fg-faint hover:text-fg cursor-pointer"
+            className="rounded px-1 text-meta text-fg-faint hover:text-fg cursor-pointer"
           >
             {labels.length ? "Edit" : "Add labels"}
           </button>
@@ -71,7 +71,7 @@ export function PageLabels({
           save.mutate(draft);
           setEditing(false);
         }}
-        className="rounded px-1.5 text-[11px] text-accent-text hover:underline cursor-pointer"
+        className="rounded px-1.5 text-meta text-accent-text hover:underline cursor-pointer"
       >
         Done
       </button>

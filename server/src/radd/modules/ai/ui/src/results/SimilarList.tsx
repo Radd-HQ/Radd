@@ -23,7 +23,7 @@ export function SimilarCandidatesList({
           itemKey={candidate.item_key}
           title={candidate.title}
           badge={
-            <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-0.5 text-[11px] font-medium text-accent-text">
+            <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-0.5 text-meta font-medium text-accent-text">
               {Math.round(candidate.score * 100)}%
             </span>
           }

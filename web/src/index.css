@@ -56,6 +56,21 @@
   --animate-menu-in: menu-in 120ms ease-out;
   --animate-panel-in: panel-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
 
+  /* Type scale (RADD-1518): ONE ladder, in rem, on the root — never inside a
+     theme block, so a size is identical under light and dark. Each step is one
+     pixel up from the arbitrary size it replaced (Aurelien's 110–115% zoom);
+     a node test refuses any `text-[NNpx]` coming back. text-xs and text-sm
+     are Tailwind's presets moved the same step, so a preset label never sits a
+     pixel under a token one beside it. text-base and up are untouched. */
+  --text-nano: 0.625rem; /* 10px — was 9: avatar initials */
+  --text-micro: 0.6875rem; /* 11px — was 10: badges, chips, counters */
+  --text-meta: 0.75rem; /* 12px — was 11: keys, dates, meta lines */
+  --text-xs: 0.8125rem; /* 13px — was 12: labels (preset, moved) */
+  --text-xs--line-height: calc(1.125 / 0.8125);
+  --text-row: 0.875rem; /* 14px — was 13: row titles, panel copy */
+  --text-sm: 0.9375rem; /* 15px — was 14 (preset, moved) */
+  --text-sm--line-height: calc(1.375 / 0.9375);
+
   @keyframes fade-in {
     from {
       opacity: 0;

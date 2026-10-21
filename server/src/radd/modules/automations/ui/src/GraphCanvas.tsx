@@ -90,7 +90,7 @@ function GraphNode({ data, selected }: NodeProps) {
       <div className="flex items-center gap-1.5">
         <Icon size={13} className="shrink-0" style={{ color: tone }} aria-hidden />
         <span
-          className="truncate text-[11px] uppercase tracking-wide"
+          className="truncate text-meta uppercase tracking-wide"
           style={verdict ? { color: verdict.tone } : undefined}
         >
           <span className={verdict ? "" : "text-fg-muted"}>{verdict ? verdict.tag : node.kind}</span>
@@ -103,7 +103,7 @@ function GraphNode({ data, selected }: NodeProps) {
                 ? "A Block submission node is reachable: this can refuse a submission."
                 : "Nothing reachable blocks: this only ever advises."
             }
-            className="ml-auto shrink-0 rounded-[4px] border px-1 py-px text-[9px] uppercase tracking-wide"
+            className="ml-auto shrink-0 rounded-[4px] border px-1 py-px text-nano uppercase tracking-wide"
             style={{
               color: validation === "blocks" ? "var(--status-danger-ink)" : "var(--status-warning-ink)",
               borderColor: validation === "blocks" ? "var(--status-danger-ink)" : "var(--status-warning-ink)",
@@ -120,31 +120,31 @@ function GraphNode({ data, selected }: NodeProps) {
                 ? "Runs once for every issue that reaches it"
                 : "Runs once, however many issues reach it"
             }
-            className="ml-auto shrink-0 rounded-[4px] border border-subtle px-1 py-px text-[9px] uppercase tracking-wide text-fg-muted"
+            className="ml-auto shrink-0 rounded-[4px] border border-subtle px-1 py-px text-nano uppercase tracking-wide text-fg-muted"
           >
             {arity === "item" ? "per issue" : "once"}
           </span>
         )}
       </div>
       <div className="mt-0.5 flex items-baseline gap-1.5">
-        <span className="min-w-0 truncate text-[13px] font-medium text-heading" title={node.type}>{title}</span>
+        <span className="min-w-0 truncate text-row font-medium text-heading" title={node.type}>{title}</span>
         {/* A producer's NAME, because it is what every downstream token says
             (spec 120) — reading a graph means knowing which node `triage` is. */}
         {node.name && (
           <code
             data-node-name={node.name}
-            className="shrink-0 rounded-[4px] bg-elevated px-1 py-px text-[10px] text-accent-text"
+            className="shrink-0 rounded-[4px] bg-elevated px-1 py-px text-micro text-accent-text"
           >
             {node.name}
           </code>
         )}
       </div>
-      {subtitle && <div className="mt-0.5 truncate text-[11px] text-fg-secondary">{subtitle}</div>}
-      {!portsAvailable && <div className="mt-1 text-[11px] text-fg-muted">Ports not resolved</div>}
+      {subtitle && <div className="mt-0.5 truncate text-meta text-fg-secondary">{subtitle}</div>}
+      {!portsAvailable && <div className="mt-1 text-meta text-fg-muted">Ports not resolved</div>}
       {run && (
         <div
           data-node-run={run.ran ? "ran" : "skipped"}
-          className="mt-1 truncate text-[10px] text-fg-muted"
+          className="mt-1 truncate text-micro text-fg-muted"
           title={run.incoming_sample.join(", ")}
         >
           {run.ran ? `${run.incoming} in` : "did not run"}
@@ -187,8 +187,8 @@ function GraphNode({ data, selected }: NodeProps) {
                 data-port-label={port}
                 className={
                   (orientation === "vertical"
-                    ? "text-[9px] uppercase tracking-wide"
-                    : "translate-x-full pl-2.5 text-[9px] uppercase tracking-wide") +
+                    ? "text-nano uppercase tracking-wide"
+                    : "translate-x-full pl-2.5 text-nano uppercase tracking-wide") +
                   (outcome && !outcome.taken ? " line-through opacity-60" : "")
                 }
                 style={{ color: PORT_TONE[port] }}

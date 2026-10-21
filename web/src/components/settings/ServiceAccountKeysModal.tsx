@@ -68,7 +68,7 @@ function KeyEditor({ account, onClose, accountError }: { account: ServiceAccount
         {accountError}
         {minted && (
           <div className="rounded-lg border border-strong bg-elevated p-3">
-            <p className="text-[12px] font-medium text-heading">
+            <p className="text-xs font-medium text-heading">
               Copy this key now — it is never shown again.
             </p>
             <div className="mt-2">
@@ -78,7 +78,7 @@ function KeyEditor({ account, onClose, accountError }: { account: ServiceAccount
         )}
 
         <section>
-          <h3 className="text-[12px] font-medium text-heading">Existing keys</h3>
+          <h3 className="text-xs font-medium text-heading">Existing keys</h3>
           <TextField type="search" label="Find keys" value={keys.filter} onChange={event => keys.setFilter(event.target.value)} />
           <div aria-busy={keys.busy}>
           {keys.isPending ? (
@@ -86,7 +86,7 @@ function KeyEditor({ account, onClose, accountError }: { account: ServiceAccount
           ) : keys.isError ? (
             <div><QueryError label="keys" error={keys.error} /><Button variant="secondary" onClick={() => void keys.refetch()}>Retry keys</Button></div>
           ) : keys.rows.length === 0 ? (
-            <p className="mt-2 text-[12px] text-fg-muted">No matching keys.</p>
+            <p className="mt-2 text-xs text-fg-muted">No matching keys.</p>
           ) : (
             <ul aria-label="Service account keys" className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-subtle">
               {keys.rows.map((key) => (
@@ -94,12 +94,12 @@ function KeyEditor({ account, onClose, accountError }: { account: ServiceAccount
                   key={key.id}
                   className="flex flex-wrap items-center gap-2 border-b border-subtle/60 px-3 py-2 last:border-b-0"
                 >
-                  <code className="font-mono text-[12px] text-fg">{key.prefix_display}…</code>
-                  <span className="flex-1 truncate text-[12px] text-fg-secondary">{key.name}</span>
-                  <span className="max-w-full break-words text-[11px] text-fg-muted">
+                  <code className="font-mono text-xs text-fg">{key.prefix_display}…</code>
+                  <span className="flex-1 truncate text-xs text-fg-secondary">{key.name}</span>
+                  <span className="max-w-full break-words text-meta text-fg-muted">
                     {key.restricted ? `scoped: ${key.global_count} global, ${key.project_count} projects` : "full account authority"}
                   </span>
-                  {key.expires_at && <span className="text-[11px] text-fg-muted">{new Date(key.expires_at).getTime() < Date.now() ? "Expired" : `Expires ${formatDate(key.expires_at)}`}</span>}
+                  {key.expires_at && <span className="text-meta text-fg-muted">{new Date(key.expires_at).getTime() < Date.now() ? "Expired" : `Expires ${formatDate(key.expires_at)}`}</span>}
                   <button
                     type="button"
                     aria-label={`Revoke ${key.name}`}
@@ -118,8 +118,8 @@ function KeyEditor({ account, onClose, accountError }: { account: ServiceAccount
         </section>
 
         <section className="border-t border-subtle pt-4">
-          <h3 className="text-[12px] font-medium text-heading">Mint a key</h3>
-          <p className="mt-1 text-[12px] text-fg-muted">
+          <h3 className="text-xs font-medium text-heading">Mint a key</h3>
+          <p className="mt-1 text-xs text-fg-muted">
             Choose the permissions this key may use. Its effective access is also limited by the account's roles.
           </p>
           <div className="mt-3 space-y-3">
@@ -136,7 +136,7 @@ function KeyEditor({ account, onClose, accountError }: { account: ServiceAccount
               <KeyRound size={14} aria-hidden /> Mint key
             </Button>
             {mint.isError && (
-              <p role="alert" className="text-[12px] text-status-danger-ink">{errorMessage(mint.error)}</p>
+              <p role="alert" className="text-xs text-status-danger-ink">{errorMessage(mint.error)}</p>
             )}
           </div>
         </section>

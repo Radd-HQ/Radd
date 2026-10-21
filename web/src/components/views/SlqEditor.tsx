@@ -162,7 +162,7 @@ export function SlqEditor({
                 // and drags ~6px of descender space into its wrapper.
                 "block h-7 w-full resize-none overflow-hidden bg-transparent px-0 py-1 font-mono " +
                 "text-xs leading-5 text-fg outline-none placeholder:text-fg-faint"
-              : "block w-full resize-none rounded-md border bg-base/60 px-2.5 py-2 font-mono text-[13px] " +
+              : "block w-full resize-none rounded-md border bg-base/60 px-2.5 py-2 font-mono text-row " +
                 "leading-5 text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 " +
                 (invalid
                   ? "border-red-500/60 focus:outline-red-400"
@@ -266,7 +266,7 @@ function SlqErrorBlock({ query, message, position }: SlqErrorBlockProps) {
         {message}
       </p>
       {context && (
-        <pre className="overflow-x-auto rounded border border-red-500/30 bg-red-500/5 px-2 py-1 font-mono text-[11px] leading-4 text-fg">
+        <pre className="overflow-x-auto rounded border border-red-500/30 bg-red-500/5 px-2 py-1 font-mono text-meta leading-4 text-fg">
           {context.line}
           {"\n"}
           <span className="text-red-400">{context.caret}</span>

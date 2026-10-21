@@ -54,7 +54,7 @@ export function PresetPicker({
 
   return (
     <div className="min-w-0">
-      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+      <p className="mb-1.5 text-meta font-medium uppercase tracking-wide text-fg-muted">
         Presets
       </p>
       {rows.length > 0 && (

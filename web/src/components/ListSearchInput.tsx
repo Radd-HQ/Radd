@@ -46,7 +46,7 @@ export function ListSearchInput({
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           aria-label={ariaLabel ?? placeholder}
-          className="h-8 w-full rounded-md border border-subtle bg-surface pl-8 pr-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
+          className="h-8 w-full rounded-md border border-subtle bg-surface pl-8 pr-2.5 text-row text-heading placeholder:text-fg-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
         />
       </div>
       <span className="shrink-0 text-xs tabular-nums text-fg-muted" aria-live="polite">

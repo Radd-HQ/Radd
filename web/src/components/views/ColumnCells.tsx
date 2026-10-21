@@ -127,7 +127,7 @@ function ColumnHandle({
 }
 
 const HEADER_CELL_CLASS =
-  "relative flex items-center overflow-hidden text-[11px] font-medium uppercase tracking-wide text-fg-muted";
+  "relative flex items-center overflow-hidden text-meta font-medium uppercase tracking-wide text-fg-muted";
 
 /** The sticky header. Its wrapper paints an OPAQUE bg-base block spanning the
  * scroll container's full padded width, so rows scrolling past disappear

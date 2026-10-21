@@ -103,7 +103,7 @@ export function ParentSearchInput({
         // A leading project key narrows the cross-project search (RADD-1500) — the first thing
         // anyone types to reach another project's epics, so the placeholder says it.
         placeholder={placeholder ?? (sameProject ? `Search ${kindWord}s in this project…` : `Search ${kindWord}s across all projects — a project key narrows…`)}
-        className="h-8 w-full rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+        className="h-8 w-full rounded-md border border-strong bg-surface px-2.5 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
       />
       {open && candidates.length > 0 && (
         <ul
@@ -123,9 +123,9 @@ export function ParentSearchInput({
                   setTerm("");
                   setOpen(false);
                 }}
-                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[13px] hover:bg-elevated cursor-pointer"
+                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-row hover:bg-elevated cursor-pointer"
               >
-                <span className="shrink-0 font-mono text-[11px] text-fg-muted">{candidate.key}</span>
+                <span className="shrink-0 font-mono text-meta text-fg-muted">{candidate.key}</span>
                 <span className="truncate text-fg">{candidate.title}</span>
               </button>
             </li>
@@ -133,7 +133,7 @@ export function ParentSearchInput({
         </ul>
       )}
       {open && query !== "" && results.isSuccess && candidates.length === 0 && (
-        <p className="mt-1 text-[11px] text-fg-faint">No {kindWord} matches “{query}”.</p>
+        <p className="mt-1 text-meta text-fg-faint">No {kindWord} matches “{query}”.</p>
       )}
     </div>
   );
@@ -184,10 +184,10 @@ export function ParentPickerField({
       </label>
       {showChip ? (
         <div
-          className="flex h-8 items-center gap-2 rounded-md border border-strong bg-surface px-2.5 text-[13px]"
+          className="flex h-8 items-center gap-2 rounded-md border border-strong bg-surface px-2.5 text-row"
           data-parent-current={value.key}
         >
-          <span className="shrink-0 font-mono text-[11px] text-fg-muted">{value.key}</span>
+          <span className="shrink-0 font-mono text-meta text-fg-muted">{value.key}</span>
           <span className="min-w-0 flex-1 truncate text-fg" title={value.title}>
             {value.title}
           </span>
@@ -222,7 +222,7 @@ export function ParentPickerField({
           )}
         </div>
       )}
-      {hint && <p className="text-[11px] text-fg-muted">{hint}</p>}
+      {hint && <p className="text-meta text-fg-muted">{hint}</p>}
     </div>
   );
 }
@@ -241,11 +241,11 @@ export function HiddenParentField({ kind }: { kind: ItemKindValue }) {
   return (
     <div className="flex flex-col gap-1.5" data-parent-field={kind} data-parent-hidden>
       <span className="text-xs font-medium text-fg-secondary">{parentLabel(kind)}</span>
-      <div className="flex h-8 items-center gap-2 rounded-md border border-subtle bg-surface px-2.5 text-[13px] text-fg-muted">
+      <div className="flex h-8 items-center gap-2 rounded-md border border-subtle bg-surface px-2.5 text-row text-fg-muted">
         <EyeOff size={13} aria-hidden />
         <span className="min-w-0 flex-1 truncate">{hiddenParentText(kind)}</span>
       </div>
-      <p className="text-[11px] text-fg-muted">Someone with access to that project can change it.</p>
+      <p className="text-meta text-fg-muted">Someone with access to that project can change it.</p>
     </div>
   );
 }

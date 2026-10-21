@@ -33,7 +33,7 @@ export function ScopedAccessPanel({ scopeId, scopeName, kind, canGrant, canRevok
   });
   return <section aria-label={kind === "space" ? "Space access" : "Project access"} className="mt-2 rounded-md border border-subtle bg-surface/40 p-3">
     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-      <h5 className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">Access</h5>
+      <h5 className="text-meta font-medium uppercase tracking-wide text-fg-faint">Access</h5>
       {canGrant && <Button variant="ghost" size="sm" onClick={() => setGranting(true)}><Plus size={12} aria-hidden />Grant role</Button>}
     </div>
     <ListSearchInput value={grants.filter} onChange={grants.setFilter} placeholder="Find grants by name…"
@@ -45,10 +45,10 @@ export function ScopedAccessPanel({ scopeId, scopeName, kind, canGrant, canRevok
         : <ul className="flex flex-col gap-2">{grants.rows.map(grant => {
           const Icon = grant.team_id ? Users : grant.group_id ? UsersRound : UserIcon;
           const kind = grant.team_id ? "Team" : grant.group_id ? "Group" : "Person";
-          return <li key={grant.id} data-grant-id={grant.id} className="flex min-w-0 flex-wrap items-center gap-2 text-[13px]">
+          return <li key={grant.id} data-grant-id={grant.id} className="flex min-w-0 flex-wrap items-center gap-2 text-row">
             <ShieldCheck size={12} className="shrink-0 text-fg-faint" aria-hidden />
             <span className="min-w-0 break-words text-fg">{grant.role_name ?? "Unavailable role"}</span>
-            <span className="inline-flex min-w-0 items-center gap-1 rounded bg-elevated px-1.5 py-px text-[11px] text-fg-secondary">
+            <span className="inline-flex min-w-0 items-center gap-1 rounded bg-elevated px-1.5 py-px text-meta text-fg-secondary">
               <Icon size={10} className="shrink-0" aria-hidden /><span className="min-w-0 break-words">{kind}: {grant.subject_name ?? "Unavailable name"}</span>
             </span>
             {grant.subject_active === false && <span className="text-xs text-fg-muted">Inactive account</span>}
@@ -59,7 +59,7 @@ export function ScopedAccessPanel({ scopeId, scopeName, kind, canGrant, canRevok
         })}</ul>}
     </div>
     <DirectoryPager {...grants} onPage={grants.setPage} label={`${kind} grants`} />
-    <p className="mt-2 flex items-start gap-1 text-[11px] text-fg-faint"><Globe size={10} className="mt-0.5 shrink-0" aria-hidden />This list shows direct grants only. Instance-wide roles, team membership and nested directory groups can also provide access. Use the person’s access inspector to review those sources.</p>
+    <p className="mt-2 flex items-start gap-1 text-meta text-fg-faint"><Globe size={10} className="mt-0.5 shrink-0" aria-hidden />This list shows direct grants only. Instance-wide roles, team membership and nested directory groups can also provide access. Use the person’s access inspector to review those sources.</p>
     {revoke.isError && <div role="alert"><ErrorText error={revoke.error} /></div>}
     {granting && <GrantScopedRoleDialog scopeId={scopeId} scopeName={scopeName} kind={kind} onClose={() => setGranting(false)} onGranted={invalidate} />}
   </section>;

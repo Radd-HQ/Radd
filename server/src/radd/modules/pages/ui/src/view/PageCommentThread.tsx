@@ -75,18 +75,18 @@ export function PageCommentThread({
       {onNavigate ? <button type="button" onFocus={onFocus} onClick={onNavigate} disabled={orphaned !== null}
         aria-label={`Go to passage: ${row.anchor?.quote}`}
         title={orphaned ? "This passage was edited, removed, or is ambiguous." : "Go to this passage"}
-        className="mb-1 flex w-full items-start gap-1 text-left text-[11px] italic text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-default">
+        className="mb-1 flex w-full items-start gap-1 text-left text-meta italic text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-default">
         <span className="min-w-0 break-words">“{row.anchor?.quote}”</span>
-      </button> : <p className="mb-1 break-words text-[11px] italic text-fg-muted">“{row.anchor?.quote}”</p>}
+      </button> : <p className="mb-1 break-words text-meta italic text-fg-muted">“{row.anchor?.quote}”</p>}
       {orphaned && (
         // RADD-1276: said in words, not an icon and a tooltip — a rail full
         // of these after a rewrite has to read as what it is.
-        <p data-orphan-label className="mb-1 flex items-center gap-1 text-[11px] font-medium text-fg-secondary">
+        <p data-orphan-label className="mb-1 flex items-center gap-1 text-meta font-medium text-fg-secondary">
           <Unlink size={10} aria-hidden className="shrink-0" />
           {ORPHAN_LABEL[orphaned]}
         </p>
       )}
-      <p className="flex items-baseline gap-1 text-[12px]">
+      <p className="flex items-baseline gap-1 text-xs">
         <span className="font-medium text-heading">{row.author?.name ?? "Unknown author"}</span>{" "}
         <span className="text-fg-faint" title={row.created_at}>
           {relativeTime(row.created_at)}
@@ -98,7 +98,7 @@ export function PageCommentThread({
       </div>
       {preview ? (
         replyCount > 0 && (
-          <p className="mt-1 text-[11px] text-fg-muted" data-reply-count>
+          <p className="mt-1 text-meta text-fg-muted" data-reply-count>
             {replyCount} {replyCount === 1 ? "reply" : "replies"}
           </p>
         )

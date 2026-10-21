@@ -81,27 +81,27 @@ export function ChildrenSection({
           {isChecklist ? "Subtasks" : "Epic progress"}
         </h3>
         {total > 0 && (
-          <span className="text-[11px] tabular-nums text-fg-muted">
+          <span className="text-meta tabular-nums text-fg-muted">
             {done}/{total} done
           </span>
         )}
         {inProgress > 0 && (
-          <span className="text-[11px] tabular-nums text-accent-text">
+          <span className="text-meta tabular-nums text-accent-text">
             {inProgress} in progress
           </span>
         )}
         {elsewhere.count > 0 && (
-          <span className="text-[11px] tabular-nums text-fg-muted" data-foreign-children={elsewhere.count}>
+          <span className="text-meta tabular-nums text-fg-muted" data-foreign-children={elsewhere.count}>
             {elsewhere.count} in {elsewhere.keys.join(", ")}
           </span>
         )}
         {withheld > 0 && (
-          <span className="text-[11px] tabular-nums text-fg-muted" title="Children in projects you cannot see" data-withheld={withheld}>
+          <span className="text-meta tabular-nums text-fg-muted" title="Children in projects you cannot see" data-withheld={withheld}>
             {withheld} you cannot see
           </span>
         )}
         {showPoints && (rollup?.points_total ?? 0) > 0 && (
-          <span className="text-[11px] tabular-nums text-fg-muted">
+          <span className="text-meta tabular-nums text-fg-muted">
             {formatPoints(rollup!.points_done)} pts of {formatPoints(rollup!.points_total)}
           </span>
         )}
@@ -142,7 +142,7 @@ export function ChildrenSection({
           ) : children.isError && !children.data ? (
             <ErrorText error={children.error} />
           ) : childRows.length === 0 ? (
-            <p className="text-[13px] text-fg-faint">
+            <p className="text-row text-fg-faint">
               {isChecklist ? "No subtasks yet." : "No child issues yet."}
             </p>
           ) : (
@@ -251,16 +251,16 @@ function ChildRow({
         to={RoutePath.issue}
         params={{ itemKey: child.key }}
         onClick={(event) => void openRef(child.key, event)}
-        className="flex min-w-0 flex-1 items-center gap-2 text-[13px] hover:underline"
+        className="flex min-w-0 flex-1 items-center gap-2 text-row hover:underline"
       >
-        <span className="shrink-0 font-mono text-[11px] text-fg-faint">{child.key}</span>
+        <span className="shrink-0 font-mono text-meta text-fg-faint">{child.key}</span>
         <span className={`truncate ${isDone ? "text-fg-muted line-through" : "text-fg"}`}>
           {child.title}
         </span>
       </Link>
       {!checklist && (
         <span
-          className={`shrink-0 rounded border px-1.5 py-px text-[11px] ${
+          className={`shrink-0 rounded border px-1.5 py-px text-meta ${
             CATEGORY_META[child.state.category].pillClassName
           }`}
         >
@@ -314,7 +314,7 @@ function QuickAdd({
         onChange={(event) => setTitle(event.target.value)}
         placeholder={childKind === ItemKind.subtask ? "Add a subtask…" : "Add a child issue…"}
         aria-label={childKind === ItemKind.subtask ? "Add a subtask" : "Add a child issue"}
-        className="h-7 flex-1 rounded-md border border-subtle bg-base px-2 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+        className="h-7 flex-1 rounded-md border border-subtle bg-base px-2 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
       />
       {/* `errorMessage` speaks spec-119 findings, so a child refused by a
           required check reads as the check's own sentence rather than the bare
@@ -323,7 +323,7 @@ function QuickAdd({
           one input and Enter is the whole feature, and the enforcement path is
           what makes a required rule apply to it at all.) */}
       {create.isError && (
-        <span className="text-[11px] text-status-danger-ink">{errorMessage(create.error)}</span>
+        <span className="text-meta text-status-danger-ink">{errorMessage(create.error)}</span>
       )}
     </form>
   );

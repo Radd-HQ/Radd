@@ -16,7 +16,7 @@ function UnavailableCard({ title }: { title?: string | null }) {
   return (
     <div className="rounded-xl border border-dashed border-subtle px-4 py-6 text-center text-xs text-fg-faint">
       {title ? `${title} — unavailable` : "Unavailable"}
-      <span className="mt-0.5 block text-[11px] text-fg-faint">You may not have access to this widget’s data.</span>
+      <span className="mt-0.5 block text-meta text-fg-faint">You may not have access to this widget’s data.</span>
     </div>
   );
 }
@@ -36,7 +36,7 @@ export function SlqCountCard({ widget, filterQuery }: WidgetProps) {
     <div className="px-1 py-1">
       {label && <p className="truncate text-xs text-fg-muted">{label}</p>}
       <p className="mt-1 text-3xl font-semibold tabular-nums text-heading">{query.data ? query.data.total : "…"}</p>
-      {q && <p className="mt-1 truncate font-mono text-[10px] text-fg-faint" title={q}>{q}</p>}
+      {q && <p className="mt-1 truncate font-mono text-micro text-fg-faint" title={q}>{q}</p>}
     </div>
   );
 }
@@ -64,9 +64,9 @@ function SlqListRow({ item }: { item: Item }) {
         <div role="button" tabIndex={0} onClick={open} onKeyDown={(event) => { if (event.key === "Enter") open(); }}
           className="flex w-full cursor-pointer items-center gap-2 border-b border-subtle/60 px-4 py-1.5 text-left last:border-b-0 hover:bg-elevated/50">
           <ItemKeyLink itemKey={item.key}
-            className="shrink-0 rounded bg-elevated px-1.5 font-mono text-[11px] text-fg-secondary hover:text-accent-text hover:underline" />
-          <span className="min-w-0 flex-1 truncate text-[13px] text-fg">{item.title}</span>
-          <span className="shrink-0 rounded bg-elevated/80 px-1.5 py-px text-[10px] text-fg-secondary">{item.state.name}</span>
+            className="shrink-0 rounded bg-elevated px-1.5 font-mono text-meta text-fg-secondary hover:text-accent-text hover:underline" />
+          <span className="min-w-0 flex-1 truncate text-row text-fg">{item.title}</span>
+          <span className="shrink-0 rounded bg-elevated/80 px-1.5 py-px text-micro text-fg-secondary">{item.state.name}</span>
         </div>
       )}</ItemPeek>
     </li>
@@ -89,9 +89,9 @@ export function ViewCountCard({ widget, filterQuery }: WidgetProps) {
   const count = counts.data?.[viewId];
   const body = (
     <>
-      <p className="truncate text-[11px] uppercase tracking-wide text-fg-muted">{widget.title || view?.name || "View"}</p>
+      <p className="truncate text-meta uppercase tracking-wide text-fg-muted">{widget.title || view?.name || "View"}</p>
       <p className="mt-1 text-3xl font-semibold tabular-nums text-heading">{count !== undefined ? count : "…"}</p>
-      {view && <p className="mt-1 truncate text-[10px] text-fg-faint">View · {view.name}</p>}
+      {view && <p className="mt-1 truncate text-micro text-fg-faint">View · {view.name}</p>}
     </>
   );
   const cardClasses = "block rounded-lg border border-subtle bg-surface/40 px-4 py-4 hover:border-strong";

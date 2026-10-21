@@ -38,7 +38,7 @@ export function SignInSettingsPage() {
               only — the setting's own description says so, and turning it on
               is refused while you are not enrolled yourself. */}
           <section data-mfa-policy>
-            <h2 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+            <h2 className="mb-2 text-meta font-medium uppercase tracking-wide text-fg-muted">
               Two-factor authentication
             </h2>
             <ScopedSettingsEditor scope={SettingScope.instance} section="signin.mfa" />

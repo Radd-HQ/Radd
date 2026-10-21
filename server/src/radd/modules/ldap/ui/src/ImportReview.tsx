@@ -90,7 +90,7 @@ function ConflictRow({ candidate, choice, onChoose }: {
   // Callout tokens, not the Callout component — this row is an <li>, and a div would break the list.
   return (
     <li className="rounded-md border border-callout-warning-border/60 bg-callout-warning-fill p-2.5">
-      <p className="text-[13px] text-heading">
+      <p className="text-row text-heading">
         {candidate.name} <span className="text-xs text-fg-muted">{candidate.email} · {candidate.username}</span>
       </p>
       <ul className="mt-1.5 flex flex-col gap-1">
@@ -101,7 +101,7 @@ function ConflictRow({ candidate, choice, onChoose }: {
             <Chip>{MATCH_REASON[match.kind]}</Chip>
             {!match.active && <Chip>deactivated</Chip>}
             {lookAlikes.length > 1 && match.kind !== ImportMatchKind.email && (
-              <label className="flex items-center gap-1 text-[11px] text-fg-muted">
+              <label className="flex items-center gap-1 text-meta text-fg-muted">
                 <input type="radio" name={`target-${candidate.email}`} checked={targetId === match.user_id}
                   onChange={() => pick(resolution, match.user_id)} className="accent-accent" />
                 this one
@@ -119,7 +119,7 @@ function ConflictRow({ candidate, choice, onChoose }: {
           </label>
         ))}
       </div>
-      <p className="mt-1.5 flex items-center gap-1 text-[11px] text-fg-muted">
+      <p className="mt-1.5 flex items-center gap-1 text-meta text-fg-muted">
         <ArrowRight size={11} aria-hidden />
         {describe(resolution, candidate, targetId)}
       </p>

@@ -85,13 +85,13 @@ export function TeamStewardship({
 
   return (
     <section aria-label={`${team.name} ownership`} className="mb-4 rounded-md border border-subtle p-3">
-      {canAdminister && <><h4 className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+      {canAdminister && <><h4 className="mb-2 flex items-center gap-1.5 text-meta font-medium uppercase tracking-wide text-fg-faint">
         <UserCog size={12} aria-hidden />
         Who runs this team
       </h4>
 
       <div className="flex flex-wrap items-end gap-3">
-        <p className="flex items-center gap-1.5 pb-1.5 text-[13px]">
+        <p className="flex items-center gap-1.5 pb-1.5 text-row">
           <Crown size={12} className="text-amber-400/80" aria-hidden />
           {team.owner_id ? (
             <span className="text-fg">{stewards.data?.owner?.name ?? (stewards.isPending ? "Loading owner…" : "Owner unavailable")}</span>
@@ -108,7 +108,7 @@ export function TeamStewardship({
         </div>
       </div>
 
-      <p className="mt-3 mb-1 text-[11px] uppercase tracking-wide text-fg-faint">Managers</p>
+      <p className="mt-3 mb-1 text-meta uppercase tracking-wide text-fg-faint">Managers</p>
       {stewards.isPending ? <p className="text-xs text-fg-muted">Loading managers…</p>
         : stewards.isError ? <div className="space-y-2"><ErrorText error={stewards.error} />
           <Button variant="secondary" onClick={() => void stewards.refetch()}>Retry managers</Button></div>
@@ -128,7 +128,7 @@ export function TeamStewardship({
           onChange={person => { if (person) addManager.mutate(person); }} />
         {total >= 50 && <p className="mt-1 text-xs text-fg-muted">Up to 50 managers can be appointed. Remove a manager before adding another.</p>}
         </>}
-      <p className="mt-1 text-[11px] text-fg-muted">
+      <p className="mt-1 text-meta text-fg-muted">
         Managers needn't be members — a lead can run a team they're not on.
       </p>
       {addManager.isError && <ErrorText className="mt-1" error={addManager.error} />}

@@ -24,7 +24,7 @@ export function SourcesPanel() {
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-heading">Incoming</h3>
-          <p className="text-[11px] text-fg-muted">
+          <p className="text-meta text-fg-muted">
             Mailboxes Radd polls, and push endpoints it accepts.
           </p>
         </div>
@@ -52,11 +52,11 @@ export function SourcesPanel() {
           {rows.map((source) => (
             <li key={source.id} data-mail-source={source.id} className="rounded-lg border border-subtle bg-surface px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[13px] text-heading">{source.name}</span>
+                <span className="text-row text-heading">{source.name}</span>
                 <Chip>{kindLabel(kinds.data?.sources, source.kind)}</Chip>
                 {!source.enabled && <Chip tone="muted">disabled</Chip>}
                 {source.address && (
-                  <span className="font-mono text-[11px] text-fg-secondary">{source.address}</span>
+                  <span className="font-mono text-meta text-fg-secondary">{source.address}</span>
                 )}
                 <span className="ml-auto flex items-center gap-1">
                   <Button size="sm" variant="ghost" onClick={() => setRulesFor(source)}>
@@ -67,7 +67,7 @@ export function SourcesPanel() {
                   </Button>
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-fg-faint">
+              <p className="mt-1 text-meta text-fg-faint">
                 {source.kind === MailSourceKind.webhook
                   ? "HTTPS push — signed with this source's secret"
                   : `${connectionLine(

@@ -73,7 +73,7 @@ export function CannedSettingsPage() {
                       className="border-b border-subtle/60 px-4 py-2.5 last:border-b-0"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="flex-1 text-[13px] font-medium text-heading">
+                        <span className="flex-1 text-row font-medium text-heading">
                           {response.title}
                         </span>
                         {canManage && (
@@ -168,7 +168,7 @@ function ResponseForm({
           onChange={(event) => setBody(event.target.value)}
           rows={3}
           placeholder="Please restart the render node and re-submit…"
-          className="rounded-md border border-strong bg-surface px-2.5 py-2 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+          className="rounded-md border border-strong bg-surface px-2.5 py-2 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
         />
       </div>
       <div className="flex items-center gap-2">

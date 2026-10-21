@@ -156,10 +156,10 @@ function AttachmentCard({
         ) : (
           <span className="flex size-24 flex-col items-center justify-center gap-1.5 px-2 text-fg-muted">
             <FileText size={20} aria-hidden />
-            <span className="w-full truncate text-center text-[10px]">
+            <span className="w-full truncate text-center text-micro">
               {attachment.filename}
             </span>
-            <span className="text-[9px] text-fg-faint">
+            <span className="text-nano text-fg-faint">
               {formatSize(attachment.size_bytes)}
               {attachment.storage_host_name ? ` · ${attachment.storage_host_name}` : ""}
             </span>

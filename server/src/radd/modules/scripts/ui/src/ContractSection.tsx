@@ -14,7 +14,7 @@ export function ContractSection() {
         Python lives on the node, and the automation&rsquo;s versions are its history. A new node arrives
         with this contract filled in:
       </p>
-      <pre className="overflow-auto rounded-[8px] border border-subtle bg-base p-3 text-[12px] leading-5 text-fg">{CONTRACT}</pre>
+      <pre className="overflow-auto rounded-[8px] border border-subtle bg-base p-3 text-xs leading-5 text-fg">{CONTRACT}</pre>
       <p className="text-xs text-fg-secondary">
         A <em>Run a script</em> node publishes the dict <code className="text-fg">main</code> returns: each key
         you declare as an output becomes a <code className="text-fg">{"{{name.key}}"}</code> token downstream.

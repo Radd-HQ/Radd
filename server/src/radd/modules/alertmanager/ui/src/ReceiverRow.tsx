@@ -37,9 +37,9 @@ export function ReceiverRow({ receiver, revealedToken, onPatch, onNewToken, onDe
     <li className="rounded-lg border border-subtle bg-surface/40" data-receiver={receiver.name}>
       <div className="flex flex-wrap items-center gap-3 px-3 py-2.5">
         <BellRing size={14} className="text-fg-muted" aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-heading">{receiver.name}</span>
-        {!receiver.project_id && <span className="rounded bg-elevated px-1.5 py-0.5 text-[10px] text-status-warning-ink">no project</span>}
-        {!receiver.active && <span className="rounded bg-elevated px-1.5 py-0.5 text-[10px] text-fg-muted">inactive</span>}
+        <span className="min-w-0 flex-1 truncate text-row font-medium text-heading">{receiver.name}</span>
+        {!receiver.project_id && <span className="rounded bg-elevated px-1.5 py-0.5 text-micro text-status-warning-ink">no project</span>}
+        {!receiver.active && <span className="rounded bg-elevated px-1.5 py-0.5 text-micro text-fg-muted">inactive</span>}
         <Button size="sm" variant="secondary" onClick={() => onPatch({ active: !receiver.active })}>
           {receiver.active ? "Disable" : "Enable"}
         </Button>
@@ -79,7 +79,7 @@ export function ReceiverRow({ receiver, revealedToken, onPatch, onNewToken, onDe
               <Copy size={13} aria-hidden /> Copy
             </Button>
           </div>
-          <p className="text-[11px] text-fg-muted">Shown once — the token is not stored anywhere you can read it back.</p>
+          <p className="text-meta text-fg-muted">Shown once — the token is not stored anywhere you can read it back.</p>
         </div>
       )}
     </li>

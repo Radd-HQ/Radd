@@ -12,7 +12,7 @@ export function CycleStatusPill({ status }: { status: CycleStatusValue }) {
   const meta = CYCLE_STATUS_META[status];
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-px text-[11px] leading-4 ${meta.pillClassName}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-px text-meta leading-4 ${meta.pillClassName}`}
     >
       <span className={`size-1.5 rounded-full ${meta.dotClassName}`} aria-hidden />
       {meta.label}
@@ -22,7 +22,7 @@ export function CycleStatusPill({ status }: { status: CycleStatusValue }) {
 
 export function CycleDatesBadge({ start, end }: { start: string | null; end: string | null }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-fg-muted">
+    <span className="inline-flex shrink-0 items-center gap-1 text-meta text-fg-muted">
       <CalendarRange size={11} aria-hidden />
       {start && end ? `${shortDate(start)} – ${shortDate(end)}` : "Not scheduled"}
     </span>
@@ -37,7 +37,7 @@ function DoneCountPill({ done, total }: { done: number; total: number }) {
   return (
     <span
       className={
-        "inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[11px] leading-4 " +
+        "inline-flex shrink-0 items-center rounded-full border px-2 py-px text-meta leading-4 " +
         (complete
           ? "border-status-success/30 bg-status-success/10 text-status-success-ink"
           : "border-strong bg-elevated/60 text-fg")
@@ -59,7 +59,7 @@ function TimeChip({
 }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-px text-[11px] leading-4 ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-px text-meta leading-4 ${className}`}
     >
       <span className="opacity-70">{label}</span>
       <span className="font-medium">{value}</span>

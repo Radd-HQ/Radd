@@ -57,7 +57,7 @@ export function AiSelectionAction({ editor, selection }: EditorSelectionActionPr
       // Keeps the highlight while opening; nothing depends on it — the range travels in `anchor`.
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => setAnchor(selection)}
-      className="inline-flex h-7 items-center gap-1 rounded-md border border-strong bg-surface px-2 text-[11px] text-fg-secondary shadow-pop transition-colors hover:text-heading focus-visible:outline-2 focus-visible:outline-focus cursor-pointer animate-fade-in"
+      className="inline-flex h-7 items-center gap-1 rounded-md border border-strong bg-surface px-2 text-meta text-fg-secondary shadow-pop transition-colors hover:text-heading focus-visible:outline-2 focus-visible:outline-focus cursor-pointer animate-fade-in"
     >
       <Sparkles size={13} className="text-accent-text" />
       Ask AI

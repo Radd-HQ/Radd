@@ -57,7 +57,7 @@ export function RepoRow({ provider, changeNoun, connection, repo, categories }: 
       {confirmDialog}
       <div className="flex min-w-0 items-center gap-2">
         <GitBranch size={13} className="shrink-0 text-fg-muted" aria-hidden />
-        <span data-repo-name={repo.id} className="min-w-0 flex-1 truncate font-mono text-[12px] text-fg">{repo.full_name}</span>
+        <span data-repo-name={repo.id} className="min-w-0 flex-1 truncate font-mono text-xs text-fg">{repo.full_name}</span>
         <Button size="sm" variant="ghost" onClick={() => backfill.mutate()}
           disabled={backfill.isPending || !connection.has_token || !connection.active || !repo.enabled}
           title={connection.has_token ? "Link branches, requests and commits that predate the webhook" : "Backfill reads the host's API — this connection has no token"}>
@@ -93,7 +93,7 @@ export function RepoRow({ provider, changeNoun, connection, repo, categories }: 
         <Switch label="Publish a version on release and ship what is waiting"
           checked={repo.publish_on_release} disabled={!repo.project_id && !repo.publish_on_release}
           onChange={(next) => patch.mutate({ publish_on_release: next })} data-publish-on-release={repo.full_name} />
-        {!repo.project_id && <span className="text-[11px] text-fg-muted">Publishing needs a default project.</span>}
+        {!repo.project_id && <span className="text-meta text-fg-muted">Publishing needs a default project.</span>}
       </div>
       {error && <p role="alert" className="pl-5 text-xs text-status-danger-ink">{errorMessage(error)}</p>}
       {report && (

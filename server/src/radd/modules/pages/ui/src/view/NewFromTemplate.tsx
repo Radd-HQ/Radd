@@ -39,7 +39,7 @@ export function NewFromTemplate({ params }: { params: Record<string, unknown> })
   if (!template) {
     return (
       <ExtensionCard label="New page from template">
-        <p className="text-[13px] text-fg-secondary">
+        <p className="text-row text-fg-secondary">
           Set <code className="font-mono">template</code> to the name of a template.
         </p>
       </ExtensionCard>
@@ -50,7 +50,7 @@ export function NewFromTemplate({ params }: { params: Record<string, unknown> })
     // Previews and non-page surfaces have nothing to parent a new page to.
     return (
       <ExtensionCard label="New page from template">
-        <p className="text-[13px] text-fg-faint">Available on a page.</p>
+        <p className="text-row text-fg-faint">Available on a page.</p>
       </ExtensionCard>
     );
   }

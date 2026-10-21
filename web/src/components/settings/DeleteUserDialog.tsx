@@ -95,7 +95,7 @@ export function DeleteUserDialog({
           <>
             {moving.length > 0 && (
               <div className="rounded-md border border-subtle p-2.5">
-                <p className="mb-1 text-[11px] uppercase tracking-wide text-fg-faint">
+                <p className="mb-1 text-meta uppercase tracking-wide text-fg-faint">
                   Moves to the person you choose
                 </p>
                 <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-fg">

@@ -40,7 +40,7 @@ export function ReplyActions({ reply, onEdit }: { reply: Comment; onEdit: () => 
         <Trash2 size={11} aria-hidden />
       </IconButton>
       {remove.isError && (
-        <span role="alert" className="text-[11px] text-status-danger-ink">{errorMessage(remove.error)}</span>
+        <span role="alert" className="text-meta text-status-danger-ink">{errorMessage(remove.error)}</span>
       )}
       {confirmDialog}
     </span>

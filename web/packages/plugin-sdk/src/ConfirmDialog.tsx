@@ -40,7 +40,7 @@ export function ConfirmDialog({
 
   return (
     <Modal title={title} onClose={onCancel}>
-      <div className="text-[13px] text-fg-secondary">{message}</div>
+      <div className="text-row text-fg-secondary">{message}</div>
       <div ref={footerRef} className="mt-4 flex justify-end gap-2">
         {!hideCancel && (
           <Button variant="ghost" onClick={onCancel}>

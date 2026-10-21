@@ -56,11 +56,11 @@ export function PageReading({ page, bodyRef, canWrite, canComment, onEdit, onRen
           </div>
         ) : canWrite ? (
           <button type="button" onClick={() => onEdit(null)}
-            className="mt-3 rounded-md border border-transparent px-1.5 py-1 text-left text-[13px] text-fg-faint hover:border-subtle hover:text-fg-secondary cursor-pointer">
+            className="mt-3 rounded-md border border-transparent px-1.5 py-1 text-left text-row text-fg-faint hover:border-subtle hover:text-fg-secondary cursor-pointer">
             Write something…
           </button>
         ) : (
-          <p className="mt-3 px-1.5 text-[13px] text-fg-faint">This page is empty.</p>
+          <p className="mt-3 px-1.5 text-row text-fg-faint">This page is empty.</p>
         )}
       </div>
 

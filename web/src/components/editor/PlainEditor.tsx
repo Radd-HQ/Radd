@@ -279,7 +279,7 @@ export function PlainEditor({
         placeholder={placeholder}
         autoFocus={autoFocus}
         rows={Math.max(4, value.split("\n").length)}
-        className="w-full resize-y bg-transparent px-3 py-2 font-mono text-[13px] leading-relaxed text-fg placeholder:text-fg-faint outline-none"
+        className="w-full resize-y bg-transparent px-3 py-2 font-mono text-row leading-relaxed text-fg placeholder:text-fg-faint outline-none"
       />
     </div>
   );

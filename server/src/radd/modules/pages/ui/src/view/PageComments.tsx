@@ -61,7 +61,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
         <MessageSquare size={12} aria-hidden />
         Discussion
         {comments?.length ? (
-          <span className="rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
+          <span className="rounded bg-elevated px-1.5 py-px font-mono text-micro text-fg-secondary">
             {comments.length}
           </span>
         ) : null}
@@ -88,7 +88,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
                 ? " -mx-2 rounded-md border border-subtle bg-surface px-2 py-1.5" + threadRuleClass(comment) : "")}>
               <Avatar user={author ?? comment.author ?? { id: "", name: "Unknown author" }} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="flex items-baseline gap-2 text-[12px]">
+                <p className="flex items-baseline gap-2 text-xs">
                   <span className="font-medium text-heading">{comment.author?.name ?? "Unknown author"}</span>
                   <span className="text-fg-faint" title={comment.created_at}>
                     {relativeTime(comment.created_at)}
@@ -168,7 +168,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
         </div>
       ) : (
         // Disable up front rather than let the post 403 (the house rule).
-        <p className="mt-4 text-[13px] text-fg-faint">
+        <p className="mt-4 text-row text-fg-faint">
           You don't have permission to comment on pages.
         </p>
       )}

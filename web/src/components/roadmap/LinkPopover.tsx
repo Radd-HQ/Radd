@@ -70,7 +70,7 @@ export function LinkPopover({
       style={{ left: pos.left, top: pos.top, width: POPOVER_WIDTH }}
       className="fixed z-50 rounded-lg border border-strong bg-surface p-2 shadow-xl shadow-black/40"
     >
-      <p className="mb-1.5 px-0.5 font-mono text-[11px] text-fg-secondary">
+      <p className="mb-1.5 px-0.5 font-mono text-meta text-fg-secondary">
         {sourceKey} <span className="text-fg-faint">→</span> {targetKey}
       </p>
       <div className="flex gap-1">
@@ -83,7 +83,7 @@ export function LinkPopover({
               if (!creating && type === currentType) onClose();
               else onPick(type);
             }}
-            className={`flex-1 rounded-md border px-1.5 py-1 text-[11px] cursor-pointer ${
+            className={`flex-1 rounded-md border px-1.5 py-1 text-meta cursor-pointer ${
               type === highlighted
                 ? "border-accent/60 bg-accent/15 text-accent-text"
                 : "border-strong text-fg hover:border-emphasis hover:text-heading"
@@ -93,14 +93,14 @@ export function LinkPopover({
           </button>
         ))}
       </div>
-      <p className="mt-1.5 px-0.5 text-[10px] leading-snug text-fg-faint">
+      <p className="mt-1.5 px-0.5 text-micro leading-snug text-fg-faint">
         {creating ? "Enter = Blocks · Esc cancels" : "Pick a type to change the link"}
       </p>
       {!creating && onRemove && (
         <button
           type="button"
           onClick={onRemove}
-          className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-md border border-red-500/40 px-1.5 py-1 text-[11px] text-red-400 hover:border-red-500/70 hover:bg-red-500/10 cursor-pointer"
+          className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-md border border-red-500/40 px-1.5 py-1 text-meta text-red-400 hover:border-red-500/70 hover:bg-red-500/10 cursor-pointer"
         >
           <Trash2 size={12} aria-hidden />
           Remove link

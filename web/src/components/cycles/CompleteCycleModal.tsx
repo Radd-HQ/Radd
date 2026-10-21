@@ -75,7 +75,7 @@ export function CompleteCycleModal({ cycle, openCount, onClose }: Props) {
         }}
         className="flex flex-col gap-4"
       >
-        <p className="text-[13px] text-fg-secondary">
+        <p className="text-row text-fg-secondary">
           {openCount !== undefined
             ? `${openCount} open ${openCount === 1 ? "item" : "items"} (not done) will be moved.`
             : "Open issues (not done) will be moved."}{" "}
@@ -106,7 +106,7 @@ export function CompleteCycleModal({ cycle, openCount, onClose }: Props) {
 
         <DirectoryPager {...directory} onPage={directory.setPage} label="destination cycles" />
         {!toBacklog && targetCycle && (
-          <label className="flex items-center gap-2 text-[13px] text-fg">
+          <label className="flex items-center gap-2 text-row text-fg">
             <input
               type="checkbox"
               checked={startNext}
@@ -115,7 +115,7 @@ export function CompleteCycleModal({ cycle, openCount, onClose }: Props) {
             />
             Start {targetCycle.name} today
             {targetCycle.status === CycleStatus.draft && (
-              <span className="text-[11px] text-fg-muted">(it gets dates starting now)</span>
+              <span className="text-meta text-fg-muted">(it gets dates starting now)</span>
             )}
           </label>
         )}

@@ -52,7 +52,7 @@ export function ProjectIdentityCard({ project, canManage }: { project: Project; 
         Name and description
       </h2>
       <p className="mt-1 text-xs text-fg-secondary">
-        The key <span className="rounded bg-elevated px-1 py-0.5 font-mono text-[11px] text-fg">{project.key}</span>{" "}
+        The key <span className="rounded bg-elevated px-1 py-0.5 font-mono text-meta text-fg">{project.key}</span>{" "}
         cannot change — every issue key derives from it.
       </p>
       <form onSubmit={onSubmit} className="mt-3 flex flex-col gap-3">
@@ -76,7 +76,7 @@ export function ProjectIdentityCard({ project, canManage }: { project: Project; 
             maxLength={4000}
             disabled={disabled}
             placeholder="What this project is for, in a sentence or two."
-            className="rounded-md border border-subtle bg-surface px-2.5 py-2 text-[13px] text-heading placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:border-accent focus:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-70"
+            className="rounded-md border border-subtle bg-surface px-2.5 py-2 text-row text-heading placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:border-accent focus:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-70"
           />
           <p className="text-xs text-fg-muted">Shown under the name on the projects index and in this header.</p>
         </div>

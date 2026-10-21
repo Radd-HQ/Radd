@@ -86,10 +86,10 @@ function PortalSubmitForm({ form }: { form: PortalForm }) {
           <header className="flex flex-col gap-2 border-b border-subtle pb-4">
             <div className="flex items-center gap-2 text-accent-text">
               <ClipboardList size={18} aria-hidden />
-              <span className="rounded bg-elevated px-1 font-mono text-[11px] text-fg-secondary">
+              <span className="rounded bg-elevated px-1 font-mono text-meta text-fg-secondary">
                 {form.project.key}
               </span>
-              <span className="text-[11px] font-medium uppercase tracking-wide">
+              <span className="text-meta font-medium uppercase tracking-wide">
                 {form.project.name}
               </span>
             </div>

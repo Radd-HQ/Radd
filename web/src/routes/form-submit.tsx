@@ -71,7 +71,7 @@ function SubmitForm({ form, projectKey, projectId, registry }: SubmitFormProps) 
         <header className="flex flex-col gap-2 border-b border-subtle pb-4">
           <div className="flex items-center gap-2 text-accent-text">
             <ClipboardList size={18} aria-hidden />
-            <span className="text-[11px] font-medium uppercase tracking-wide">
+            <span className="text-meta font-medium uppercase tracking-wide">
               {projectKey} intake form
             </span>
           </div>

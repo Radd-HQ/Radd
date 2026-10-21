@@ -820,7 +820,7 @@ export function ViewPage({ synthetic }: { synthetic?: View } = {}) {
         {(view.query ?? "").trim() !== "" && (
           <span
             title={view.query}
-            className="inline-flex min-w-0 items-center gap-1 rounded border border-subtle bg-surface px-1.5 py-px text-[11px] text-fg-muted"
+            className="inline-flex min-w-0 items-center gap-1 rounded border border-subtle bg-surface px-1.5 py-px text-meta text-fg-muted"
           >
             <SearchCode size={11} aria-hidden className="shrink-0" />
             <code className="max-w-48 truncate font-mono">{view.query}</code>
@@ -829,7 +829,7 @@ export function ViewPage({ synthetic }: { synthetic?: View } = {}) {
 
         {/* SAVED chips — the view's shared quick filters plus the user's personal saved filters. */}
         {(view.quick_filters.length > 0 || savedFilters.filters.length > 0) && (
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
+          <span className="text-micro font-semibold uppercase tracking-wider text-fg-faint">
             Saved
           </span>
         )}

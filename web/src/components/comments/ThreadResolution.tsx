@@ -23,7 +23,7 @@ export function ThreadBadge({ comment }: { comment: ThreadRow }) {
       data-thread-state={resolved ? "resolved" : "unresolved"}
       title={resolved && comment.resolved_at ? `Resolved${who} ${relativeTime(comment.resolved_at)}` : undefined}
       className={
-        "inline-flex items-center gap-1 rounded border px-1.5 py-px text-[10px] font-medium " +
+        "inline-flex items-center gap-1 rounded border px-1.5 py-px text-micro font-medium " +
         (resolved
           ? "border-callout-success-border bg-callout-success-fill text-callout-success-ink"
           : "border-callout-info-border bg-callout-info-fill text-callout-info-ink")
@@ -63,7 +63,7 @@ export function ThreadFilter({ unresolvedOnly, onChange }: { unresolvedOnly: boo
       {([[false, "All comments"], [true, "Unresolved threads"]] as const).map(([value, label]) => (
         <button key={label} type="button" role="radio" aria-checked={unresolvedOnly === value}
           onClick={() => onChange(value)} data-comment-filter={value ? "unresolved" : "all"}
-          className={"rounded px-2 py-0.5 text-[11px] font-medium cursor-pointer transition-colors " +
+          className={"rounded px-2 py-0.5 text-meta font-medium cursor-pointer transition-colors " +
             "focus-visible:outline-2 focus-visible:outline-focus " +
             (unresolvedOnly === value ? "bg-overlay text-heading" : "text-fg-muted hover:text-fg")}>
           {label}

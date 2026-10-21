@@ -54,7 +54,7 @@ export function TokenReference({
         type="button"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
-        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] uppercase tracking-wide text-fg-muted hover:text-heading cursor-pointer"
+        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-meta uppercase tracking-wide text-fg-muted hover:text-heading cursor-pointer"
       >
         <Braces size={12} aria-hidden />
         Tokens you can use
@@ -63,13 +63,13 @@ export function TokenReference({
       {open && (
         <div className="flex flex-col gap-1.5 border-t border-subtle p-1.5">
           {!onInsert && (
-            <p data-token-reference-only className="px-1.5 text-[11px] text-fg-muted">
+            <p data-token-reference-only className="px-1.5 text-meta text-fg-muted">
               {REFERENCE_ONLY_NOTE}
             </p>
           )}
           {producers.length > 0 && (
             <div className="flex flex-col gap-0.5" data-token-variables>
-              <p className="px-1.5 text-[10px] uppercase tracking-wide text-fg-faint">
+              <p className="px-1.5 text-micro uppercase tracking-wide text-fg-faint">
                 From nodes above this one
               </p>
               {producers.map(({ node: producer, outputs }) => (
@@ -140,15 +140,15 @@ function TokenRow({
         <CornerDownRight size={10} className="shrink-0 text-fg-faint" aria-hidden />
       )}
       <code
-        className={`text-[11px] ${
+        className={`text-meta ${
           inert ? "text-fg-faint" : variable ? "text-accent-text-strong" : "text-accent-text"
         }`}
       >
         {token}
       </code>
-      <span className="min-w-0 truncate text-[11px] text-fg-secondary">{description}</span>
+      <span className="min-w-0 truncate text-meta text-fg-secondary">{description}</span>
       {inert && (
-        <span className="ml-auto shrink-0 text-[10px] uppercase text-fg-faint">
+        <span className="ml-auto shrink-0 text-micro uppercase text-fg-faint">
           — blank on this trigger
         </span>
       )}

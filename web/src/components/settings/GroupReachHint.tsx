@@ -13,7 +13,7 @@ export function GroupReachHint({ groupId }: { groupId: string }) {
   if (reach.data == null) return null;
   const n = reach.data.user_count;
   return (
-    <span className="text-[11px] text-amber-400">
+    <span className="text-meta text-amber-400">
       resolves to {n} {n === 1 ? "person" : "people"} (nesting included)
     </span>
   );

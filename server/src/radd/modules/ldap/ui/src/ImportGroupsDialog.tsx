@@ -52,7 +52,7 @@ export function ImportGroupsDialog({ onClose, preselected }: { onClose: () => vo
             </li>
           ))}
         </ul>
-        <label className="flex h-8 items-center gap-2 text-[13px] text-fg">
+        <label className="flex h-8 items-center gap-2 text-row text-fg">
           <input type="checkbox" checked={provisionMembers} onChange={(event) => setProvisionMembers(event.target.checked)}
             className="accent-accent" />
           Provision unknown members

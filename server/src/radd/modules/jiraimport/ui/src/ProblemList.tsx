@@ -102,7 +102,7 @@ function ProblemGroup({
             <>
               {/* Every affected subject, not a truncated sample — copyable, so it
                   can go straight into a JQL filter or a ticket. */}
-              <ul className="max-h-48 overflow-y-auto font-mono text-[11px] text-fg-secondary">
+              <ul className="max-h-48 overflow-y-auto font-mono text-meta text-fg-secondary">
                 {group.subjects.map((subject) => (
                   <li key={subject}>{subject}</li>
                 ))}
@@ -118,7 +118,7 @@ function ProblemGroup({
             </>
           )}
           {group.detail && (
-            <p className="mt-1.5 font-mono text-[11px] text-fg-faint">{group.detail}</p>
+            <p className="mt-1.5 font-mono text-meta text-fg-faint">{group.detail}</p>
           )}
         </div>
       )}

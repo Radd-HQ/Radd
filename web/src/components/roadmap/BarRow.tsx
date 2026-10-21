@@ -310,7 +310,7 @@ export function BarRow({
         <KindBadge kind={item.kind} size={13} />
         <ItemKeyLink itemKey={item.key} />
         <span
-          className={`min-w-0 flex-1 truncate text-[12px] ${
+          className={`min-w-0 flex-1 truncate text-xs ${
             isEpic ? "font-semibold text-heading" : "text-fg"
           }`}
           title={item.title}
@@ -324,7 +324,7 @@ export function BarRow({
           <span
             data-parent-chip={item.parent.key}
             title={`Part of ${item.parent.key} — ${item.parent.title}`}
-            className="flex shrink-0 items-center rounded border border-subtle px-1 text-[10px] leading-4 text-fg-muted"
+            className="flex shrink-0 items-center rounded border border-subtle px-1 text-micro leading-4 text-fg-muted"
           >
             <ItemKeyLink itemKey={item.parent.key} className="font-mono hover:text-accent-text hover:underline" />
           </span>
@@ -516,7 +516,7 @@ export function BarRow({
             translated children skip it — one chip per gesture, on the epic. */}
         {preview && domainStart && containerDelta === null && (
           <span
-            className="pointer-events-none absolute z-30 whitespace-nowrap rounded bg-elevated px-1.5 py-px text-[10px] font-medium text-fg shadow"
+            className="pointer-events-none absolute z-30 whitespace-nowrap rounded bg-elevated px-1.5 py-px text-micro font-medium text-fg shadow"
             style={{ left, top: -1 }}
           >
             {shortDate(isoFromDay(domainStart, span.startIndex))} →{" "}
@@ -554,7 +554,7 @@ export function BarRow({
             handle's hit box in edit mode. */}
         {dependsOn.length > 0 && (
           <span
-            className="absolute top-1/2 flex -translate-y-1/2 items-center gap-0.5 whitespace-nowrap rounded bg-red-500/15 px-1 py-px text-[10px] font-medium text-red-300"
+            className="absolute top-1/2 flex -translate-y-1/2 items-center gap-0.5 whitespace-nowrap rounded bg-red-500/15 px-1 py-px text-micro font-medium text-red-300"
             title={`Depends on ${dependsOn.map((link) => link.item.key).join(", ")}`}
             style={{
               left:

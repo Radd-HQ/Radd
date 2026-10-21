@@ -73,7 +73,7 @@ export function WipLimitMenu({
       >
             <form onSubmit={submit} className="flex flex-col gap-2">
               <p className="text-xs text-fg-muted">Warn when this column reaches its intended workload. This does not hide issues or block moves.</p>
-              <label className="text-[11px] font-medium text-fg-secondary">
+              <label className="text-meta font-medium text-fg-secondary">
                 WIP limit for {columnLabel}
               </label>
               <input

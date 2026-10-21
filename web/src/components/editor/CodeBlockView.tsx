@@ -114,7 +114,7 @@ export function CodeBlockView() {
             options={options}
           />
         ) : (
-          <span className="px-1 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+          <span className="px-1 text-meta font-medium uppercase tracking-wide text-fg-muted">
             {options.find((option) => option.value === language)?.label ?? language ?? "Plain text"}
           </span>
         )}
@@ -123,7 +123,7 @@ export function CodeBlockView() {
           onClick={copy}
           title="Copy code"
           aria-label="Copy code"
-          className="radd-code-copy inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] text-fg-muted transition-colors hover:text-heading focus-visible:outline-2 focus-visible:outline-focus cursor-pointer"
+          className="radd-code-copy inline-flex h-6 items-center gap-1 rounded px-1.5 text-meta text-fg-muted transition-colors hover:text-heading focus-visible:outline-2 focus-visible:outline-focus cursor-pointer"
         >
           {copied ? <Check size={13} /> : <Copy size={13} />}
           {copied ? "Copied" : "Copy"}

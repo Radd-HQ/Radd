@@ -86,7 +86,7 @@ export function TransformRunPanel({
           <>
             <span
               role="status"
-              className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] text-fg-secondary"
+              className="flex min-w-0 flex-1 items-center gap-1.5 text-meta text-fg-secondary"
             >
               <Loader2 size={11} aria-hidden className="shrink-0 animate-spin text-accent-text" />
               {run.text === "" ? "Reading your text…" : "Writing the result…"}
@@ -103,7 +103,7 @@ export function TransformRunPanel({
           </>
         ) : (
           <>
-            <span role="status" className="min-w-0 flex-1 truncate text-[11px] text-fg-secondary">
+            <span role="status" className="min-w-0 flex-1 truncate text-meta text-fg-secondary">
               {changes === 1 ? "1 change to review" : `${changes} changes to review`}
             </span>
             {changes > 1 && (
@@ -113,7 +113,7 @@ export function TransformRunPanel({
                   onClick={() => onNavigate(current - 1)}
                   icon={<ChevronLeft size={12} aria-hidden />}
                 />
-                <span className="tabular-nums text-[10px] text-fg-muted">
+                <span className="tabular-nums text-micro text-fg-muted">
                   {current < 0 ? "—" : current + 1}/{changes}
                 </span>
                 <StepButton
@@ -139,7 +139,7 @@ export function TransformRunPanel({
         <div
           ref={previewRef}
           data-editor-run-preview
-          className="max-h-16 overflow-y-auto whitespace-pre-wrap break-words rounded border border-subtle bg-base px-2 py-1.5 text-[11px] leading-relaxed text-fg-secondary"
+          className="max-h-16 overflow-y-auto whitespace-pre-wrap break-words rounded border border-subtle bg-base px-2 py-1.5 text-meta leading-relaxed text-fg-secondary"
         >
           {run.text || <span className="text-fg-faint">Waiting for the first words…</span>}
         </div>
@@ -147,7 +147,7 @@ export function TransformRunPanel({
         // The diff plugin's filterTransaction drops every document transaction while a review is
         // open, so typing genuinely does nothing. Saying so beats letting someone conclude the
         // editor broke.
-        <div className="flex flex-col gap-1 text-[11px] text-fg-muted">
+        <div className="flex flex-col gap-1 text-meta text-fg-muted">
           <p>
             Editing is paused until you accept or reject. Use the buttons beside a change to decide
             that one on its own.

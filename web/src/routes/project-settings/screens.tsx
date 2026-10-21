@@ -196,10 +196,10 @@ function ScreenEditor({
                 <ChevronDown size={13} />
               </button>
             </div>
-            <span className="min-w-0 flex-1 truncate text-[13px] text-heading">
+            <span className="min-w-0 flex-1 truncate text-row text-heading">
               {labelFor(row.field)}
               {row.custom && (
-                <span className="ml-2 rounded bg-elevated px-1 text-[10px] uppercase text-fg-muted">
+                <span className="ml-2 rounded bg-elevated px-1 text-micro uppercase text-fg-muted">
                   custom
                 </span>
               )}
@@ -213,7 +213,7 @@ function ScreenEditor({
                   aria-pressed={row.placement === option.value}
                   onClick={() => setPlacement(index, option.value)}
                   className={
-                    "rounded px-2 py-0.5 text-[11px] font-medium cursor-pointer disabled:cursor-default " +
+                    "rounded px-2 py-0.5 text-meta font-medium cursor-pointer disabled:cursor-default " +
                     (row.placement === option.value
                       ? "bg-elevated text-heading"
                       : "text-fg-muted hover:text-fg")

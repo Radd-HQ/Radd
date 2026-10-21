@@ -244,7 +244,7 @@ export function CommentReplies({
                       </span>
                       {reply.updated_at !== reply.created_at && <span className="text-fg-faint">(edited)</span>}
                       {isInternal && (
-                        <span className="rounded border border-callout-warning-border/60 px-1.5 py-px text-[10px] font-medium text-callout-warning-ink">
+                        <span className="rounded border border-callout-warning-border/60 px-1.5 py-px text-micro font-medium text-callout-warning-ink">
                           Internal
                         </span>
                       )}
@@ -324,7 +324,7 @@ export function CommentReplies({
               )}
               <div className="flex flex-wrap items-center gap-2">
                 {internalLocked && (
-                  <span className="text-[11px] text-fg-muted" data-reply-audience="locked">
+                  <span className="text-meta text-fg-muted" data-reply-audience="locked">
                     Replies to an internal thread are internal.
                   </span>
                 )}

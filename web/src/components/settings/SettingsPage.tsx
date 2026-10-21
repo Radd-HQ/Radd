@@ -33,7 +33,7 @@ export function SettingsPage({ title, description, actions, info, history, child
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-heading">{title}</h2>
-          {description && <p className="mt-1 text-[13px] text-fg-muted">{description}</p>}
+          {description && <p className="mt-1 text-row text-fg-muted">{description}</p>}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
@@ -49,7 +49,7 @@ function InfoBanner({ children }: { children: ReactNode }) {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
   return (
-    <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-accent/25 bg-accent/5 px-3.5 py-2.5 text-[13px] text-fg">
+    <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-accent/25 bg-accent/5 px-3.5 py-2.5 text-row text-fg">
       <Info size={15} className="mt-0.5 shrink-0 text-accent-text" aria-hidden />
       <div className="min-w-0 flex-1">{children}</div>
       <button
@@ -66,7 +66,7 @@ function InfoBanner({ children }: { children: ReactNode }) {
 
 /** Shared table cell/head styling for settings tables. */
 export const settingsTableClasses = {
-  table: "w-full border-separate border-spacing-0 text-left text-[13px]",
-  head: "border-b border-subtle px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint",
+  table: "w-full border-separate border-spacing-0 text-left text-row",
+  head: "border-b border-subtle px-3 py-2 text-meta font-medium uppercase tracking-wide text-fg-faint",
   cell: "border-b border-subtle/60 px-3 py-2.5 text-fg",
 } as const;

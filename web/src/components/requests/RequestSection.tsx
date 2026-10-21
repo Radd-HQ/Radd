@@ -98,7 +98,7 @@ function Section({
         ))}
       </ListSection>
       {compact && ordered.length > COMPACT_ROWS && (
-        <p className="text-[11px] text-fg-faint">
+        <p className="text-meta text-fg-faint">
           Showing {COMPACT_ROWS} of {ordered.length} — the Portal has the rest.
         </p>
       )}

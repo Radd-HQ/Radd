@@ -15,13 +15,13 @@ export function MappingRows({
   onChange: (index: number, changes: Record<string, unknown>) => void;
 }) {
   if (!rows.length) {
-    return <p className="text-[13px] text-fg-faint">Nothing of this kind in the download.</p>;
+    return <p className="text-row text-fg-faint">Nothing of this kind in the download.</p>;
   }
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-[13px]">
+      <table className="w-full text-row">
         <thead>
-          <tr className="border-b border-subtle text-left text-[12px] text-fg-muted">
+          <tr className="border-b border-subtle text-left text-xs text-fg-muted">
             <th className="py-1.5 pr-3 font-medium">Name</th>
             <th className="py-1.5 pr-3 font-medium">Used</th>
             <th className="py-1.5 pr-3 font-medium">What happens</th>
@@ -39,7 +39,7 @@ export function MappingRows({
                   highlight && Object.values(row).includes(highlight) ? "bg-elevated" : ""
                 }`}
               >
-                <td className="py-1.5 pr-3 font-mono text-[12px] text-fg">{name}</td>
+                <td className="py-1.5 pr-3 font-mono text-xs text-fg">{name}</td>
                 <td className="py-1.5 pr-3 text-fg-muted">{String(row.count ?? 0)}</td>
                 <td className="py-1.5 pr-3">
                   <ActionSelect
@@ -49,7 +49,7 @@ export function MappingRows({
                   />
                 </td>
                 <td className="p-2"><MappingTarget section={section} row={row} onChange={changes => onChange(index, changes)}/></td>
-                <td className="py-1.5 text-[12px] text-fg-muted">
+                <td className="py-1.5 text-xs text-fg-muted">
                   {String(row.reason ?? row.sample_page ?? "")}
                 </td>
               </tr>

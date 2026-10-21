@@ -20,8 +20,8 @@ interface SlqCheatSheetProps {
   projectId: string | null;
 }
 
-const headingClasses = "pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-faint";
-const codeClasses = "font-mono text-[11px] text-accent-text";
+const headingClasses = "pb-1 text-meta font-medium uppercase tracking-wide text-fg-faint";
+const codeClasses = "font-mono text-meta text-accent-text";
 
 /**
  * Collapsible SLQ syntax reference (spec 11), generated from lib/slq.ts
@@ -56,14 +56,14 @@ export function SlqCheatSheet({ fields, projectId }: SlqCheatSheetProps) {
                   <tr key={help.field} className="align-top">
                     <td className={`w-24 py-0.5 pr-2 ${codeClasses}`}>{help.field}</td>
                     <td className="py-0.5 pr-2 text-xs text-fg-secondary">{help.values}</td>
-                    <td className="py-0.5 font-mono text-[11px] text-fg-muted">{help.example}</td>
+                    <td className="py-0.5 font-mono text-meta text-fg-muted">{help.example}</td>
                   </tr>
                 ))}
                 {(pluginFields.data ?? []).map((field) => (
                   <tr key={field.name} className="align-top" data-slq-plugin-field={field.name}>
                     <td className={`w-24 py-0.5 pr-2 ${codeClasses}`}>{field.name}</td>
                     <td className="py-0.5 pr-2 text-xs text-fg-secondary">{field.values || field.label}</td>
-                    <td className="py-0.5 font-mono text-[11px] text-fg-muted">{field.label}</td>
+                    <td className="py-0.5 font-mono text-meta text-fg-muted">{field.label}</td>
                   </tr>
                 ))}
               </tbody>
@@ -82,7 +82,7 @@ export function SlqCheatSheet({ fields, projectId }: SlqCheatSheetProps) {
                         {field.name} · {FIELD_TYPE_LABELS[field.type]}
                         {field.options ? ` (${field.options.join(" | ")})` : ""}
                       </td>
-                      <td className="py-0.5 font-mono text-[11px] text-fg-muted">
+                      <td className="py-0.5 font-mono text-meta text-fg-muted">
                         {cfOpsHint(field.type)}
                       </td>
                     </tr>
@@ -106,7 +106,7 @@ export function SlqCheatSheet({ fields, projectId }: SlqCheatSheetProps) {
             </table>
             <ul className="mt-1.5 flex flex-col gap-0.5">
               {SLQ_VALUE_NOTES.map((note) => (
-                <li key={note} className="text-[11px] text-fg-muted">
+                <li key={note} className="text-meta text-fg-muted">
                   {note}
                 </li>
               ))}
@@ -117,7 +117,7 @@ export function SlqCheatSheet({ fields, projectId }: SlqCheatSheetProps) {
             <p className={headingClasses}>Examples</p>
             <ul className="flex flex-col gap-1">
               {SLQ_EXAMPLES.map((example) => (
-                <li key={example} className="font-mono text-[11px] text-fg-secondary">
+                <li key={example} className="font-mono text-meta text-fg-secondary">
                   {example}
                 </li>
               ))}

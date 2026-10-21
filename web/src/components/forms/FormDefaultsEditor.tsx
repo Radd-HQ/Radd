@@ -154,7 +154,7 @@ export function FormDefaultsEditor({
             set({ estimate_points: event.target.value === "" ? null : Number(event.target.value) })
           }
         />
-        <label className="flex cursor-pointer items-center gap-2 self-end pb-2 text-[13px] text-fg">
+        <label className="flex cursor-pointer items-center gap-2 self-end pb-2 text-row text-fg">
           <input
             type="checkbox"
             checked={value.flagged}

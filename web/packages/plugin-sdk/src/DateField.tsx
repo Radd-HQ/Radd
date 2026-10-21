@@ -1,7 +1,7 @@
 import { useId } from "react";
 // The house date input; the picker follows the page's scheme.
 const dateClasses =
-  "h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading " +
+  "h-8 rounded-md border border-strong bg-surface px-2 text-row text-heading " +
   "focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:inherit]";
 export function DateField({
   label,

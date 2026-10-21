@@ -93,7 +93,7 @@ export function JiraImportPage() {
 function ConnectionNotice({ title, detail }: { title: string; detail: string }) {
   return (
     <Callout kind={CalloutKind.warning} className="p-3">
-      <p className="text-[13px]">{title}</p>
+      <p className="text-row">{title}</p>
       {detail && <p className="mt-1 text-fg-secondary">{detail}</p>}
     </Callout>
   );

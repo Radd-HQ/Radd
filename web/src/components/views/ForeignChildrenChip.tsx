@@ -25,7 +25,7 @@ export function ForeignChildrenChip({
   if (foreign.count === 0 && withheld === 0) return null;
   return (
     <span
-      className="inline-flex shrink-0 items-center gap-1.5 text-[11px] text-fg-muted"
+      className="inline-flex shrink-0 items-center gap-1.5 text-meta text-fg-muted"
       data-foreign-children={foreign.count}
       data-withheld={withheld}
     >

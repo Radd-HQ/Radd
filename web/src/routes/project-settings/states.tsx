@@ -155,7 +155,7 @@ function StateRow({
             maxLength={100}
             autoFocus
             aria-label={`Rename ${state.name}`}
-            className="h-7 flex-1 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+            className="h-7 flex-1 rounded-md border border-strong bg-surface px-2 text-row text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus"
           />
           <button
             type="submit"
@@ -182,10 +182,10 @@ function StateRow({
         </form>
       ) : (
         <>
-          <span className="flex-1 text-[13px] text-heading">
+          <span className="flex-1 text-row text-heading">
             {state.name}
             {state.is_default && (
-              <span className="ml-2 rounded border border-strong px-1 py-px text-[10px] uppercase tracking-wide text-fg-muted">
+              <span className="ml-2 rounded border border-strong px-1 py-px text-micro uppercase tracking-wide text-fg-muted">
                 Default
               </span>
             )}
@@ -365,7 +365,7 @@ function StateCategoriesCard({
     <section className="mt-6" aria-label="State categories">
       <h2 className="mb-1 flex items-center gap-2 text-sm font-medium text-heading">
         Categories
-        <span className="rounded bg-elevated px-1.5 py-px text-[10px] font-medium text-fg-secondary">
+        <span className="rounded bg-elevated px-1.5 py-px text-micro font-medium text-fg-secondary">
           Shared by every project
         </span>
       </h2>
@@ -390,10 +390,10 @@ function StateCategoriesCard({
               aria-label={`Colour for ${row.name}`}
               className="size-5 shrink-0 cursor-pointer rounded border border-strong bg-transparent disabled:cursor-default"
             />
-            <span className="flex-1 text-[13px] text-heading">
+            <span className="flex-1 text-row text-heading">
               {row.name}
               {row.is_builtin && (
-                <span className="ml-2 rounded border border-strong px-1 py-px text-[10px] uppercase tracking-wide text-fg-muted">
+                <span className="ml-2 rounded border border-strong px-1 py-px text-micro uppercase tracking-wide text-fg-muted">
                   Builtin
                 </span>
               )}
@@ -511,7 +511,7 @@ function DeleteStateDialog({
   return (
     <Modal title={`Delete "${state.name}"`} onClose={onClose}>
       <div className="flex flex-col gap-3">
-        <p className="text-[13px] text-fg-secondary">
+        <p className="text-row text-fg-secondary">
           {n === undefined
             ? "Counting the issues in this state…"
             : n === 0

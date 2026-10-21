@@ -57,12 +57,12 @@ function InterpreterSection() {
         <Terminal size={15} className="text-accent-text" aria-hidden />
         <h2 className="text-sm font-medium text-heading">Interpreter</h2>
         {data && (
-          <span data-interpreter-status={data.status} className={`rounded px-1.5 py-px text-[10px] uppercase tracking-wide ${STATUS_TONE[data.status]}`}>
+          <span data-interpreter-status={data.status} className={`rounded px-1.5 py-px text-micro uppercase tracking-wide ${STATUS_TONE[data.status]}`}>
             {data.status}
           </span>
         )}
-        {data?.resolved && <span className="text-[11px] text-fg-muted">Python {data.resolved}</span>}
-        {data?.built_at && <span className="text-[11px] text-fg-faint">built {relativeTime(data.built_at)}</span>}
+        {data?.resolved && <span className="text-meta text-fg-muted">Python {data.resolved}</span>}
+        {data?.built_at && <span className="text-meta text-fg-faint">built {relativeTime(data.built_at)}</span>}
       </div>
       <p className="text-xs text-fg-secondary">
         A virtual environment built by uv under <code className="text-fg">{data?.path ?? "…"}</code>, with the
@@ -98,7 +98,7 @@ function InterpreterSection() {
         <Callout kind={CalloutKind.info}>Nothing runs until the interpreter is built.</Callout>
       )}
       {showLog && (
-        <pre className="max-h-64 overflow-auto rounded-[8px] border border-subtle bg-base p-2 text-[11px] text-fg-secondary">
+        <pre className="max-h-64 overflow-auto rounded-[8px] border border-subtle bg-base p-2 text-meta text-fg-secondary">
           {rebuild.data?.log || data?.log}
         </pre>
       )}
@@ -136,7 +136,7 @@ function IndexSection() {
         <Globe size={15} className="text-accent-text" aria-hidden />
         <h2 className="text-sm font-medium text-heading">Package index</h2>
         {data?.offline && (
-          <span data-index-mode="offline" className="rounded bg-elevated px-1.5 py-px text-[10px] uppercase tracking-wide text-fg-secondary">
+          <span data-index-mode="offline" className="rounded bg-elevated px-1.5 py-px text-micro uppercase tracking-wide text-fg-secondary">
             offline
           </span>
         )}
@@ -173,7 +173,7 @@ function IndexSection() {
           }}
           className="min-w-72"
         />
-        <label className="flex items-center gap-2 pb-2 text-[13px] text-fg">
+        <label className="flex items-center gap-2 pb-2 text-row text-fg">
           <input
             type="checkbox"
             checked={offline}
@@ -225,19 +225,19 @@ function PackagesSection() {
       <div className="flex items-center gap-2">
         <Package size={15} className="text-accent-text" aria-hidden />
         <h2 className="text-sm font-medium text-heading">Packages</h2>
-        <span className="text-[11px] text-fg-muted">What your scripts may import, beyond the standard library and the SDK.</span>
+        <span className="text-meta text-fg-muted">What your scripts may import, beyond the standard library and the SDK.</span>
       </div>
       {packages.isError && <QueryError label="packages" error={packages.error} />}
       {packages.data && packages.data.length > 0 && (
         <ul className="flex flex-col gap-0.5">
           {packages.data.map((row) => (
             <li key={row.id} data-package={row.name} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded border border-subtle/80 bg-base/40 px-2.5 py-1.5 text-xs">
-              <span data-package-status={row.status} className={`rounded px-1.5 py-px text-[10px] uppercase tracking-wide ${PACKAGE_TONE[row.status]}`}>
+              <span data-package-status={row.status} className={`rounded px-1.5 py-px text-micro uppercase tracking-wide ${PACKAGE_TONE[row.status]}`}>
                 {row.status}
               </span>
               <span className="font-medium text-fg">{row.name}</span>
-              <span className="text-[11px] text-fg-muted">{row.spec}</span>
-              {row.resolved_version && <span className="text-[11px] text-fg-secondary">→ {row.resolved_version}</span>}
+              <span className="text-meta text-fg-muted">{row.spec}</span>
+              {row.resolved_version && <span className="text-meta text-fg-secondary">→ {row.resolved_version}</span>}
               <span className="ml-auto flex items-center gap-1">
                 {row.log && (
                   <Button type="button" variant={ButtonVariant.ghost} size="sm" onClick={() => setOpenLog(openLog === row.id ? null : row.id)}>
@@ -249,7 +249,7 @@ function PackagesSection() {
                 </Button>
               </span>
               {openLog === row.id && (
-                <pre className="mt-1 max-h-48 w-full overflow-auto rounded border border-subtle bg-base p-2 text-[11px] text-fg-secondary">{row.log}</pre>
+                <pre className="mt-1 max-h-48 w-full overflow-auto rounded border border-subtle bg-base p-2 text-meta text-fg-secondary">{row.log}</pre>
               )}
             </li>
           ))}

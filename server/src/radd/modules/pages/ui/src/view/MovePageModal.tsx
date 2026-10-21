@@ -59,7 +59,7 @@ export function MovePageModal({
   const currentParent = page.parent_id ? byId.get(page.parent_id)?.title : null;
 
   const optionClass = (selected: boolean) =>
-    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] cursor-pointer " +
+    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-row cursor-pointer " +
     "focus-visible:outline-2 focus-visible:outline-focus " +
     (selected ? "bg-elevated text-heading" : "text-fg hover:bg-elevated/60");
 
@@ -89,7 +89,7 @@ export function MovePageModal({
           >
             <CornerLeftUp size={13} aria-hidden className="shrink-0 text-fg-faint" />
             <span className="flex-1">Top level</span>
-            {page.parent_id === null && <span className="text-[11px] text-fg-faint">current</span>}
+            {page.parent_id === null && <span className="text-meta text-fg-faint">current</span>}
           </button>
           {visible.map((row) => (
             <button
@@ -104,11 +104,11 @@ export function MovePageModal({
                 {target === row.id && <Check size={13} aria-hidden />}
               </span>
               <span className="min-w-0 flex-1 truncate">{row.title}</span>
-              {row.id === page.parent_id && <span className="text-[11px] text-fg-faint">current</span>}
+              {row.id === page.parent_id && <span className="text-meta text-fg-faint">current</span>}
             </button>
           ))}
           {candidates.length > MAX_VISIBLE && (
-            <p className="px-2 py-1.5 text-[11px] text-fg-faint">
+            <p className="px-2 py-1.5 text-meta text-fg-faint">
               {candidates.length - MAX_VISIBLE} more — keep typing to narrow.
             </p>
           )}

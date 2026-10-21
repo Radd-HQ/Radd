@@ -30,7 +30,7 @@ export function DuplicatesSection() {
   if (duplicates.isError || (duplicates.isSuccess && groups.length === 0)) {
     return (
       <section className="mt-8">
-        <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+        <h3 className="mb-2 text-meta font-medium uppercase tracking-wide text-fg-muted">
           Possible duplicates
         </h3>
         <p className="text-xs text-fg-muted">
@@ -41,7 +41,7 @@ export function DuplicatesSection() {
   }
   return (
     <section className="mt-8">
-      <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+      <h3 className="mb-2 text-meta font-medium uppercase tracking-wide text-fg-muted">
         Possible duplicates
       </h3>
       <div className="grid gap-2 sm:grid-cols-2">
@@ -51,19 +51,19 @@ export function DuplicatesSection() {
             className="rounded-lg border border-subtle px-3.5 py-3"
           >
             <div className="mb-2 flex items-center gap-2">
-              <span className="rounded border border-amber-500/40 px-1.5 py-px text-[11px] text-amber-300">
+              <span className="rounded border border-amber-500/40 px-1.5 py-px text-meta text-amber-300">
                 {KIND_LABELS[group.kind] ?? group.kind}
               </span>
               <span className="font-mono text-xs text-fg-muted">{group.key}</span>
             </div>
             <ul className="flex flex-col gap-1">
               {group.users.map((user) => (
-                <li key={user.id} className="flex items-center gap-2 text-[13px]">
+                <li key={user.id} className="flex items-center gap-2 text-row">
                   <span className="truncate text-fg">{user.email}</span>
                   <span className="truncate text-xs text-fg-muted">{user.name}</span>
                   <span className="ml-auto flex shrink-0 items-center gap-1.5">
                     <SourceBadge source={user.source} />
-                    {!user.active && <span className="text-[11px] text-red-400">inactive</span>}
+                    {!user.active && <span className="text-meta text-red-400">inactive</span>}
                   </span>
                 </li>
               ))}
@@ -125,7 +125,7 @@ function MergeDialog({
   return (
     <Modal title="Merge duplicate accounts" onClose={onClose}>
       <div className="flex flex-col gap-3">
-        <p className="text-[13px] text-fg-secondary">
+        <p className="text-row text-fg-secondary">
           Pick the account to KEEP. Everything referencing the other account
           {duplicates.length === 1 ? "" : "s"} — items, comments, worklogs, watchers,
           memberships, history — repoints to it; the duplicate
@@ -135,7 +135,7 @@ function MergeDialog({
           {group.users.map((user) => (
             <label
               key={user.id}
-              className="flex items-center gap-2 rounded-md border border-subtle px-2.5 py-2 text-[13px] hover:bg-surface/60 cursor-pointer"
+              className="flex items-center gap-2 rounded-md border border-subtle px-2.5 py-2 text-row hover:bg-surface/60 cursor-pointer"
             >
               <input
                 type="radio"

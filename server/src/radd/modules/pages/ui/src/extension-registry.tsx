@@ -27,7 +27,7 @@ const Loaded = lazy(() => import("./view/extensions").then(() => ({ default: Ren
 function FirstParty(props: BlockProps) {
   if (renderers?.[props.name]) return <Rendered {...props} />;
   return (
-    <Suspense fallback={<ExtensionCard label={`radd:${props.name}`}><span className="text-[13px] text-fg-faint">Loading…</span></ExtensionCard>}>
+    <Suspense fallback={<ExtensionCard label={`radd:${props.name}`}><span className="text-row text-fg-faint">Loading…</span></ExtensionCard>}>
       <Loaded {...props} />
     </Suspense>
   );

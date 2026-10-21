@@ -108,9 +108,9 @@ export function MonitoringSettingsPage() {
               below still reflects their real progress.
             </p>
           )}
-          <table className="w-full text-[13px]">
+          <table className="w-full text-row">
             <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wide text-fg-faint">
+              <tr className="text-left text-meta uppercase tracking-wide text-fg-faint">
                 <th className="py-1 pr-3 font-medium">Worker</th>
                 <th className="py-1 pr-3 font-medium">Backlog</th>
                 <th className="py-1 pr-3 font-medium">Last movement</th>
@@ -124,7 +124,7 @@ export function MonitoringSettingsPage() {
                   <tr key={worker.name}>
                     <td className="py-1.5 pr-3">
                       <span className="font-mono text-xs text-fg">{worker.name}</span>
-                      <span className="block text-[11px] text-fg-muted">
+                      <span className="block text-meta text-fg-muted">
                         {worker.description || "Background consumer"}
                       </span>
                     </td>
@@ -139,7 +139,7 @@ export function MonitoringSettingsPage() {
                     </td>
                     <td className="py-1.5">
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${state.className}`}
+                        className={`rounded-full px-2 py-0.5 text-meta font-medium ring-1 ${state.className}`}
                       >
                         {state.label}
                       </span>

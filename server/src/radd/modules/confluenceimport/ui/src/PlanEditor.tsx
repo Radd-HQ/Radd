@@ -86,7 +86,7 @@ export function PlanEditor({
 
   if (plan.isError) return <QueryError label="import plan" error={plan.error}/>;
   if (!draft || !options) {
-    return <p className="text-[13px] text-fg-faint">Loading the plan…</p>;
+    return <p className="text-row text-fg-faint">Loading the plan…</p>;
   }
 
   const rows = draft[tab] as { count: number }[];
@@ -107,7 +107,7 @@ export function PlanEditor({
     <section className="rounded-xl border border-subtle bg-surface p-4" id="confluence-mappings">
       <header className="mb-3">
         <h2 className="text-sm font-semibold text-heading">Mappings</h2>
-        <p className="text-[13px] text-fg-muted">
+        <p className="text-row text-fg-muted">
           Everything below was counted in the download, so the decisions that matter
           are the ones at the top.
         </p>
@@ -122,7 +122,7 @@ export function PlanEditor({
               type="button"
               onClick={() => { setTab(section); setFilter(""); }}
               aria-pressed={tab === section}
-              className={`rounded-lg px-2.5 py-1 text-[13px] ${
+              className={`rounded-lg px-2.5 py-1 text-row ${
                 tab === section
                   ? "bg-accent text-white"
                   : "text-fg-secondary hover:bg-elevated"
@@ -130,7 +130,7 @@ export function PlanEditor({
             >
               {CONFLUENCE_SECTION_LABELS[section]}
               {count > 0 && (
-                <span className="ml-1.5 text-[11px] opacity-80">{count}</span>
+                <span className="ml-1.5 text-meta opacity-80">{count}</span>
               )}
             </button>
           );
@@ -159,7 +159,7 @@ export function PlanEditor({
           {problems.map((problem, index) => (
             <li
               key={index}
-              className="flex items-start gap-2 rounded-lg border border-subtle bg-elevated px-3 py-2 text-[13px]"
+              className="flex items-start gap-2 rounded-lg border border-subtle bg-elevated px-3 py-2 text-row"
             >
               <AlertTriangle className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />
               <span className="text-fg-secondary">

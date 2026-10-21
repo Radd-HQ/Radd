@@ -32,7 +32,7 @@ interface SelectProps {
   disabled?: boolean;
   /** Red error ring (SelectField's `error`). */
   invalid?: boolean;
-  /** sm = h-7 text-xs (inline rows); md = h-8 px-2.5 text-[13px] (matches TextField). */
+  /** sm = h-7 text-xs (inline rows); md = h-8 px-2.5 text-row (matches TextField). */
   size?: "sm" | "md";
   /** Extra classes on the relative wrapper (width, margins). */
   className?: string;
@@ -50,7 +50,7 @@ interface SelectProps {
 
 const sizeClasses = {
   sm: "h-7 pl-2 pr-6 text-xs",
-  md: "h-8 pl-2.5 pr-7 text-[13px]",
+  md: "h-8 pl-2.5 pr-7 text-row",
 } as const;
 
 const PANEL_MAX_HEIGHT = 240; // max-h-60
@@ -410,7 +410,7 @@ export function Select({
                 aria-controls={listId}
                 aria-activedescendant={activeId}
                 aria-label={ariaLabel ? `Filter ${ariaLabel}` : "Filter options"}
-                className="w-full bg-transparent text-[13px] text-fg placeholder:text-fg-faint focus:outline-none"
+                className="w-full bg-transparent text-row text-fg placeholder:text-fg-faint focus:outline-none"
               />
             </div>
           )}
@@ -444,7 +444,7 @@ export function Select({
                     commit(index);
                   }}
                   className={
-                    "flex items-center gap-2 rounded px-2 py-1.5 text-[13px] " +
+                    "flex items-center gap-2 rounded px-2 py-1.5 text-row " +
                     (option.disabled
                       ? "cursor-not-allowed text-fg-faint"
                       : "cursor-pointer " +
@@ -468,7 +468,7 @@ export function Select({
               </li>
             )}
             {visible.length === 0 && (
-              <li className="px-2 py-1.5 text-[13px] text-fg-faint">
+              <li className="px-2 py-1.5 text-row text-fg-faint">
                 {normalizedQuery ? "No matches" : "No options"}
               </li>
             )}

@@ -181,7 +181,7 @@ function TreeRow({
     <>
       <div
         className={
-          "group/docrow flex items-center gap-1 rounded-md pr-1 text-[13px] " +
+          "group/docrow flex items-center gap-1 rounded-md pr-1 text-row " +
           (row.id === selectedId
             ? "bg-elevated text-heading"
             : ancestors.has(row.id)
@@ -210,7 +210,7 @@ function TreeRow({
         </Link>
         {/* RADD-714: how big is this section, without expanding it. */}
         {children.length > 0 && !isOpen && (
-          <span className="shrink-0 rounded bg-elevated px-1 font-mono text-[10px] text-fg-faint">
+          <span className="shrink-0 rounded bg-elevated px-1 font-mono text-micro text-fg-faint">
             {children.length}
           </span>
         )}

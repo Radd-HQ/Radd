@@ -76,7 +76,7 @@ export function AlertmanagerSettingsPage() {
         <EmptyState icon={BellRing} message="You need instance-admin access to configure Alertmanager." />
       ) : (
         <>
-          <p className="mb-4 text-[13px] text-fg-muted" data-alertmanager-note>
+          <p className="mb-4 text-row text-fg-muted" data-alertmanager-note>
             A receiver creates the issue, then does only what its settings below say. Firing, repeats and resolutions are
             also automation triggers, for anything the settings don't cover.
           </p>
@@ -113,7 +113,7 @@ export function AlertmanagerSettingsPage() {
                   <Button type="submit" disabled={create.isPending || !form.name.trim() || !form.project_id}>Create receiver</Button>
                   <Button type="button" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
                 </div>
-                {create.isError && <p role="alert" className="text-[12px] text-status-danger-ink">{errorMessage(create.error)}</p>}
+                {create.isError && <p role="alert" className="text-xs text-status-danger-ink">{errorMessage(create.error)}</p>}
               </form>
             ) : (
               <Button variant="secondary" onClick={() => setAdding(true)}>

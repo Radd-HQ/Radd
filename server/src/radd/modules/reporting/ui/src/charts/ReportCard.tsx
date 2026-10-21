@@ -18,7 +18,7 @@ export function ReportCard({ title, description, controls, note, children }: Rep
     <section className={inDashboard ? "" : "rounded-lg border border-subtle bg-surface/30"}>
       <header className="flex flex-wrap items-start gap-x-4 gap-y-2 border-b border-subtle px-4 py-3">
         <div className="min-w-0">
-          {!inDashboard && <h2 className="text-[13px] font-semibold text-heading">{title}</h2>}
+          {!inDashboard && <h2 className="text-row font-semibold text-heading">{title}</h2>}
           {description && <p className="mt-0.5 text-xs text-fg-muted">{description}</p>}
           {note}
         </div>

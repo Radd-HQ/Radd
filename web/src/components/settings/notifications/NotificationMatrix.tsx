@@ -26,7 +26,7 @@ export function NotificationMatrix({
       {/* Column hints as a visible legend: `title=` tooltips are invisible on touch. */}
       <div className="mb-3 flex flex-col gap-1" data-matrix-legend>
         {prefs.scopes.map((scope) => (
-          <p key={scope} className="text-[12px] leading-snug text-fg-muted">
+          <p key={scope} className="text-xs leading-snug text-fg-muted">
             <span className="font-medium text-fg-secondary">{SCOPE_LABELS[scope]}</span>
             {" — "}
             {SCOPE_HINTS[scope]}
@@ -47,7 +47,7 @@ export function NotificationMatrix({
         <span
           key={scope}
           title={SCOPE_HINTS[scope]}
-          className="justify-self-center px-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-muted"
+          className="justify-self-center px-1.5 text-meta font-medium uppercase tracking-wide text-fg-muted"
         >
           {SCOPE_LABELS[scope]}
         </span>
@@ -55,8 +55,8 @@ export function NotificationMatrix({
       {prefs.kinds.map((kind) => (
         <Fragment key={kind.kind}>
           <span className="flex min-w-0 flex-col py-0.5">
-            <span className="text-[13px] text-fg">{kind.label}</span>
-            <span className="text-[11px] leading-snug text-fg-muted">{kind.description}</span>
+            <span className="text-row text-fg">{kind.label}</span>
+            <span className="text-meta leading-snug text-fg-muted">{kind.description}</span>
           </span>
           {prefs.scopes.map((scope) => {
             const personalElsewhere = kind.personal && scope !== RuleScope.own;

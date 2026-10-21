@@ -260,7 +260,7 @@ function AuditRow({ entry, showProject, availablePlugins }: { entry: AuditEntry;
       </Td>
       <Td className="align-top">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="rounded bg-elevated px-1.5 py-0.5 text-[11px] font-medium text-fg-secondary" data-audit-event-label>
+          <span className="rounded bg-elevated px-1.5 py-0.5 text-meta font-medium text-fg-secondary" data-audit-event-label>
             {did}
           </span>
           {link ? (
@@ -268,23 +268,23 @@ function AuditRow({ entry, showProject, availablePlugins }: { entry: AuditEntry;
               to={link.to}
               params={link.params ?? {}}
               search={link.search ?? {}}
-              className="text-[13px] font-medium text-accent-text hover:text-accent-text-strong"
+              className="text-row font-medium text-accent-text hover:text-accent-text-strong"
               data-audit-entity-link
             >
               {what}
             </Link>
           ) : (
-            <span className="text-[13px] font-medium text-heading" data-audit-entity-label>
+            <span className="text-row font-medium text-heading" data-audit-entity-label>
               {what}
             </span>
           )}
           {showProject && entry.project && (
-            <span className="font-mono text-[11px] text-fg-faint" title={entry.project.name}>
+            <span className="font-mono text-meta text-fg-faint" title={entry.project.name}>
               {entry.project.key}
             </span>
           )}
           {entry.silent && (
-            <span className="text-[11px] text-fg-faint" title="Written by a bulk import — no notifications or automations ran">
+            <span className="text-meta text-fg-faint" title="Written by a bulk import — no notifications or automations ran">
               import
             </span>
           )}
@@ -300,7 +300,7 @@ function AuditRow({ entry, showProject, availablePlugins }: { entry: AuditEntry;
               <button
                 type="button"
                 onClick={() => setExpanded(true)}
-                className="mt-0.5 text-[12px] text-accent-text hover:text-accent-text-strong cursor-pointer"
+                className="mt-0.5 text-xs text-accent-text hover:text-accent-text-strong cursor-pointer"
               >
                 +{hidden} more
               </button>

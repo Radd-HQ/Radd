@@ -24,8 +24,8 @@ export function Card({
 export function StatRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-1">
-      <span className="text-[13px] text-fg-secondary">{label}</span>
-      <span className="text-[13px] font-medium tabular-nums text-heading">{value}</span>
+      <span className="text-row text-fg-secondary">{label}</span>
+      <span className="text-row font-medium tabular-nums text-heading">{value}</span>
     </div>
   );
 }

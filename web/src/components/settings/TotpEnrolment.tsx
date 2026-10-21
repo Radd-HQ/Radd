@@ -41,7 +41,7 @@ export function TotpEnrolmentStep({
       <div className="flex flex-col items-center gap-4 @lg:flex-row @lg:items-start">
         <TotpQrCode uri={setup.otpauth_uri} />
         <div className="flex min-w-0 flex-1 flex-col gap-3 self-stretch">
-          <p className="text-[13px] text-fg">
+          <p className="text-row text-fg">
             Scan the code with your authenticator app (Google Authenticator, 1Password, Aegis, …).
             Can&rsquo;t scan? Add the secret below as a time-based (TOTP) entry.
           </p>
@@ -74,7 +74,7 @@ export function TotpEnrolmentStep({
 export function RecoveryCodesOnce({ codes, onDone }: { codes: string[]; onDone: () => void }) {
   return (
     <div className="flex max-w-xl flex-col gap-3 rounded-lg border border-subtle bg-surface/40 p-4">
-      <p className="flex items-center gap-2 text-[13px] font-medium text-heading">
+      <p className="flex items-center gap-2 text-row font-medium text-heading">
         <ShieldCheck size={15} className="shrink-0 text-emerald-400" aria-hidden />
         Save your recovery codes
       </p>
@@ -82,7 +82,7 @@ export function RecoveryCodesOnce({ codes, onDone }: { codes: string[]; onDone: 
         Each code signs you in once if your authenticator is gone. They are shown{" "}
         <strong>only now</strong> — store them with your passwords or print them.
       </p>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-1 rounded-md border border-strong bg-base px-4 py-3 font-mono text-[13px] text-heading">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1 rounded-md border border-strong bg-base px-4 py-3 font-mono text-row text-heading">
         {codes.map((recoveryCode) => (
           <span key={recoveryCode}>{recoveryCode}</span>
         ))}

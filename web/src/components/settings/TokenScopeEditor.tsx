@@ -44,7 +44,7 @@ export function TokenScopeEditor({
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="flex items-center gap-2 text-[13px] text-fg">
+      <label className="flex items-center gap-2 text-row text-fg">
         <input
           id={`${id}-restrict`}
           type="checkbox"

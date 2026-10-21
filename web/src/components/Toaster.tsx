@@ -28,7 +28,7 @@ export function Toaster() {
         <div
           key={toast.id}
           className={
-            "flex items-start gap-2 rounded-md border bg-surface px-3 py-2.5 text-[13px] shadow-pop animate-menu-in " +
+            "flex items-start gap-2 rounded-md border bg-surface px-3 py-2.5 text-row shadow-pop animate-menu-in " +
             (success ? "border-emerald-500/40 text-emerald-300" : "border-red-500/40 text-red-300")
           }
         >
@@ -39,7 +39,7 @@ export function Toaster() {
               type="button"
               onClick={() => go(toast.id, toast.action!)}
               data-toast-action
-              className="flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-[12px] font-medium underline-offset-2 hover:underline cursor-pointer"
+              className="flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-xs font-medium underline-offset-2 hover:underline cursor-pointer"
             >
               {toast.action.label}
               <ArrowUpRight size={12} aria-hidden />

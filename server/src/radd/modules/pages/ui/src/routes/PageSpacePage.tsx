@@ -85,7 +85,7 @@ export function PageSpacePage() {
         {!space ? (
           <>
             <ErrorText size="sm" error={`Page space not found: ${spaceSlug}`} />
-            <p className="text-[13px] text-fg-muted">
+            <p className="text-row text-fg-muted">
               A page address is <code>/pages/&lt;space&gt;/&lt;page&gt;</code>, or{" "}
               <code>/pages?pageId=&lt;number&gt;</code> for a permalink.{" "}
               <Link to={PageRoute.pages} className="text-accent-text underline-offset-2 hover:underline">
@@ -172,7 +172,7 @@ export function PageSpacePage() {
               <Archive size={12} aria-hidden />
               Archived pages
               {archivedCount > 0 && (
-                <span className="ml-auto rounded bg-elevated px-1 font-mono text-[10px] text-fg-faint">
+                <span className="ml-auto rounded bg-elevated px-1 font-mono text-micro text-fg-faint">
                   {archivedCount}
                 </span>
               )}

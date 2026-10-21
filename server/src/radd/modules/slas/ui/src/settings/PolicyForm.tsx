@@ -17,7 +17,7 @@ import { MetOnField, TeamAudience, metRuleValid, type MetRule } from "./MetOnFie
 import { durationText, minutesLabel, minutesToTime, parseClockMinutes, timeToMinutes } from "./durations";
 
 const timeInputClasses =
-  "h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading " +
+  "h-8 rounded-md border border-strong bg-surface px-2 text-row text-heading " +
   "focus:outline-2 focus:outline-offset-1 focus:outline-focus";
 
 /** ONE create-and-edit form for an SLA policy (two forms over one resource drift). The project,
@@ -228,7 +228,7 @@ export function PolicyForm({
           <input type="time" value={windowEnd} onChange={(event) => setWindowEnd(event.target.value)}
             className={timeInputClasses} aria-label="Business hours end" />
         </label>
-        <span className={"pb-2 text-[11px] " + (windowInvalid ? "text-status-danger-ink" : "text-fg-faint")}>
+        <span className={"pb-2 text-meta " + (windowInvalid ? "text-status-danger-ink" : "text-fg-faint")}>
           {windowInvalid
             ? "Set both times, start before end."
             : "Optional: the clock only runs inside this daily window (leave empty for 24h)."}

@@ -44,7 +44,7 @@ const CRON_EXAMPLES: { expression: string; label: string }[] = [
 ];
 
 const timeInputClasses =
-  "h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading " +
+  "h-8 rounded-md border border-strong bg-surface px-2 text-row text-heading " +
   "focus:outline-2 focus:outline-offset-1 focus:outline-focus";
 
 
@@ -159,7 +159,7 @@ export function ScheduleEditor({value, onChange, previewSchedule}: ScheduleEdito
             className={timeInputClasses + " w-24"}
             aria-label="Day of the month"
           />
-          <span className="font-normal text-[11px] text-fg-secondary">
+          <span className="font-normal text-meta text-fg-secondary">
             Months without that day use their last one — the 31st runs on 28 February.
           </span>
         </label>
@@ -182,7 +182,7 @@ export function ScheduleEditor({value, onChange, previewSchedule}: ScheduleEdito
               </Button>
             ))}
           </div>
-          <span className="text-[11px] text-fg-secondary">
+          <span className="text-meta text-fg-secondary">
             Five fields: minute, hour, day of month, month, day of week. It cannot run more
             often than every 5 minutes.
           </span>
@@ -223,7 +223,7 @@ export function ScheduleEditor({value, onChange, previewSchedule}: ScheduleEdito
       ) : preview && preview.next_runs.length > 0 ? (
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-fg-secondary">Next runs</span>
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-fg-secondary">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-meta text-fg-secondary">
             {preview.next_runs.map((iso) => (
               <span key={iso}>{shortDateTime(iso)}</span>
             ))}
@@ -231,7 +231,7 @@ export function ScheduleEditor({value, onChange, previewSchedule}: ScheduleEdito
         </div>
       ) : null}
 
-      <p className="text-[11px] text-fg-secondary">
+      <p className="text-meta text-fg-secondary">
         {preview ? `Schedule timezone: ${preview.timezone}. Next runs are displayed in your timezone (${readerTimeZone() || browserTimeZone()}).` : "Times use the server's scheduler timezone."}
       </p>
     </div>

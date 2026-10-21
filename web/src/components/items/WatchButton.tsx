@@ -34,7 +34,7 @@ export function WatchButton({ item }: { item: Item }) {
     >
       {watching ? <Bell size={13} aria-hidden /> : <BellOff size={13} aria-hidden />}
       {watching ? "Watching" : "Watch"}
-      {count > 0 && <span className="text-[10px] text-fg-muted">{count}</span>}
+      {count > 0 && <span className="text-micro text-fg-muted">{count}</span>}
     </button>
   );
 }

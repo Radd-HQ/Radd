@@ -50,7 +50,7 @@ export function DeflectPagesSection({ docs }: { docs: DeflectPage[] }) {
   if (docs.length === 0) return null;
   return (
     <section className="flex flex-col gap-1">
-      <h3 className="flex items-center gap-1.5 text-[11px] font-medium text-fg-secondary">
+      <h3 className="flex items-center gap-1.5 text-meta font-medium text-fg-secondary">
         <BookOpen size={12} aria-hidden />
         Maybe this answers it
       </h3>
@@ -66,7 +66,7 @@ export function DeflectPagesSection({ docs }: { docs: DeflectPage[] }) {
               <span className="truncate underline-offset-2 group-hover:underline">
                 {doc.title}
               </span>
-              <span className="shrink-0 text-[10px] text-fg-faint">{doc.space_name}</span>
+              <span className="shrink-0 text-micro text-fg-faint">{doc.space_name}</span>
             </Link>
           </li>
         ))}
@@ -82,7 +82,7 @@ export function DeflectItemsSection({ items }: { items: DeflectItem[] }) {
   if (items.length === 0) return null;
   return (
     <section className="flex flex-col gap-1">
-      <h3 className="flex items-center gap-1.5 text-[11px] font-medium text-fg-secondary">
+      <h3 className="flex items-center gap-1.5 text-meta font-medium text-fg-secondary">
         <CheckCircle2 size={12} aria-hidden />
         Previously resolved
       </h3>
@@ -114,7 +114,7 @@ function DeflectItemRow({
         onClick={(event) => void openRef(item.key, event)}
         className="group flex items-baseline gap-1.5 text-xs text-fg hover:text-accent-text"
       >
-        <span className="shrink-0 font-mono text-[11px] text-fg-muted">{item.key}</span>
+        <span className="shrink-0 font-mono text-meta text-fg-muted">{item.key}</span>
         <span className="truncate underline-offset-2 group-hover:underline">{item.title}</span>
       </Link>
     </li>

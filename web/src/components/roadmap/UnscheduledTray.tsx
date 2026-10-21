@@ -89,7 +89,7 @@ export function UnscheduledTray({
   );
 
   const chipClasses = (active: boolean) =>
-    "rounded-full border px-2 py-px text-[11px] transition-colors cursor-pointer " +
+    "rounded-full border px-2 py-px text-meta transition-colors cursor-pointer " +
     (active
       ? "border-accent-hover bg-accent/15 text-accent-text-strong"
       : "border-strong text-fg-secondary hover:border-emphasis hover:text-fg");
@@ -140,7 +140,7 @@ export function UnscheduledTray({
             }}
             placeholder="Search titles… (Enter)"
             aria-label="Search unscheduled issues"
-            className="h-6 w-full rounded-md border border-subtle bg-base pl-6 pr-6 text-[11px] text-fg placeholder:text-fg-faint focus:outline-2 focus:outline-focus"
+            className="h-6 w-full rounded-md border border-subtle bg-base pl-6 pr-6 text-meta text-fg placeholder:text-fg-faint focus:outline-2 focus:outline-focus"
           />
           {(searchInput || search) && (
             <button
@@ -158,7 +158,7 @@ export function UnscheduledTray({
         </div>
       </header>
       {canEdit && visible.length > 0 && (
-        <p className="border-b border-subtle/60 px-4 py-2 text-[11px] leading-snug text-fg-faint">
+        <p className="border-b border-subtle/60 px-4 py-2 text-meta leading-snug text-fg-faint">
           Drag onto the timeline to schedule — issues get a one-week bar, epics about three.
         </p>
       )}
@@ -200,7 +200,7 @@ export function UnscheduledTray({
                   <KindBadge kind={item.kind} size={13} />
                   <PriorityIcon priority={item.priority} size={12} />
                   <ItemKeyLink itemKey={item.key} />
-                  <span className="min-w-0 flex-1 truncate text-[12px] text-fg">
+                  <span className="min-w-0 flex-1 truncate text-xs text-fg">
                     {item.title}
                   </span>
                   <span

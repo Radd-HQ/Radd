@@ -164,7 +164,7 @@ function UserRow({ entry, users, onChange }: {
   return (
     <div className="flex flex-wrap items-center gap-2 px-3 py-2">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] text-fg">
+        <p className="truncate text-row text-fg">
           {who}
           <span className="ml-1.5 text-xs text-fg-faint">
             {entry.jira_key} · {entry.count} reference{entry.count === 1 ? "" : "s"}
@@ -211,7 +211,7 @@ function UserRow({ entry, users, onChange }: {
           placeholder="no address — set a domain, or map them instead"
           onChange={(e) => onChange({ placeholder_email: e.target.value })}
           className={
-            "h-8 w-64 rounded-md border bg-surface px-2.5 text-[13px] text-heading outline-none " +
+            "h-8 w-64 rounded-md border bg-surface px-2.5 text-row text-heading outline-none " +
             "focus-visible:outline-2 focus-visible:outline-focus " +
             (entry.placeholder_email ? "border-strong" : "border-status-danger/60")
           }

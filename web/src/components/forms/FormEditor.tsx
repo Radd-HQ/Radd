@@ -141,12 +141,12 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
           onChange={(event) => setDescription(event.target.value)}
           rows={2}
           placeholder="Shown at the top of the intake form"
-          className="rounded-md border border-strong bg-surface px-2.5 py-1.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+          className="rounded-md border border-strong bg-surface px-2.5 py-1.5 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
         />
       </div>
 
       <div className="flex flex-col gap-2 rounded-lg border border-subtle bg-surface/40 p-3">
-        <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-fg">
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-row text-fg">
           <input
             type="checkbox"
             checked={descEnabled}
@@ -168,7 +168,7 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
                 required
               />
             </div>
-            <label className="flex w-fit cursor-pointer items-center gap-2 pb-1 text-[13px] text-fg">
+            <label className="flex w-fit cursor-pointer items-center gap-2 pb-1 text-row text-fg">
               <input
                 type="checkbox"
                 checked={descRequired}
@@ -182,7 +182,7 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
 
         {/* RADD-798 — independent of the description area, so it sits outside
             that conditional: a form with no description can still be shared. */}
-        <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-fg">
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-row text-fg">
           <input
             type="checkbox"
             checked={teamPicker}
@@ -191,13 +191,13 @@ export function FormEditor({ project, form, onDone }: FormEditorProps) {
           />
           Let submitters share the request with one of their teams
         </label>
-        <p className="-mt-2 text-[11px] text-fg-faint">
+        <p className="-mt-2 text-meta text-fg-faint">
           The picker offers only teams the submitter belongs to, and everyone in the chosen
           team can then open and follow the request.
         </p>
       </div>
 
-      <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-fg">
+      <label className="flex w-fit cursor-pointer items-center gap-2 text-row text-fg">
         <input
           type="checkbox"
           checked={enabled}

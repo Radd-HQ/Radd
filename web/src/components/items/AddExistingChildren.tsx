@@ -110,7 +110,7 @@ function AddExistingChildrenModal({
                 <li
                   key={candidate.id}
                   data-picked-child={candidate.key}
-                  className="inline-flex shrink-0 items-center gap-1 rounded border border-subtle bg-elevated py-px pl-1.5 pr-0.5 text-[11px] leading-4 text-fg"
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-subtle bg-elevated py-px pl-1.5 pr-0.5 text-meta leading-4 text-fg"
                 >
                   <span className="font-mono text-fg-muted">{candidate.key}</span>
                   <span className="max-w-40 truncate">{candidate.title}</span>

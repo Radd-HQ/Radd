@@ -178,7 +178,7 @@ export function QueryBar({
               title={`SLQ mode — ${modShortcut("I")} toggles`}
               onClick={() => setChoice(SLQ)}
               className={
-                "rounded px-1.5 py-0.5 font-mono text-[10px] cursor-pointer transition-colors " +
+                "rounded px-1.5 py-0.5 font-mono text-micro cursor-pointer transition-colors " +
                 (!active ? "bg-elevated text-heading" : "text-fg-muted hover:text-fg")
               }
             >
@@ -196,7 +196,7 @@ export function QueryBar({
                   onClick={() => setChoice(mode.id)}
                   data-query-mode-toggle={mode.id}
                   className={
-                    "flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] cursor-pointer transition-colors " +
+                    "flex items-center gap-1 rounded px-1.5 py-0.5 text-micro cursor-pointer transition-colors " +
                     (on ? "bg-elevated text-heading" : "text-fg-muted hover:text-fg")
                   }
                 >
@@ -211,11 +211,11 @@ export function QueryBar({
       {(active && draft.isPending) || failed || draft.data?.explanation ? (
         <div className="absolute left-0 right-0 top-full z-20 mt-2 rounded-md border border-subtle bg-surface px-2.5 py-1.5 shadow-pop">
           {active && draft.isPending ? (
-            <p className="text-[11px] text-fg-faint">{active.busyLabel ?? "Working…"}</p>
+            <p className="text-meta text-fg-faint">{active.busyLabel ?? "Working…"}</p>
           ) : failed ? (
-            <p className="text-[11px] text-status-danger-ink">{errorMessage(draft.error)}</p>
+            <p className="text-meta text-status-danger-ink">{errorMessage(draft.error)}</p>
           ) : (
-            <p className="text-[11px] text-fg-faint" data-query-explanation>{draft.data?.explanation}</p>
+            <p className="text-meta text-fg-faint" data-query-explanation>{draft.data?.explanation}</p>
           )}
         </div>
       ) : null}

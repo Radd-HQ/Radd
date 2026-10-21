@@ -100,45 +100,45 @@ export function SimilarHoverCard({ itemKey, anchor }: SimilarHoverCardProps) {
       style={{ left: pos.left, top: pos.top, width: CARD_WIDTH_PX }}
       className="pointer-events-none fixed z-50 rounded-lg border border-strong bg-surface p-3 shadow-xl shadow-black/40"
     >
-      <p className="font-mono text-[11px] text-fg-muted">{itemKey}</p>
+      <p className="font-mono text-meta text-fg-muted">{itemKey}</p>
 
-      {item.isPending && <p className="mt-1 text-[12px] text-fg-muted">Loading…</p>}
+      {item.isPending && <p className="mt-1 text-xs text-fg-muted">Loading…</p>}
 
       {item.isError && (
         // Most often a permission refusal. Saying which is better than an empty
         // card that reads as a bug, and better than inventing a preview.
-        <p className="mt-1 text-[12px] text-fg-muted">
+        <p className="mt-1 text-xs text-fg-muted">
           You can’t open this issue, so there’s nothing to preview.
         </p>
       )}
 
       {data && (
         <>
-          <p className="mt-0.5 text-[13px] font-medium leading-snug text-heading">{data.title}</p>
+          <p className="mt-0.5 text-row font-medium leading-snug text-heading">{data.title}</p>
 
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <StatePill state={data.state} />
-            <span className="inline-flex items-center gap-1 text-[11px] text-fg-secondary">
+            <span className="inline-flex items-center gap-1 text-meta text-fg-secondary">
               <PriorityIcon priority={data.priority} size={13} />
               {PRIORITY_META[data.priority].label}
             </span>
             {data.assignee ? (
-              <span className="inline-flex items-center gap-1 text-[11px] text-fg-secondary">
+              <span className="inline-flex items-center gap-1 text-meta text-fg-secondary">
                 <AssigneeAvatar assignee={data.assignee} />
                 {data.assignee.name}
               </span>
             ) : (
-              <span className="text-[11px] text-fg-faint">Unassigned</span>
+              <span className="text-meta text-fg-faint">Unassigned</span>
             )}
           </div>
 
           {description ? (
-            <p className="mt-2 whitespace-pre-line text-[12px] leading-relaxed text-fg-secondary">
+            <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-fg-secondary">
               {description}
             </p>
           ) : (
             // A stated absence. A blank space here reads as "still loading".
-            <p className="mt-2 text-[12px] italic text-fg-faint">No description.</p>
+            <p className="mt-2 text-xs italic text-fg-faint">No description.</p>
           )}
         </>
       )}

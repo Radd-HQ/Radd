@@ -71,20 +71,20 @@ export function RolesSettingsPage() {
                   ) : (
                     <ChevronRight size={14} className="text-fg-muted" aria-hidden />
                   )}
-                  <span className="text-[13px] font-medium text-heading">{role.name}</span>
-                  <span className="rounded bg-elevated px-1 font-mono text-[11px] text-fg-secondary">
+                  <span className="text-row font-medium text-heading">{role.name}</span>
+                  <span className="rounded bg-elevated px-1 font-mono text-meta text-fg-secondary">
                     {role.key}
                   </span>
                   {role.key === BASELINE_ROLE_KEY ? (
                     <span
-                      className="rounded border border-accent/50 bg-accent/10 px-1.5 py-px text-[11px] text-accent-text"
+                      className="rounded border border-accent/50 bg-accent/10 px-1.5 py-px text-meta text-accent-text"
                       title="Held by every active user, on every project, without being granted"
                     >
                       Everyone, always
                     </span>
                   ) : (
                     role.is_builtin && (
-                      <span className="rounded border border-accent/50 px-1.5 py-px text-[11px] text-accent-text">
+                      <span className="rounded border border-accent/50 px-1.5 py-px text-meta text-accent-text">
                         Builtin
                       </span>
                     )

@@ -41,13 +41,13 @@ export function ExtensionPicker({
       style={{ left: at.left, top: at.top }}
       role="menu"
     >
-      <p className="border-b border-subtle px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+      <p className="border-b border-subtle px-3 py-1.5 text-meta font-semibold uppercase tracking-wide text-fg-muted">
         Insert extension
       </p>
       {isLoading ? (
-        <p className="px-3 py-2 text-[13px] text-fg-faint">Loading…</p>
+        <p className="px-3 py-2 text-row text-fg-faint">Loading…</p>
       ) : !data?.length ? (
-        <p className="px-3 py-2 text-[13px] text-fg-faint">No extensions are installed.</p>
+        <p className="px-3 py-2 text-row text-fg-faint">No extensions are installed.</p>
       ) : (
         <ul className="max-h-96 overflow-y-auto py-1">
           {groupsOf(data).map((group) => (
@@ -55,7 +55,7 @@ export function ExtensionPicker({
               {/* A heading only once there is something to separate. With
                   built-ins alone it would be a label on the whole list. */}
               {group.showTitle && (
-                <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-fg-faint">
+                <p className="px-3 pt-2 pb-1 text-micro font-semibold uppercase tracking-wide text-fg-faint">
                   {group.title}
                 </p>
               )}
@@ -73,11 +73,11 @@ export function ExtensionPicker({
                       >
                         <Icon size={15} className="shrink-0 text-fg-muted" aria-hidden />
                         <span className="flex min-w-0 flex-col">
-                          <span className="text-[13px] leading-tight text-heading">
+                          <span className="text-row leading-tight text-heading">
                             {spec.label}
                           </span>
                           {spec.description && (
-                            <span className="truncate text-[11px] leading-tight text-fg-muted">
+                            <span className="truncate text-meta leading-tight text-fg-muted">
                               {spec.description}
                             </span>
                           )}

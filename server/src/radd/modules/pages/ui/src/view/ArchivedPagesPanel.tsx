@@ -94,7 +94,7 @@ export function ArchivedPagesPanel({
       <div className="mb-1 flex items-center gap-2">
         <Archive size={15} className="text-fg-muted" aria-hidden />
         <h2 className="text-base font-semibold text-heading">Archived pages</h2>
-        <span className="rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
+        <span className="rounded bg-elevated px-1.5 py-px font-mono text-micro text-fg-secondary">
           {archived.length}
         </span>
       </div>
@@ -151,7 +151,7 @@ export function ArchivedPagesPanel({
             </div>
           )}
           {shown.length === 0 ? (
-            <p className="text-[13px] text-fg-faint" data-archived-no-match>
+            <p className="text-row text-fg-faint" data-archived-no-match>
               No archived page matches “{query}”.
             </p>
           ) : (
@@ -232,7 +232,7 @@ function ArchivedPageRow({
           <span className="min-w-0 truncate">{page.title}</span>
           <ExternalLink size={11} className="shrink-0 text-fg-faint" aria-hidden />
         </Link>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-fg-muted">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-meta text-fg-muted">
           <span className="min-w-0 truncate">{path.length ? path.join(" / ") : "Top level"}</span>
           <span aria-hidden>·</span>
           <span>Archived {page.archived_at ? formatDateTime(page.archived_at) : ""}</span>
@@ -246,7 +246,7 @@ function ArchivedPageRow({
           )}
         </div>
         {skippedReason && (
-          <p className="mt-1 text-[11px] text-status-danger-ink" data-archived-skipped>
+          <p className="mt-1 text-meta text-status-danger-ink" data-archived-skipped>
             Skipped: {skippedReason}
           </p>
         )}

@@ -61,7 +61,7 @@ function Unavailable({ title }: { title?: string | null }) {
   return (
     <div className="rounded-xl border border-dashed border-subtle px-4 py-6 text-center text-xs text-fg-faint">
       {title ? `${title} — unavailable` : "Unavailable"}
-      <span className="mt-0.5 block text-[11px] text-fg-faint">You may not have access to this widget’s data.</span>
+      <span className="mt-0.5 block text-meta text-fg-faint">You may not have access to this widget’s data.</span>
     </div>
   );
 }

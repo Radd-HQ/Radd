@@ -36,7 +36,7 @@ export function PermissionMatrix({ catalog, selected, onChange }: PermissionMatr
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {byResource(catalog).map(([resource, group]) => (
         <fieldset key={resource} className="rounded-lg border border-subtle p-3">
-          <legend className="px-1 font-mono text-[11px] font-medium uppercase tracking-wide text-fg-secondary">
+          <legend className="px-1 font-mono text-meta font-medium uppercase tracking-wide text-fg-secondary">
             {resource.replace(/_/g, " ")}
           </legend>
           <ul className="flex flex-col gap-1.5">
@@ -56,7 +56,7 @@ export function PermissionMatrix({ catalog, selected, onChange }: PermissionMatr
 }
 
 const chipClasses = (on: boolean, editable: boolean) =>
-  "rounded border px-1.5 py-px text-[10px] " +
+  "rounded border px-1.5 py-px text-micro " +
   (editable ? "cursor-pointer " : "cursor-default ") +
   (on
     ? "border-accent/50 bg-accent/15 text-accent-text"
@@ -110,7 +110,7 @@ function PermissionRow({
           <span className="flex items-center gap-1.5 text-xs font-medium text-fg">
             {permission.action}
             <span
-              className="rounded border border-subtle px-1 text-[9px] uppercase text-fg-faint"
+              className="rounded border border-subtle px-1 text-nano uppercase text-fg-faint"
               title={`Checked at ${permission.scope} scope — WHERE it applies is chosen on the grant.`}
             >
               {permission.scope}

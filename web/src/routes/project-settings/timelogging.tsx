@@ -43,7 +43,7 @@ export function ProjectTimeloggingSettingsPage({ projectId }: { projectId?: stri
               targets resolve it per item project — so it belongs beside the
               toggle that decides whether this project logs time at all. */}
           <section aria-label="Working days" className="mt-8">
-            <h3 className="text-[13px] font-semibold text-heading">Working days</h3>
+            <h3 className="text-row font-semibold text-heading">Working days</h3>
             <p className="mb-3 mt-0.5 text-xs text-fg-muted">
               Which days count as worked here. The timesheet flags under- and over-logged
               days against this, and business-day SLA targets use each issue's project.
@@ -76,10 +76,10 @@ function ProjectEnableRow({ project }: { project: Project }) {
 
   return (
     <li className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
-      <span className="rounded bg-elevated px-1 font-mono text-[11px] text-fg-secondary">
+      <span className="rounded bg-elevated px-1 font-mono text-meta text-fg-secondary">
         {project.key}
       </span>
-      <span className="truncate text-[13px] text-fg">{project.name}</span>
+      <span className="truncate text-row text-fg">{project.name}</span>
       <label className="ml-auto flex items-center gap-2 text-xs text-fg-secondary">
         {toggle.isError && <span className="text-red-400">{errorMessage(toggle.error)}</span>}
         <span>{enabled ? "Enabled" : "Disabled"}</span>

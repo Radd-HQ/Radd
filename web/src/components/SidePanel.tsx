@@ -135,12 +135,12 @@ export function SidePanel({
           <PanelLeftOpen size={15} aria-hidden />
           <Icon size={14} aria-hidden />
           {badge !== undefined && (
-            <span className="rounded bg-elevated px-1 py-px text-[10px] tabular-nums text-fg-secondary">
+            <span className="rounded bg-elevated px-1 py-px text-micro tabular-nums text-fg-secondary">
               {badge}
             </span>
           )}
           <span
-            className="mt-1 text-[11px] font-medium tracking-wide whitespace-nowrap"
+            className="mt-1 text-meta font-medium tracking-wide whitespace-nowrap"
             style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
           >
             {label}
@@ -158,9 +158,9 @@ export function SidePanel({
         {!frameless && (
           <div className="flex items-center gap-2 px-4 pt-3 pb-1">
             <Icon size={14} className="text-fg-muted" aria-hidden />
-            <h2 className="text-[13px] font-semibold text-fg">{label}</h2>
+            <h2 className="text-row font-semibold text-fg">{label}</h2>
             {badge !== undefined && (
-              <span className="rounded bg-elevated px-1.5 py-px text-[11px] tabular-nums text-fg-secondary">
+              <span className="rounded bg-elevated px-1.5 py-px text-meta tabular-nums text-fg-secondary">
                 {badge}
               </span>
             )}

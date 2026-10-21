@@ -83,7 +83,7 @@ export function DisplayMenu({
             {viewOptions && <div className="mb-3 border-b border-subtle pb-3">{viewOptions}</div>}
             {cardDesigner ? (
               <div>
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+                <p className="mb-2 text-meta font-medium uppercase tracking-wide text-fg-muted">
                   Card layout
                 </p>
                 <Button
@@ -98,7 +98,7 @@ export function DisplayMenu({
                   <LayoutTemplate size={13} aria-hidden />
                   {cardDesigner.canEdit ? "Design card…" : "View card layout…"}
                 </Button>
-                <p className="mt-2 text-[11px] text-fg-faint">
+                <p className="mt-2 text-meta text-fg-faint">
                   The card layout is part of this view — everyone sees it.
                   {cardDesigner.canEdit ? "" : " Only view editors change it."}
                 </p>
@@ -107,7 +107,7 @@ export function DisplayMenu({
               <ColumnsSection editor={columnsEditor} />
             ) : (
               <>
-                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+                <p className="mb-2 text-meta font-medium uppercase tracking-wide text-fg-muted">
                   Fields on items
                 </p>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
@@ -148,7 +148,7 @@ export function DisplayMenu({
             <div className="mt-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-fg-secondary">Scale</span>
-                <span className="text-[11px] tabular-nums text-fg-muted">
+                <span className="text-meta tabular-nums text-fg-muted">
                   {Math.round(display.scale * 100)}%
                 </span>
               </div>
@@ -197,7 +197,7 @@ function ColumnsSection({ editor }: { editor: ColumnsEditor }) {
 
   return (
     <div>
-      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+      <p className="mb-2 text-meta font-medium uppercase tracking-wide text-fg-muted">
         Columns
       </p>
       <ul className="flex flex-col gap-1">
@@ -268,13 +268,13 @@ function ColumnsSection({ editor }: { editor: ColumnsEditor }) {
               />
             </div>
           )}
-          <p className="mt-2 text-[11px] text-fg-faint">
+          <p className="mt-2 text-meta text-fg-faint">
             Columns are part of this view — everyone sees this set. Drag the header edges to
             size them for yourself.
           </p>
         </>
       ) : (
-        <p className="mt-2 text-[11px] text-fg-faint">
+        <p className="mt-2 text-meta text-fg-faint">
           Columns are part of this view — only view editors change them. Widths are yours:
           drag the header edges.
         </p>

@@ -29,7 +29,7 @@ export function SlqSuggestDropdown({
       role="listbox"
     >
       {contextLabel && (
-        <div className="border-b border-subtle px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-fg-muted">
+        <div className="border-b border-subtle px-2.5 py-1 text-micro font-medium uppercase tracking-wide text-fg-muted">
           {contextLabel}
         </div>
       )}
@@ -49,7 +49,7 @@ export function SlqSuggestDropdown({
               }}
               onMouseEnter={() => onHover(index)}
               className={
-                "flex items-center justify-between gap-3 px-2.5 py-1 font-mono text-[13px] " +
+                "flex items-center justify-between gap-3 px-2.5 py-1 font-mono text-row " +
                 (hint
                   ? "cursor-default text-fg-muted"
                   : "cursor-pointer " + (active ? "bg-accent/20 text-heading" : "text-fg"))
@@ -57,7 +57,7 @@ export function SlqSuggestDropdown({
             >
               <span className="truncate">{suggestion.label}</span>
               {suggestion.detail && (
-                <span className="shrink-0 text-[11px] text-fg-muted">{suggestion.detail}</span>
+                <span className="shrink-0 text-meta text-fg-muted">{suggestion.detail}</span>
               )}
             </li>
           );

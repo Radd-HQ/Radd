@@ -52,7 +52,7 @@ export function SharingGrantsEditor({ resourceType, resourceId, draft, onChange 
     <li key={row.draftId ?? `new-${index}`} data-sharing-new className="flex min-w-0 flex-wrap items-center gap-2 rounded border border-accent/40 bg-accent/5 p-2 text-xs">
       <span className="min-w-0 flex-1 break-words">{row.subjectName ?? `New ${row.kind}`}</span>
       <span className="text-fg-muted">{row.kind}</span>
-      <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-text">New</span>
+      <span className="rounded bg-accent/15 px-1.5 py-0.5 text-micro font-medium uppercase tracking-wide text-accent-text">New</span>
       <Select aria-label="Access level" size="sm" value={row.level} options={SHARE_LEVEL_OPTIONS}
         onChange={level => onChange({ ...draft, additions: draft.additions.map((old, i) => i === index ? { ...old, level: level as ShareLevelValue } : old) })} />
       <Button size="sm" variant="ghost" onClick={() => onChange({ ...draft, additions: draft.additions.filter((_, i) => i !== index) })}>Remove</Button>

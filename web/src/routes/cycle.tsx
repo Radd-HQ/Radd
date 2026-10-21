@@ -89,7 +89,7 @@ export function CyclePage() {
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1 className="text-lg font-semibold text-heading">{cycle.data.name}</h1>
           <span
-            className="inline-flex items-center gap-1.5 rounded border border-strong px-1.5 py-px text-[11px] uppercase tracking-wide text-fg-secondary"
+            className="inline-flex items-center gap-1.5 rounded border border-strong px-1.5 py-px text-meta uppercase tracking-wide text-fg-secondary"
             title={`Status: ${status.label}`}
           >
             <span className={`size-2 rounded-full ${status.dotClassName}`} aria-hidden />
@@ -115,7 +115,7 @@ export function CyclePage() {
             )}
         </div>
         {cycle.data.goal && (
-          <p className="mt-2 flex items-start gap-1.5 text-[13px] text-fg-secondary">
+          <p className="mt-2 flex items-start gap-1.5 text-row text-fg-secondary">
             <Target size={14} className="mt-0.5 shrink-0 text-fg-faint" aria-hidden />
             {cycle.data.goal}
           </p>
@@ -196,7 +196,7 @@ export function CyclePage() {
                     className={`size-2 rounded-full ${CATEGORY_META[group.category].dotClassName}`}
                     aria-hidden
                   />
-                  <h2 className="text-[13px] font-semibold text-fg">
+                  <h2 className="text-row font-semibold text-fg">
                     {CATEGORY_META[group.category].label}
                   </h2>
                   <span className="text-xs text-fg-muted">{group.items.length} on this page</span>
@@ -240,9 +240,9 @@ function CycleItemRow({ item }: { item: Item }) {
         <KindBadge kind={item.kind} size={13} />
         <PriorityIcon priority={item.priority} size={13} />
         <ItemKeyLink itemKey={item.key} />
-        <span className="min-w-0 flex-1 truncate text-[13px] text-heading">{item.title}</span>
+        <span className="min-w-0 flex-1 truncate text-row text-heading">{item.title}</span>
         {item.target_date && (
-          <span className="shrink-0 text-[11px] text-fg-muted">
+          <span className="shrink-0 text-meta text-fg-muted">
             {formatDate(item.target_date)}
           </span>
         )}

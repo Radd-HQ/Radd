@@ -66,7 +66,7 @@ function totals(buckets: SlaReportBucket[]) {
 function Tile({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-subtle bg-surface/40 px-3.5 py-2.5" data-sla-tile={label}>
-      <p className="text-[11px] uppercase tracking-wide text-fg-muted">{label}</p>
+      <p className="text-meta uppercase tracking-wide text-fg-muted">{label}</p>
       <p className="mt-0.5 text-lg font-semibold tabular-nums text-heading">{value}</p>
     </div>
   );
@@ -161,7 +161,7 @@ export function SlaReportCard({
         </div>
         {csat && window.csatCount > 0 && (
           <div className="mt-5">
-            <p className="mb-2 text-[11px] uppercase tracking-wide text-fg-muted">
+            <p className="mb-2 text-meta uppercase tracking-wide text-fg-muted">
               CSAT trend — avg rating by the week the response arrived
             </p>
             <Slot

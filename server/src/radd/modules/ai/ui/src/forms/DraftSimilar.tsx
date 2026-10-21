@@ -41,7 +41,7 @@ export function AiDraftSimilar({ title, description, projectId, exclude }: ItemD
   if (title.trim().length < SIMILAR_MIN_SEED_CHARS || candidates.length === 0) return null;
   return (
     <section className="flex flex-col gap-1" data-ai-draft-similar>
-      <h3 className="flex items-center gap-1.5 text-[11px] font-medium text-fg-secondary">
+      <h3 className="flex items-center gap-1.5 text-meta font-medium text-fg-secondary">
         <FileSearch size={12} aria-hidden />
         Similar issues
       </h3>

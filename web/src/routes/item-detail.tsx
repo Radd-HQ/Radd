@@ -464,14 +464,14 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
               <button
                 type="button"
                 onClick={() => setEditingDescription(true)}
-                className="rounded-md border border-transparent px-1.5 py-1 text-left text-[13px] text-fg-faint hover:border-subtle hover:text-fg-secondary cursor-pointer"
+                className="rounded-md border border-transparent px-1.5 py-1 text-left text-row text-fg-faint hover:border-subtle hover:text-fg-secondary cursor-pointer"
               >
                 Add a description…
               </button>
             ) : (
               <p
                 title={writ.reasonFor("description")}
-                className="px-1.5 py-1 text-[13px] text-fg-faint"
+                className="px-1.5 py-1 text-row text-fg-faint"
               >
                 No description.
               </p>

@@ -54,7 +54,7 @@ export function DirectorySettingsPage() {
             {DIRECTORY_TABS.map(([key, label]) => (
               <button key={key} type="button" role="tab" aria-selected={tab === key} data-directory-tab={key}
                 onClick={() => setTab(key)}
-                className={"-mb-px cursor-pointer border-b-2 px-2.5 py-2 text-[13px] " +
+                className={"-mb-px cursor-pointer border-b-2 px-2.5 py-2 text-row " +
                   (tab === key ? "border-accent-hover text-heading" : "border-transparent text-fg-muted hover:text-fg")}>
                 {label}
               </button>

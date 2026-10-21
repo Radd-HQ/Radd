@@ -20,11 +20,11 @@ export function FormCard({
         params={{ formId: form.id }}
         className="flex h-full flex-col gap-1 rounded-lg border border-subtle bg-surface/40 p-3 hover:border-emphasis hover:bg-surface focus-visible:outline-2 focus-visible:outline-focus"
       >
-        <span className="flex items-center gap-1.5 text-[13px] font-medium text-heading">
+        <span className="flex items-center gap-1.5 text-row font-medium text-heading">
           <ClipboardList size={14} className="shrink-0 text-accent-text" aria-hidden />
           {form.name}
           {showProject && (
-            <span className="ml-auto shrink-0 rounded bg-elevated px-1 font-mono text-[11px] text-fg-secondary">
+            <span className="ml-auto shrink-0 rounded bg-elevated px-1 font-mono text-meta text-fg-secondary">
               {project.key}
             </span>
           )}

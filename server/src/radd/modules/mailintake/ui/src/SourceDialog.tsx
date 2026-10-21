@@ -77,7 +77,7 @@ export function SourceDialog({
         />
 
         {source ? (
-          <p className="text-[11px] text-fg-muted">
+          <p className="text-meta text-fg-muted">
             Kind: <strong>{kindLabel(kinds.data?.sources, source.kind)}</strong> — fixed once the
             source exists.
           </p>
@@ -129,7 +129,7 @@ export function SourceDialog({
         )}
 
         {isWebhook ? (
-          <p className="rounded-md border border-subtle bg-surface/60 px-3 py-2 text-[11px] text-fg-secondary">
+          <p className="rounded-md border border-subtle bg-surface/60 px-3 py-2 text-meta text-fg-secondary">
             Push to <code className="font-mono">POST /api/v1/integrations/email</code> with the raw
             message and an <code className="font-mono">X-Radd-Signature</code> HMAC of the body,
             keyed with the secret below. An empty secret rejects everything.

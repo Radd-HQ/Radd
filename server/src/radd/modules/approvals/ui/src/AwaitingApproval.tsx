@@ -46,10 +46,10 @@ export function AwaitingApproval() {
                 title={row.note || undefined}
                 className="flex w-full cursor-pointer items-center gap-2.5 border-b border-subtle/60 px-4 py-2 text-left last:border-b-0 hover:bg-elevated/50">
                 <ItemKeyLink itemKey={row.item_key}
-                  className="shrink-0 rounded bg-elevated px-1.5 font-mono text-[11px] text-fg-secondary hover:text-accent-text hover:underline" />
-                <span className="min-w-0 flex-1 truncate text-[13px] text-fg">{row.item_title}</span>
-                <span className="shrink-0 rounded bg-elevated/80 px-1.5 py-px text-[10px] text-fg-secondary">→ {row.to_state_name}</span>
-                <span className="shrink-0 text-[11px] text-fg-muted">{row.requested_by?.name ?? "Unknown"} · {shortDate(row.created_at)}</span>
+                  className="shrink-0 rounded bg-elevated px-1.5 font-mono text-meta text-fg-secondary hover:text-accent-text hover:underline" />
+                <span className="min-w-0 flex-1 truncate text-row text-fg">{row.item_title}</span>
+                <span className="shrink-0 rounded bg-elevated/80 px-1.5 py-px text-micro text-fg-secondary">→ {row.to_state_name}</span>
+                <span className="shrink-0 text-meta text-fg-muted">{row.requested_by?.name ?? "Unknown"} · {shortDate(row.created_at)}</span>
               </div>
             )}</ItemPeek>
           </li>

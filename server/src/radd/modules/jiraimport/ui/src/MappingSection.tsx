@@ -38,8 +38,8 @@ export function MappingSection({
         ) : (
           <ChevronRight size={14} className="shrink-0 text-fg-muted" />
         )}
-        <span className="text-[13px] font-medium text-fg">{title}</span>
-        <span className="rounded bg-elevated px-1.5 text-[11px] text-fg-secondary">{count}</span>
+        <span className="text-row font-medium text-fg">{title}</span>
+        <span className="rounded bg-elevated px-1.5 text-meta text-fg-secondary">{count}</span>
         {hint && <span className="ml-2 truncate text-xs text-fg-faint">{hint}</span>}
       </button>
       {isOpen && (
@@ -63,7 +63,7 @@ export function RowLabel({
 }) {
   return (
     <div className="min-w-0 flex-1">
-      <p className="truncate text-[13px] text-fg">
+      <p className="truncate text-row text-fg">
         {value}
         {count !== undefined && (
           <span className="ml-1.5 text-xs text-fg-faint">

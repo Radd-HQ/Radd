@@ -70,7 +70,7 @@ function PagesDirectory() {
               <Link to={PageRoute.space} params={{ spaceSlug: space.slug }} className="flex h-full min-w-0 flex-col gap-1 rounded-lg border border-subtle bg-surface/50 p-4 hover:border-strong hover:bg-surface">
                 <span className="flex min-w-0 flex-wrap items-baseline gap-2">
                   <span className="min-w-0 break-words text-sm font-medium text-heading">{space.name}</span>
-                  <span className="ml-auto shrink-0 text-[11px] text-fg-muted">{space.page_count} page{space.page_count === 1 ? "" : "s"}</span>
+                  <span className="ml-auto shrink-0 text-meta text-fg-muted">{space.page_count} page{space.page_count === 1 ? "" : "s"}</span>
                 </span>
                 {space.description && <span className="break-words text-xs leading-relaxed text-fg-muted">{space.description}</span>}
               </Link>

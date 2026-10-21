@@ -290,7 +290,7 @@ export function CardPreview({
  * item is fully populated) still needs a visible, draggable body. */
 function EmptyCellTag({ attr }: { attr: string }) {
   return (
-    <span className="rounded border border-dashed border-strong px-1.5 py-px text-[10px] text-fg-faint">
+    <span className="rounded border border-dashed border-strong px-1.5 py-px text-micro text-fg-faint">
       {attr}
     </span>
   );
@@ -308,7 +308,7 @@ function SelectedCellHint({
   onRemove?: () => void;
 }) {
   return (
-    <div className="mt-2 flex items-center gap-2 text-[11px] text-fg-muted">
+    <div className="mt-2 flex items-center gap-2 text-meta text-fg-muted">
       <span className="font-mono">{attr}</span>
       <button
         type="button"

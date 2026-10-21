@@ -280,7 +280,7 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
               hint="Case-insensitive regex deciding which cycle headers show. Backlog always shows."
             />
             {cycleFilterError && (
-              <p className="text-[11px] text-red-400" role="alert">
+              <p className="text-meta text-red-400" role="alert">
                 Invalid regex: {cycleFilterError}
               </p>
             )}
@@ -400,7 +400,7 @@ function QuickFilterRow({
         onChange={(event) => onChange({ ...filter, name: event.target.value })}
         placeholder="Label (defaults to the condition)"
         maxLength={60}
-        className="h-8 w-36 shrink-0 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading"
+        className="h-8 w-36 shrink-0 rounded-md border border-strong bg-surface px-2 text-row text-heading"
       />
       <div className="min-w-0 flex-1">
         <SlqEditor

@@ -109,7 +109,7 @@ export function ProvidersPanel() {
   return (
     <section data-sso-providers aria-label="Sign-in providers">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+        <h2 className="text-meta font-medium uppercase tracking-wide text-fg-muted">
           Providers
         </h2>
         <Button size="sm" variant="ghost" onClick={() => setAdding(true)}>

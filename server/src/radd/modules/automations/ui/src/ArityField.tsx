@@ -22,7 +22,7 @@ export function ArityField({ rule, value, forced, onChange }: ArityFieldProps) {
 
   return (
     <fieldset className="flex flex-col gap-1">
-      <legend className="text-[11px] font-medium uppercase tracking-wide text-fg-secondary">
+      <legend className="text-meta font-medium uppercase tracking-wide text-fg-secondary">
         Run
       </legend>
       <div className="flex gap-1" role="radiogroup" aria-label="Run">
@@ -38,7 +38,7 @@ export function ArityField({ rule, value, forced, onChange }: ArityFieldProps) {
               disabled={locked}
               title={locked ? forced?.reason : undefined}
               onClick={() => onChange(option)}
-              className={`flex-1 rounded-[6px] border px-2 py-1.5 text-left text-[11px] ${
+              className={`flex-1 rounded-[6px] border px-2 py-1.5 text-left text-meta ${
                 active
                   ? "border-emphasis bg-elevated text-heading"
                   : "border-subtle text-fg-secondary hover:border-strong hover:text-fg"
@@ -50,7 +50,7 @@ export function ArityField({ rule, value, forced, onChange }: ArityFieldProps) {
           );
         })}
       </div>
-      <p className="text-[11px] text-fg-muted">
+      <p className="text-meta text-fg-muted">
         {forced?.reason ??
           (current === NodeArity.item
             ? "Fires once for every issue that reaches it — capped per run, and the dry run shows the real count."

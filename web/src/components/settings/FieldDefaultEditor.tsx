@@ -45,7 +45,7 @@ export function FieldDefaultEditor({ field, canManage }: { field: FieldDef; canM
           multiple={field.type === FieldType.multi_select} onChange={values => setDraft(field.type === FieldType.multi_select ? values.length ? values : null : values[0] ?? null)} />
           : <CustomFieldControl field={control} value={draft} onChange={setDraft} />}
       </fieldset>
-      <p className="mt-1 text-[11px] text-fg-faint">
+      <p className="mt-1 text-meta text-fg-faint">
         Seeded onto new issues when this field is left blank on create.
       </p>
       {canManage && (

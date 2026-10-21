@@ -54,7 +54,7 @@ export function StorageChoiceProvider({ children }: { children: ReactNode }) {
       {children}
       {options && (
         <Modal title="Where should this file be stored?" onClose={() => settle(null)}>
-          <p className="mb-3 text-[13px] text-fg-secondary">
+          <p className="mb-3 text-row text-fg-secondary">
             A storage rule asks uploaders to pick. Closing this cancels the upload.
           </p>
           <div className="flex flex-col gap-2">

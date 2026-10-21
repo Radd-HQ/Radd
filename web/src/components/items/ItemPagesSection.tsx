@@ -37,10 +37,10 @@ export function ItemPagesSection({ item }: { item: Item }) {
 
   return (
     <section className="mt-3 border-t border-subtle pt-3">
-      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">Pages</p>
+      <p className="mb-2 text-meta font-medium uppercase tracking-wide text-fg-faint">Pages</p>
       <div className="flex flex-col gap-2">
         {list.length === 0 ? (
-          <p className="text-[13px] text-fg-faint">No linked docs yet.</p>
+          <p className="text-row text-fg-faint">No linked docs yet.</p>
         ) : (
           <ul className="flex flex-col gap-1">
             {list.map((ref) => (
@@ -51,11 +51,11 @@ export function ItemPagesSection({ item }: { item: Item }) {
                 <BookOpen size={14} className="shrink-0 text-fg-muted" aria-hidden />
                 <Link
                   {...pagePermalink(ref.page_id)}
-                  className="min-w-0 flex-1 truncate text-[13px] text-fg hover:underline"
+                  className="min-w-0 flex-1 truncate text-row text-fg hover:underline"
                 >
                   {ref.title}
                 </Link>
-                <span className="shrink-0 text-[11px] text-fg-faint">{ref.space_name}</span>
+                <span className="shrink-0 text-meta text-fg-faint">{ref.space_name}</span>
                 {canWrite && <UnlinkButton pageId={ref.page_id} item={item} />}
               </li>
             ))}
@@ -122,7 +122,7 @@ function LinkDocPicker({ item }: { item: Item }) {
           placeholder="Search pages…"
           aria-label="Search pages"
           autoFocus
-          className="h-8 flex-1 rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+          className="h-8 flex-1 rounded-md border border-strong bg-surface px-2.5 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
         />
         <button
           type="button"
@@ -142,7 +142,7 @@ function LinkDocPicker({ item }: { item: Item }) {
                 type="button"
                 onClick={() => link.mutate(hit.page_id)}
                 disabled={link.isPending}
-                className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-[13px] text-fg hover:bg-elevated cursor-pointer disabled:opacity-50"
+                className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-row text-fg hover:bg-elevated cursor-pointer disabled:opacity-50"
               >
                 <BookOpen size={12} className="shrink-0 text-fg-faint" aria-hidden />
                 <span className="truncate">{hit.title}</span>

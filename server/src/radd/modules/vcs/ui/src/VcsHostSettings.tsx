@@ -26,7 +26,7 @@ export function VcsHostSettings({ config }: { config: VcsConnector }) {
 
   return (
     <div>
-      <p className="mb-2 text-[13px] text-fg-muted">{config.description}</p>
+      <p className="mb-2 text-row text-fg-muted">{config.description}</p>
       <p className="mb-3 text-xs text-fg-muted">
         Only registered, enabled repositories accept webhooks. Pausing a host pauses all its repositories; removing a
         repository stops ingestion and keeps historical links. Use a different webhook secret for each host. The default
@@ -113,13 +113,13 @@ function ConnectionCard({ config, connection, repos, categories, onEdit }: {
       <header className="flex items-center gap-3 border-b border-subtle/60 px-4 py-2.5">
         <Server size={14} className="text-fg-muted" aria-hidden />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium text-heading">{connection.name}</div>
-          <div className="truncate text-[11px] text-fg-muted">{connection.base_url || "no base URL set"}</div>
+          <div className="truncate text-row font-medium text-heading">{connection.name}</div>
+          <div className="truncate text-meta text-fg-muted">{connection.base_url || "no base URL set"}</div>
         </div>
-        {!connection.has_secret && <span className="rounded bg-elevated px-1.5 py-0.5 text-[10px] text-status-warning-ink">no webhook secret</span>}
-        {!connection.active && <span className="rounded bg-elevated px-1.5 py-0.5 text-[10px] text-fg-muted">inactive</span>}
+        {!connection.has_secret && <span className="rounded bg-elevated px-1.5 py-0.5 text-micro text-status-warning-ink">no webhook secret</span>}
+        {!connection.active && <span className="rounded bg-elevated px-1.5 py-0.5 text-micro text-fg-muted">inactive</span>}
         {result && (
-          <span className="flex items-center gap-1 text-[11px] text-fg-muted">
+          <span className="flex items-center gap-1 text-meta text-fg-muted">
             {result.ok ? <CheckCircle2 size={12} className="text-status-success-ink" aria-hidden /> : <XCircle size={12} className="text-status-danger-ink" aria-hidden />}
             {result.ok ? result.version || "reachable" : result.detail}
           </span>
@@ -216,7 +216,7 @@ function HostForm({ config, connection, onDone }: {
         <Button type="submit" disabled={save.isPending}>{connection ? "Save host" : "New host"}</Button>
         <Button type="button" variant="ghost" onClick={onDone}>Cancel</Button>
       </div>
-      {save.isError && <p role="alert" className="text-[12px] text-status-danger-ink">{errorMessage(save.error)}</p>}
+      {save.isError && <p role="alert" className="text-xs text-status-danger-ink">{errorMessage(save.error)}</p>}
     </form>
   );
 }

@@ -123,7 +123,7 @@ function ProviderRow({ provider, probe, onTest, onEdit, onDelete }: {
           <span className="inline-flex items-center gap-1.5">
             {provider.name}
             {provider.source === AiProviderSource.env && (
-              <span className="rounded bg-elevated px-1.5 py-px text-[10px] font-normal text-fg-muted"
+              <span className="rounded bg-elevated px-1.5 py-px text-micro font-normal text-fg-muted"
                 title="Seeded from environment variables — editable like any other row">
                 env
               </span>
@@ -139,7 +139,7 @@ function ProviderRow({ provider, probe, onTest, onEdit, onDelete }: {
             <span className="inline-flex items-center gap-1.5">
               {provider.reasoning ? "Model default" : "Off"}
               {paramCount > 0 && (
-                <span className="rounded bg-elevated px-1.5 py-px text-[10px] text-fg-muted"
+                <span className="rounded bg-elevated px-1.5 py-px text-micro text-fg-muted"
                   title={JSON.stringify(provider.request_params)}>
                   +{paramCount} param{paramCount === 1 ? "" : "s"}
                 </span>

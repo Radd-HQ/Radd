@@ -7,7 +7,7 @@ export function ChangeList({ changes, entityType, className = "" }: { changes: H
   return (
     <ul className={`flex flex-col gap-0.5 ${className}`}>
       {changes.map((change, index) => (
-        <li key={index} className="text-[13px] leading-relaxed text-fg">
+        <li key={index} className="text-row leading-relaxed text-fg">
           <Slot id={SlotId.entityChangeLine} match={entityType ?? ""} change={safeChange(change)} fallback={<ChangeLine change={change} />} errorFallback={<ChangeLine change={change} />} />
         </li>
       ))}

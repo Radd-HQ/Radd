@@ -24,7 +24,7 @@ export function SidebarSpaces({ collapsed, onToggle }: { collapsed: boolean; onT
       <Settings size={12} aria-hidden />
     </Link>}>
     {outsideWindow && current.data && <div aria-label="Current wiki space" className="mb-1 border-b border-subtle pb-1">
-      <span className="px-2 text-[10px] text-fg-muted">Current space</span>
+      <span className="px-2 text-micro text-fg-muted">Current space</span>
       <SidebarLink to={PageRoute.space} params={{ spaceSlug: current.data.slug }}>
         <BookOpen size={14} aria-hidden /><span className="truncate">{current.data.name}</span>
       </SidebarLink>

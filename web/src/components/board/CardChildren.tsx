@@ -30,7 +30,7 @@ export function CardChildren({ parentId }: { parentId: string }) {
       ) : children.isError && !children.data ? (
         <ErrorText error={children.error} />
       ) : sorted.length === 0 ? (
-        <p className="text-[11px] text-fg-faint">No children.</p>
+        <p className="text-meta text-fg-faint">No children.</p>
       ) : (
         <ul className="flex flex-col">
           {sorted.map((child) => {
@@ -49,9 +49,9 @@ export function CardChildren({ parentId }: { parentId: string }) {
                     aria-hidden
                     className={`size-1.5 shrink-0 rounded-full ${meta.dotClassName}`}
                   />
-                  <span className="shrink-0 font-mono text-[10px] text-fg-faint">{child.key}</span>
+                  <span className="shrink-0 font-mono text-micro text-fg-faint">{child.key}</span>
                   <span
-                    className={`truncate text-[11px] ${
+                    className={`truncate text-meta ${
                       finished ? "text-fg-muted line-through" : "text-fg-secondary"
                     }`}
                   >

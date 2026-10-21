@@ -490,7 +490,7 @@ function CommentParams({ params, set, str }: CommentControlProps) {
           onChange={(event) => set({ body: event.target.value })}
           rows={2}
           placeholder="Auto-added by a rule…"
-          className="rounded-md border border-strong bg-surface px-2.5 py-1.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+          className="rounded-md border border-strong bg-surface px-2.5 py-1.5 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
         />
       </div>
       <SelectField

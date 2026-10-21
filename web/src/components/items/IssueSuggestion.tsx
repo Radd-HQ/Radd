@@ -31,9 +31,9 @@ export function IssueSuggestion({ itemKey, title, badge, note, mergeFrom, onOpen
           onClick={(event) => {
             if (openRef(itemKey, event)) onOpen?.();
           }}
-          className="min-w-0 flex-1 truncate text-[13px] text-fg hover:underline"
+          className="min-w-0 flex-1 truncate text-row text-fg hover:underline"
         >
-          <span className="mr-1.5 font-mono text-[11px] text-fg-muted">{itemKey}</span>
+          <span className="mr-1.5 font-mono text-meta text-fg-muted">{itemKey}</span>
           {title}
         </Link>
         {badge}
@@ -70,7 +70,7 @@ export function IssueSuggestion({ itemKey, title, badge, note, mergeFrom, onOpen
         )}
       </div>
       {confirmNode}
-      {note && <p className="mt-0.5 text-[11px] text-fg-faint">{note}</p>}
+      {note && <p className="mt-0.5 text-meta text-fg-faint">{note}</p>}
     </li>
   );
 }

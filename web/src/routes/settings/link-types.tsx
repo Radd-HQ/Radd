@@ -156,12 +156,12 @@ function LinkTypeRow({
       <td className={`${cell} whitespace-nowrap`}>
         <span className="text-heading">{type.name}</span>
         {type.system && (
-          <span className="ml-2 rounded bg-elevated px-1 text-[10px] uppercase tracking-wide text-fg-muted">
+          <span className="ml-2 rounded bg-elevated px-1 text-micro uppercase tracking-wide text-fg-muted">
             built-in
           </span>
         )}
         {type.auto_managed && (
-          <span className="ml-1 rounded bg-elevated px-1 text-[10px] uppercase tracking-wide text-fg-muted">
+          <span className="ml-1 rounded bg-elevated px-1 text-micro uppercase tracking-wide text-fg-muted">
             auto
           </span>
         )}
@@ -185,7 +185,7 @@ function LinkTypeRow({
         ) : (
           <span className="flex flex-wrap gap-1">
             {type.project_ids.map((id) => (
-              <span key={id} className="rounded bg-elevated px-1 font-mono text-[11px]">
+              <span key={id} className="rounded bg-elevated px-1 font-mono text-meta">
                 {projectKeys.get(id) ?? "?"}
               </span>
             ))}
@@ -355,7 +355,7 @@ function LinkTypeModal({
         <div>
           <p className="mb-1.5 text-xs font-medium text-fg-secondary">Scope</p>
           <ScopePicker value={projectIds} onChange={setProjectIds} projects={projects} />
-          <p className="mt-1.5 text-[11px] text-fg-faint">
+          <p className="mt-1.5 text-meta text-fg-faint">
             A global type is offered on every project; a scoped one only on those you pick.
           </p>
         </div>

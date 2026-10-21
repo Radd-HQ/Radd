@@ -36,7 +36,7 @@ export function EditingNow({ store }: { store: PresenceStore }) {
       role="status"
       aria-label={`In this page: ${summary}`}
       data-editing-now
-      className="flex items-center gap-2 text-[11px] text-fg-muted"
+      className="flex items-center gap-2 text-meta text-fg-muted"
     >
       <span className="flex items-center -space-x-1.5">
         {shown.map((person) => {
@@ -65,7 +65,7 @@ export function EditingNow({ store }: { store: PresenceStore }) {
               .slice(MAX_FACES)
               .map((person) => person.user.name)
               .join(", ")}
-            className="flex size-5 items-center justify-center rounded-full bg-elevated text-[9px] font-semibold text-fg-secondary ring-2 ring-base"
+            className="flex size-5 items-center justify-center rounded-full bg-elevated text-nano font-semibold text-fg-secondary ring-2 ring-base"
           >
             +{overflow}
           </span>
@@ -86,7 +86,7 @@ export function SavingStatus({ store }: { store: PresenceStore }) {
   const isSaver = saver === self;
   const saverName = people.find((person) => person.clientIds.includes(saver ?? -1))?.user.name;
   return (
-    <span className="text-[11px] text-fg-muted" data-collab-saver={isSaver}>
+    <span className="text-meta text-fg-muted" data-collab-saver={isSaver}>
       {isSaver || !saverName ? "Saving as you type" : `Saved by ${saverName}`}
     </span>
   );

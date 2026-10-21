@@ -48,7 +48,7 @@ export function PreviewDialog({
   return (
     <Modal title="Where would this land?" onClose={onClose}>
       <div className="flex flex-col gap-3">
-        <p className="text-[11px] text-fg-muted">
+        <p className="text-meta text-fg-muted">
           Runs the chain against a made-up message. Nothing is sent and no ticket is created.
         </p>
         <TextField
@@ -99,27 +99,27 @@ function PreviewResult({ result }: { result: RoutingPreviewResult }) {
         // own fill (4.51:1 light, 4.56:1 dark). The raw red-400 text on a
         // red-500/10 tint it replaces was a tint the light remap only half
         // reached, and the loudest thing on the panel was the least legible.
-        <div className="rounded-md border border-callout-danger-border/60 bg-callout-danger-fill px-3 py-2 text-[13px]">
+        <div className="rounded-md border border-callout-danger-border/60 bg-callout-danger-fill px-3 py-2 text-row">
           <span className="font-medium text-callout-danger-ink">
             {crashed.length === 1
               ? "1 rule failed and was skipped"
               : `${crashed.length} rules failed and were skipped`}
           </span>
-          <span className="mt-0.5 block text-[11px] text-fg-secondary">
+          <span className="mt-0.5 block text-meta text-fg-secondary">
             The chain kept going so no message would be lost, but the destination below is
             what happens WITH those rules broken — not what they were written to do.
           </span>
         </div>
       )}
-      <div className="rounded-md border border-subtle bg-surface/60 px-3 py-2 text-[13px]">
+      <div className="rounded-md border border-subtle bg-surface/60 px-3 py-2 text-row">
         <span className="text-fg">
           Opens in <strong>{result.project_key || "nowhere — no default set"}</strong>
         </span>
-        <span className="mt-0.5 block text-[11px] text-fg-faint">{result.reason}</span>
+        <span className="mt-0.5 block text-meta text-fg-faint">{result.reason}</span>
       </div>
       {outcomes.length > 0 && (
         <div className="flex flex-col gap-1">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+          <span className="text-meta font-medium uppercase tracking-wide text-fg-muted">
             The chain, top to bottom
           </span>
           {outcomes.map((outcome, index) => {
@@ -132,8 +132,8 @@ function PreviewResult({ result }: { result: RoutingPreviewResult }) {
                 data-rule-status={outcome.status}
                 className="flex flex-col gap-0.5 rounded-md border border-subtle bg-surface/40 px-2 py-1.5"
               >
-                <div className="flex items-baseline gap-2 text-[12px]">
-                  <span className="w-4 shrink-0 text-center font-mono text-[11px] text-fg-faint">
+                <div className="flex items-baseline gap-2 text-xs">
+                  <span className="w-4 shrink-0 text-center font-mono text-meta text-fg-faint">
                     {index + 1}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-fg-secondary">
@@ -145,7 +145,7 @@ function PreviewResult({ result }: { result: RoutingPreviewResult }) {
                 </div>
                 {outcome.detail && (
                   // Wrapped, never truncated: the detail is the most informative field on the panel.
-                  <p className="pl-6 text-[11px] leading-snug break-words text-fg-faint">
+                  <p className="pl-6 text-meta leading-snug break-words text-fg-faint">
                     {outcome.detail}
                   </p>
                 )}

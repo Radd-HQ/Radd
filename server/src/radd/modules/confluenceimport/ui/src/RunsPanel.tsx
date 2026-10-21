@@ -71,14 +71,14 @@ export function RunsPanel({
             <li key={run.id} className="py-3">
               <div className="flex items-start gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-medium text-heading">
+                  <p className="text-row font-medium text-heading">
                     {run.dry_run ? "Dry run" : "Import"} ·{" "}
                     <span className="font-normal text-fg-secondary">
                       {CONFLUENCE_STAGE_LABELS[run.stage] ?? run.stage}
                     </span>
                   </p>
                   {counts.length > 0 && (
-                    <p className="mt-0.5 text-[12px] text-fg-muted">
+                    <p className="mt-0.5 text-xs text-fg-muted">
                       {counts.map(([key, value]) => `${CONFLUENCE_COUNT_LABELS[key]}: ${value}`).join(" · ")}
                     </p>
                   )}
@@ -136,7 +136,7 @@ function ProblemList({
       {[...grouped.values()].map(({ problem, count }, index) => (
         <li
           key={index}
-          className="flex items-start justify-between gap-3 rounded-lg border border-subtle bg-elevated px-3 py-1.5 text-[12px]"
+          className="flex items-start justify-between gap-3 rounded-lg border border-subtle bg-elevated px-3 py-1.5 text-xs"
         >
           <span className="min-w-0 text-fg-secondary">
             {problem.message}

@@ -17,7 +17,7 @@ export function MyForms() {
 
   return (
     <section className="flex flex-col gap-2" aria-label="Submit a request">
-      <h2 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+      <h2 className="flex items-center gap-1.5 text-meta font-semibold uppercase tracking-wide text-fg-muted">
         <ConciergeBell size={12} aria-hidden />
         Submit a request
       </h2>

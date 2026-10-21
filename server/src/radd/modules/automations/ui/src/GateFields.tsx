@@ -13,7 +13,7 @@ import { TokenMultiSelect } from "@radd/plugin-sdk";
 function Labelled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-fg-secondary">
+      <span className="text-meta font-medium uppercase tracking-wide text-fg-secondary">
         {label}
       </span>
       {children}

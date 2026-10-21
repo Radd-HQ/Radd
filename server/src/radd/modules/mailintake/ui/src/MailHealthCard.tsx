@@ -27,8 +27,8 @@ export interface MailHealth {
 function StatRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-1">
-      <span className="text-[13px] text-fg-secondary">{label}</span>
-      <span className="text-[13px] font-medium tabular-nums text-heading">{value}</span>
+      <span className="text-row text-fg-secondary">{label}</span>
+      <span className="text-row font-medium tabular-nums text-heading">{value}</span>
     </div>
   );
 }
@@ -67,9 +67,9 @@ export function MailHealthCard() {
       )}
       {mail.recent.length > 0 && (
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-row">
             <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wide text-fg-faint">
+              <tr className="text-left text-meta uppercase tracking-wide text-fg-faint">
                 <th className="py-1 pr-3 font-medium">When</th>
                 <th className="py-1 pr-3 font-medium">Recipient</th>
                 <th className="py-1 font-medium">Error</th>
@@ -84,7 +84,7 @@ export function MailHealthCard() {
                   <td className="py-1.5 pr-3 text-fg" title={failure.subject}>
                     {failure.recipient || "—"}
                     {failure.given_up && (
-                      <span className="ml-1.5 rounded-full bg-status-danger/15 px-2 py-0.5 text-[11px] font-medium text-status-danger ring-1 ring-status-danger/30">
+                      <span className="ml-1.5 rounded-full bg-status-danger/15 px-2 py-0.5 text-meta font-medium text-status-danger ring-1 ring-status-danger/30">
                         Gave up
                       </span>
                     )}

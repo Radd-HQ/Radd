@@ -35,7 +35,7 @@ export function PlanTabs({
             {label}
             <span className={selected ? "text-white/70" : "text-fg-faint"}>{counted(key)}</span>
             {count > 0 && (
-              <span className="rounded bg-status-danger/20 px-1 text-[10px] text-status-danger-ink">
+              <span className="rounded bg-status-danger/20 px-1 text-micro text-status-danger-ink">
                 {count}
               </span>
             )}
@@ -98,7 +98,7 @@ export function ValidationSummary({ validation }: { validation: PlanValidation |
   }
   return (
     <Callout kind={CalloutKind.danger} className="p-3">
-      <p className="text-[13px]">{validation.problems.length} thing(s) to fix before importing</p>
+      <p className="text-row">{validation.problems.length} thing(s) to fix before importing</p>
       <ul className="mt-1.5 flex flex-col gap-0.5 text-xs text-fg-secondary">
         {validation.problems.slice(0, 12).map((problem, i) => (
           <li key={i}>

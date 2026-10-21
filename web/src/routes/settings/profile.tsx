@@ -52,7 +52,7 @@ export function ProfileSettingsPage() {
         </p>
         <Link
           to={RoutePath.settingsNotifications}
-          className="inline-flex items-center gap-1.5 text-[13px] text-accent-text hover:text-accent-text-strong"
+          className="inline-flex items-center gap-1.5 text-row text-accent-text hover:text-accent-text-strong"
         >
           <Bell size={14} aria-hidden />
           Notification settings
@@ -160,7 +160,7 @@ function ProfileForm({ user }: { user: Me }) {
             onChange={(event) => setEmoji(event.target.value)}
             placeholder="None — your initials show"
             maxLength={16}
-            className="h-8 rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+            className="h-8 rounded-md border border-strong bg-surface px-2.5 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
           />
         </div>
 
@@ -213,7 +213,7 @@ function ProfileForm({ user }: { user: Me }) {
               ...timezones.map((zone) => ({ value: zone, label: zone })),
             ]}
           />
-          <p className="text-[11px] text-fg-faint">
+          <p className="text-meta text-fg-faint">
             Every time Radd shows you — comments, history, the timesheet's today — is in this
             zone. Dates without a time (due dates, cycles) are calendar days and never shift.
           </p>

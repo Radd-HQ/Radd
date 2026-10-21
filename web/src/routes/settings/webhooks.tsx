@@ -165,12 +165,12 @@ function EndpointRow({ endpoint }: { endpoint: WebhookEndpoint }) {
           {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
         </button>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-mono text-[12px] text-heading">{endpoint.url}</p>
+          <p className="truncate font-mono text-xs text-heading">{endpoint.url}</p>
           {endpoint.description && (
-            <p className="truncate text-[11px] text-fg-muted">{endpoint.description}</p>
+            <p className="truncate text-meta text-fg-muted">{endpoint.description}</p>
           )}
         </div>
-        <span className="hidden text-[11px] text-fg-faint sm:block">
+        <span className="hidden text-meta text-fg-faint sm:block">
           {endpoint.event_types?.length
             ? `${endpoint.event_types.length} event type${endpoint.event_types.length === 1 ? "" : "s"}`
             : "all events"}
@@ -246,15 +246,15 @@ function DeliveryLog({ endpointId }: { endpointId: string }) {
   return (
     <ul className="flex flex-col gap-1">
       {deliveries.data.map((delivery) => (
-        <li key={delivery.id} className="flex items-center gap-2 text-[12px]">
+        <li key={delivery.id} className="flex items-center gap-2 text-xs">
           <span
-            className={`rounded-full px-1.5 py-px text-[10px] font-medium ring-1 ${
+            className={`rounded-full px-1.5 py-px text-micro font-medium ring-1 ${
               STATUS_STYLES[delivery.status] ?? "bg-elevated text-fg-secondary ring-strong"
             }`}
           >
             {delivery.status}
           </span>
-          <span className="font-mono text-[11px] text-fg-muted">event {delivery.event_id}</span>
+          <span className="font-mono text-meta text-fg-muted">event {delivery.event_id}</span>
           <span className="text-fg-faint">
             {delivery.attempts} attempt{delivery.attempts === 1 ? "" : "s"}
           </span>

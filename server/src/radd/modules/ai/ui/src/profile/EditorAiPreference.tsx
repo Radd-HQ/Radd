@@ -28,7 +28,7 @@ export function EditorAiPreference() {
         <ErrorText error={prefs.error} />
       ) : (
         <div className="flex flex-col gap-2">
-          <label className="flex items-center gap-2 text-[13px] text-fg">
+          <label className="flex items-center gap-2 text-row text-fg">
             <input
               type="checkbox"
               checked={prefs.data[EDITOR_AI_PREF_KEY] !== false}

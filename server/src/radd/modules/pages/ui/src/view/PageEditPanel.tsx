@@ -64,7 +64,7 @@ export function PageEditPanel({
         {binding ? (
           <RichEditor key={binding.key} {...editorProps} binding={binding} />
         ) : (
-          <div className="min-h-24 animate-pulse rounded-md border border-strong bg-surface px-3 py-2 text-[13px] text-fg-faint">
+          <div className="min-h-24 animate-pulse rounded-md border border-strong bg-surface px-3 py-2 text-row text-fg-faint">
             Joining the page…
           </div>
         )}

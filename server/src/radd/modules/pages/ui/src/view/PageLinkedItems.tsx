@@ -51,7 +51,7 @@ export function PageLinkedItems({ pageId, canWrite }: { pageId: string; canWrite
         <Chevron size={13} aria-hidden />
         Linked issues
         {list.length > 0 && (
-          <span className="rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
+          <span className="rounded bg-elevated px-1.5 py-px font-mono text-micro text-fg-secondary">
             {list.length}
           </span>
         )}
@@ -64,7 +64,7 @@ export function PageLinkedItems({ pageId, canWrite }: { pageId: string; canWrite
               Failed to load links: {errorMessage(items.error)}
             </p>
           ) : list.length === 0 ? (
-            <p className="text-[13px] text-fg-faint">
+            <p className="text-row text-fg-faint">
               No linked issues yet — mentioning one in the page links it automatically.
             </p>
           ) : (
@@ -79,18 +79,18 @@ export function PageLinkedItems({ pageId, canWrite }: { pageId: string; canWrite
                     params={{ itemKey: item.key }}
                     className="flex min-w-0 flex-1 items-center gap-2 hover:underline"
                   >
-                    <span className="shrink-0 rounded bg-elevated px-1.5 font-mono text-[11px] text-fg-secondary">
+                    <span className="shrink-0 rounded bg-elevated px-1.5 font-mono text-meta text-fg-secondary">
                       {item.key}
                     </span>
-                    <span className="truncate text-[13px] text-fg">{item.title}</span>
+                    <span className="truncate text-row text-fg">{item.title}</span>
                   </Link>
-                  <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-fg-muted">
+                  <span className="flex shrink-0 items-center gap-1.5 text-meta text-fg-muted">
                     <StateCategoryDot category={item.state_category} />
                     {item.state}
                   </span>
                   {item.derived ? (
                     <span
-                      className="shrink-0 text-[11px] text-fg-faint"
+                      className="shrink-0 text-meta text-fg-faint"
                       title="Mentioned in this page — remove the mention to remove the link"
                     >
                       in the text

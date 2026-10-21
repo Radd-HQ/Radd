@@ -21,7 +21,7 @@ export function Panel({
     <section id={id} className="rounded-lg border border-subtle bg-surface p-4" data-jira-section={section}>
       <header className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-[13px] font-medium text-heading">{title}</h2>
+          <h2 className="text-row font-medium text-heading">{title}</h2>
           {description && <p className="mt-0.5 text-xs text-fg-secondary">{description}</p>}
         </div>
         {action}

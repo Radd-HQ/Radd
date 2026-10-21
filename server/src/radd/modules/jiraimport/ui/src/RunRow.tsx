@@ -76,7 +76,7 @@ export function RunRow({
           >
             {run.dry_run ? "Dry run" : run.kind === RunKind.rollback ? "Rollback" : "Import"}
           </button>
-          <div className="mt-0.5 text-[11px] text-fg-faint">{relativeTime(run.created_at)}</div>
+          <div className="mt-0.5 text-meta text-fg-faint">{relativeTime(run.created_at)}</div>
         </Td>
         <Td className="text-xs text-fg-secondary">
           {counts.length === 0 ? (

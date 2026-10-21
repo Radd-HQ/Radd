@@ -17,4 +17,4 @@ export function ImportResults({ rows }: { rows: { key: string; label: string; ou
 
 /** A checkbox row in an import picker. */
 export const pickRowClasses =
-  "flex items-start gap-2 rounded-md border border-subtle px-2.5 py-2 text-[13px] hover:bg-surface/60 cursor-pointer";
+  "flex items-start gap-2 rounded-md border border-subtle px-2.5 py-2 text-row hover:bg-surface/60 cursor-pointer";

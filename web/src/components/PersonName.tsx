@@ -22,7 +22,7 @@ const STATUS_TONES = {
 };
 export function StatusChip({ indicator }: { indicator: StatusIndicator }) {
   return <span aria-label={indicator.ariaLabel} title={indicator.title}
-    className={`shrink-0 rounded px-1 py-px text-[10px] font-medium leading-3 ${STATUS_TONES[indicator.tone]}`}>
+    className={`shrink-0 rounded px-1 py-px text-micro font-medium leading-3 ${STATUS_TONES[indicator.tone]}`}>
     {indicator.label}
   </span>;
 }
@@ -33,7 +33,7 @@ function ServiceChip() {
   return (
     <span
       aria-label="Service account"
-      className="shrink-0 rounded bg-elevated px-1 py-px text-[10px] font-medium leading-3 text-fg-muted"
+      className="shrink-0 rounded bg-elevated px-1 py-px text-micro font-medium leading-3 text-fg-muted"
     >
       service
     </span>

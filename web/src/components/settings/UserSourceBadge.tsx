@@ -20,7 +20,7 @@ const SOURCE_BADGE_CLASSES: Record<UserSourceValue, string> = {
 export function SourceBadge({ source }: { source: UserSourceValue }) {
   return (
     <span
-      className={`rounded border px-1.5 py-px text-[11px] ${SOURCE_BADGE_CLASSES[source] ?? SOURCE_BADGE_CLASSES[UserSource.local]}`}
+      className={`rounded border px-1.5 py-px text-meta ${SOURCE_BADGE_CLASSES[source] ?? SOURCE_BADGE_CLASSES[UserSource.local]}`}
     >
       {SOURCE_LABELS[source] ?? source}
     </span>

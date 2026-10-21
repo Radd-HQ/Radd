@@ -65,7 +65,7 @@ export function MfaEnrollment({
       onConfirm={(code) => confirm.mutate(code)}
       confirmLabel="Confirm and sign in"
       intro={
-        <p className="flex items-start gap-2 text-[13px] text-heading" data-mfa-enrollment>
+        <p className="flex items-start gap-2 text-row text-heading" data-mfa-enrollment>
           <ShieldAlert size={15} className="mt-0.5 shrink-0 text-accent-text" aria-hidden />
           This server requires two-factor authentication. Set it up now to finish signing in.
         </p>

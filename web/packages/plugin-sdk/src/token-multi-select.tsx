@@ -191,7 +191,7 @@ export function TokenMultiSelect({
         {value.map((v) => (
           <span
             key={v}
-            className="inline-flex shrink-0 items-center gap-1 rounded border border-subtle bg-elevated py-px pl-1.5 pr-0.5 text-[11px] leading-4 text-fg"
+            className="inline-flex shrink-0 items-center gap-1 rounded border border-subtle bg-elevated py-px pl-1.5 pr-0.5 text-meta leading-4 text-fg"
           >
             {chipIcon(v)}
             <span className="max-w-40 truncate">{chipLabel(v)}</span>
@@ -229,7 +229,7 @@ export function TokenMultiSelect({
           }}
           onKeyDown={onKeyDown}
           placeholder={value.length === 0 ? placeholder : ""}
-          className="h-full min-w-16 flex-1 bg-transparent text-[13px] text-heading placeholder:text-fg-faint outline-none"
+          className="h-full min-w-16 flex-1 bg-transparent text-row text-heading placeholder:text-fg-faint outline-none"
         />
       </div>
 
@@ -247,7 +247,7 @@ export function TokenMultiSelect({
             return (
               <li key={o.value}>
                 {groupHeader && (
-                  <div className="px-2 pb-0.5 pt-1.5 text-[10px] uppercase tracking-wide text-fg-faint">
+                  <div className="px-2 pb-0.5 pt-1.5 text-micro uppercase tracking-wide text-fg-faint">
                     {groupHeader}
                   </div>
                 )}
@@ -262,7 +262,7 @@ export function TokenMultiSelect({
             );
           })}
           {hiddenCount > 0 && (
-            <li className="px-2 py-1.5 text-[11px] text-fg-faint" aria-live="polite">
+            <li className="px-2 py-1.5 text-meta text-fg-faint" aria-live="polite">
               Keep typing — {hiddenCount.toLocaleString()} more match{hiddenCount === 1 ? "" : "es"}
             </li>
           )}

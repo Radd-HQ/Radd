@@ -355,7 +355,7 @@ export function CommandPalette() {
             aria-label="Search"
             className="w-full bg-transparent py-3 text-sm text-heading placeholder:text-fg-faint focus:outline-none"
           />
-          <kbd className="rounded border border-subtle px-1.5 py-0.5 text-[10px] text-fg-muted">
+          <kbd className="rounded border border-subtle px-1.5 py-0.5 text-micro text-fg-muted">
             esc
           </kbd>
         </div>
@@ -377,7 +377,7 @@ export function CommandPalette() {
                 ) : null,
               )}
               {answered.text && entries.length === 0 && (
-                <p className="whitespace-pre-wrap px-4 py-3 text-[13px] text-fg" data-palette-answer-text>
+                <p className="whitespace-pre-wrap px-4 py-3 text-row text-fg" data-palette-answer-text>
                   {answered.text}
                 </p>
               )}
@@ -407,11 +407,11 @@ export function CommandPalette() {
             >
               {entry.kind === "issue" && (
                 <>
-                  <span className="shrink-0 rounded bg-elevated px-1.5 font-mono text-[11px] text-fg-secondary">
+                  <span className="shrink-0 rounded bg-elevated px-1.5 font-mono text-meta text-fg-secondary">
                     {entry.result.key}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] text-fg">
+                    <span className="block truncate text-row text-fg">
                       {entry.result.title}
                     </span>
                     {entry.result.snippet && (
@@ -439,7 +439,7 @@ export function CommandPalette() {
                   <>
                     <BookOpen size={14} className="shrink-0 text-fg-muted" aria-hidden />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] text-fg">
+                      <span className="block truncate text-row text-fg">
                         {entry.result.title}
                       </span>
                       {entry.result.snippet && (
@@ -468,7 +468,7 @@ export function CommandPalette() {
                 >
                   <Layers size={14} className="shrink-0 text-fg-muted" aria-hidden />
                   <span className="min-w-0 flex-1" data-entity-hit={entry.hit.entity_type}>
-                    <span className="block truncate text-[13px] text-fg">{entry.hit.title}</span>
+                    <span className="block truncate text-row text-fg">{entry.hit.title}</span>
                     {entry.hit.subtitle && (
                       <span className="block truncate text-xs text-fg-muted">{entry.hit.subtitle}</span>
                     )}
@@ -489,7 +489,7 @@ export function CommandPalette() {
                 onHover={() => setSelected(flatIndex)}
               >
                 <Plus size={14} className="shrink-0 text-fg-muted" aria-hidden />
-                <span className="truncate text-[13px] text-fg">
+                <span className="truncate text-row text-fg">
                   {entry.kind === "action" ? entry.label : null}
                 </span>
               </PaletteRow>
@@ -509,7 +509,7 @@ export function CommandPalette() {
                 onHover={() => setSelected(flatIndex)}
               >
                 <Icon size={14} className="shrink-0 text-fg-muted" aria-hidden />
-                <span className="truncate text-[13px] text-fg">
+                <span className="truncate text-row text-fg">
                   {entry.kind === "goto" ? entry.entry.label : null}
                 </span>
               </PaletteRow>
@@ -530,7 +530,7 @@ export function CommandPalette() {
                 onHover={() => setSelected(flatIndex)}
               >
                 {Icon ? <Icon size={14} className="shrink-0 text-accent-text" aria-hidden /> : null}
-                <span className="truncate text-[13px] text-fg">
+                <span className="truncate text-row text-fg">
                   {entry.mode.label}: “{query.trim()}”{" "}
                   <span className="text-fg-muted">— {entry.mode.hint}</span>
                 </span>
@@ -558,24 +558,24 @@ function AnswerRow({ row }: { row: PaletteRow }) {
     <>
       {Icon ? <Icon size={14} className="shrink-0 text-fg-muted" aria-hidden /> : null}
       {row.badge ? (
-        <span className="shrink-0 rounded bg-elevated px-1.5 font-mono text-[11px] text-fg-secondary">{row.badge}</span>
+        <span className="shrink-0 rounded bg-elevated px-1.5 font-mono text-meta text-fg-secondary">{row.badge}</span>
       ) : null}
       {row.subtitle ? (
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] text-fg">{row.title}</span>
+          <span className="block truncate text-row text-fg">{row.title}</span>
           <span className="block truncate text-xs text-fg-muted">{row.subtitle}</span>
         </span>
       ) : (
-        <span className="min-w-0 flex-1 truncate text-[13px] text-fg">{row.title}</span>
+        <span className="min-w-0 flex-1 truncate text-row text-fg">{row.title}</span>
       )}
-      {row.hint ? <span className="shrink-0 text-[10px] text-fg-faint">{row.hint}</span> : null}
+      {row.hint ? <span className="shrink-0 text-micro text-fg-faint">{row.hint}</span> : null}
     </>
   );
 }
 
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <p className="px-4 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+    <p className="px-4 pb-1 pt-2 text-meta font-medium uppercase tracking-wide text-fg-faint">
       {children}
     </p>
   );

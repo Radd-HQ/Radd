@@ -87,7 +87,7 @@ export function CommentComposer({
           <SegmentedChoice label="Post as" value={mode} options={MODES} onChange={onMode} data-composer-mode={mode} />
           {controls}
           {mode === CommentComposerMode.thread && (
-            <span className="text-[11px] text-fg-muted" data-thread-hint>{THREAD_HINT}</span>
+            <span className="text-meta text-fg-muted" data-thread-hint>{THREAD_HINT}</span>
           )}
         </div>
         {children}

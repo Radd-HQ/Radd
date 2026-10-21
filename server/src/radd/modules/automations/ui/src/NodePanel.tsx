@@ -34,7 +34,7 @@ export function NodePanel({ templates, onAdd }: NodePanelProps) {
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search nodes…"
           aria-label="Search nodes"
-          className="h-8 w-full rounded-[6px] border border-subtle bg-base pl-7 pr-2 text-[13px] text-fg outline-none placeholder:text-fg-faint focus:outline focus:outline-2 focus:outline-focus"
+          className="h-8 w-full rounded-[6px] border border-subtle bg-base pl-7 pr-2 text-row text-fg outline-none placeholder:text-fg-faint focus:outline focus:outline-2 focus:outline-focus"
         />
       </label>
 
@@ -58,7 +58,7 @@ export function NodePanel({ templates, onAdd }: NodePanelProps) {
                   })
                 }
                 aria-expanded={open}
-                className="flex w-full items-center gap-1 rounded-[6px] px-1 py-1 text-left text-[11px] uppercase tracking-wide text-fg-muted hover:text-heading cursor-pointer"
+                className="flex w-full items-center gap-1 rounded-[6px] px-1 py-1 text-left text-meta uppercase tracking-wide text-fg-muted hover:text-heading cursor-pointer"
               >
                 <ChevronRight
                   size={12}
@@ -78,7 +78,7 @@ export function NodePanel({ templates, onAdd }: NodePanelProps) {
                           type="button"
                           onClick={() => onAdd(template)}
                           title={`Add ${template.label}`}
-                          className="flex w-full items-center gap-1.5 rounded-[6px] px-2 py-1.5 text-left text-[13px] text-fg hover:bg-elevated cursor-pointer"
+                          className="flex w-full items-center gap-1.5 rounded-[6px] px-2 py-1.5 text-left text-row text-fg hover:bg-elevated cursor-pointer"
                         >
                           <Icon
                             size={12}
@@ -88,7 +88,7 @@ export function NodePanel({ templates, onAdd }: NodePanelProps) {
                           />
                           <span className="truncate">{template.label}</span>
                           {template.kind === NodeKind.trigger && (
-                            <span className="ml-auto shrink-0 text-[10px] uppercase text-fg-faint">
+                            <span className="ml-auto shrink-0 text-micro uppercase text-fg-faint">
                               start
                             </span>
                           )}

@@ -7,7 +7,7 @@ export function AutomaticMessagesPanel() {
     <section data-automatic-messages>
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-heading">Automatic messages</h3>
-        <p className="text-[11px] text-fg-muted">
+        <p className="text-meta text-fg-muted">
           What the desk sends without being asked. Public replies always reach the issue's
           external contacts; these are the messages beyond them. Each switch can be overridden per
           project.

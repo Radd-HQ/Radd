@@ -92,7 +92,7 @@ export function InboxPeek() {
         <div className="flex shrink-0 items-center gap-2 border-b border-subtle px-4 py-2.5">
           <h2 className="text-sm font-semibold text-heading">Inbox</h2>
           {data && data.unread_count > 0 && (
-            <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[11px] font-medium text-accent-text">
+            <span className="rounded-full bg-accent/20 px-2 py-0.5 text-meta font-medium text-accent-text">
               {data.unread_count} new
             </span>
           )}

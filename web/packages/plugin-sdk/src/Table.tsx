@@ -15,7 +15,7 @@ import type { ReactNode, TdHTMLAttributes, ThHTMLAttributes } from "react";
 
 export function Table({ className = "", children }: { className?: string; children: ReactNode }) {
   return (
-    <table className={`w-full border-separate border-spacing-0 text-left text-[13px] ${className}`}>
+    <table className={`w-full border-separate border-spacing-0 text-left text-row ${className}`}>
       {children}
     </table>
   );
@@ -73,7 +73,7 @@ export function Th({
     <th
       {...props}
       className={
-        "border-b border-subtle px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint " +
+        "border-b border-subtle px-3 py-2 text-meta font-medium uppercase tracking-wide text-fg-faint " +
         (numeric ? "text-right tnum " : "") +
         className
       }

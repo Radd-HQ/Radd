@@ -52,7 +52,7 @@ export function SenderDialog({
         />
 
         {sender ? (
-          <p className="text-[11px] text-fg-muted">
+          <p className="text-meta text-fg-muted">
             Kind: <strong>{kindLabel(kinds.data?.senders, sender.kind)}</strong> — fixed once the
             sender exists.
           </p>

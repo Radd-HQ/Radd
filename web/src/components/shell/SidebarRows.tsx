@@ -24,7 +24,7 @@ import type { Cycle } from "@radd-plugin-ui/cycles/types";
 import type { Project } from "@radd-plugin-ui/projects/types";
 
 export const navLinkClasses =
-  "relative flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-fg-secondary hover:bg-overlay " +
+  "relative flex items-center gap-2 rounded-md px-2 py-1.5 text-row text-fg-secondary hover:bg-overlay " +
   "hover:text-heading focus-visible:outline-2 focus-visible:outline-focus " +
   "[&.active]:bg-elevated [&.active]:text-heading " +
   "[&.active]:before:absolute [&.active]:before:left-0 [&.active]:before:top-1/2 " +
@@ -52,7 +52,7 @@ export function SectionHeader({
 }) {
   const Chevron = collapsed ? ChevronRight : ChevronDown;
   const labelClasses =
-    "text-[11px] font-medium uppercase tracking-wide text-fg-faint hover:text-fg";
+    "text-meta font-medium uppercase tracking-wide text-fg-faint hover:text-fg";
   return (
     <div className="group/section flex items-center px-2 pb-1">
       <button
@@ -86,7 +86,7 @@ export function InboxLink() {
       <Inbox size={14} aria-hidden />
       Inbox
       {unread > 0 && (
-        <span className="ml-auto rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-white">
+        <span className="ml-auto rounded-full bg-accent px-1.5 py-px text-micro font-semibold text-white">
           {unread > 99 ? "99+" : unread}
         </span>
       )}
@@ -160,7 +160,7 @@ function CountedViewLink({ view, option, count }: { view: View; option: ViewType
   const body = <>
     <Icon size={14} aria-hidden />
     <span className="truncate">{view.name}</span>
-    {count !== undefined && <span className="ml-auto shrink-0 rounded-full bg-elevated px-1.5 py-px text-[10px] font-medium text-fg-secondary">
+    {count !== undefined && <span className="ml-auto shrink-0 rounded-full bg-elevated px-1.5 py-px text-micro font-medium text-fg-secondary">
       {count > 999 ? "999+" : count}
     </span>}
   </>;
@@ -200,7 +200,7 @@ export function CycleRow({ cycle }: { cycle: Cycle }) {
         <CalendarRange size={14} aria-hidden />
         <span className="truncate">{cycle.name}</span>
         {cycle.status === CycleStatus.active && (
-          <span className="ml-auto shrink-0 rounded bg-chart-progress/15 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-chart-progress-ink">
+          <span className="ml-auto shrink-0 rounded bg-chart-progress/15 px-1.5 py-px text-micro font-medium uppercase tracking-wide text-chart-progress-ink">
             Active
           </span>
         )}

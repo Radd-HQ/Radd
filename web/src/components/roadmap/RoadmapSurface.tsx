@@ -746,7 +746,7 @@ export function RoadmapSurface({
           Show closed
         </ToolbarToggle>
         {truncated && (
-          <span className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] text-fg-secondary">
+          <span className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-meta text-fg-secondary">
             Showing the first {items.length.toLocaleString()} matches — refine the query, or
             <button
               type="button"
@@ -784,7 +784,7 @@ export function RoadmapSurface({
                   role="alert"
                   data-save-error
                   title={editing.saveError}
-                  className="max-w-xs truncate rounded-md border border-status-danger/40 bg-status-danger/10 px-2 py-0.5 text-[11px] text-status-danger-ink"
+                  className="max-w-xs truncate rounded-md border border-status-danger/40 bg-status-danger/10 px-2 py-0.5 text-meta text-status-danger-ink"
                 >
                   Save refused — {editing.saveError}
                 </span>

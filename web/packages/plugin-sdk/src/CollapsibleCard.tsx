@@ -32,7 +32,7 @@ export function CollapsibleCard({
         <Chevron size={13} aria-hidden />
         {title}
         {count !== undefined && count > 0 && (
-          <span className="ml-1 rounded bg-elevated px-1.5 text-[11px] text-fg-secondary">
+          <span className="ml-1 rounded bg-elevated px-1.5 text-meta text-fg-secondary">
             {count}
           </span>
         )}

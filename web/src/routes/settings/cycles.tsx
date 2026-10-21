@@ -115,18 +115,18 @@ function CycleRow({
       <Link
         to={RoutePath.cycle}
         params={{ cycleId: cycle.id }}
-        className="min-w-0 break-words text-[13px] font-medium text-heading hover:underline"
+        className="min-w-0 break-words text-row font-medium text-heading hover:underline"
       >
         {cycle.name}
       </Link>
-      <span className="rounded border border-strong px-1.5 py-px text-[10px] uppercase tracking-wide text-fg-secondary">
+      <span className="rounded border border-strong px-1.5 py-px text-micro uppercase tracking-wide text-fg-secondary">
         {status.label}
       </span>
       {cycle.project_id && <CycleProjectChip projectId={cycle.project_id} />}
       {cycle.team_ids.length > 0 && (
         <span
           title="Team-restricted — only the associated teams (and admins) see this cycle"
-          className="rounded border border-status-warning/40 bg-status-warning/10 px-1.5 py-px text-[10px] uppercase tracking-wide text-status-warning-ink"
+          className="rounded border border-status-warning/40 bg-status-warning/10 px-1.5 py-px text-micro uppercase tracking-wide text-status-warning-ink"
         >
           Restricted
         </span>
@@ -244,7 +244,7 @@ export function CycleModal({ cycle, onClose, defaultProjectId }: {
               type="date"
               value={startDate}
               onChange={(event) => setStartDate(event.target.value)}
-              className="h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:dark]"
+              className="h-8 rounded-md border border-strong bg-surface px-2 text-row text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:dark]"
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -256,7 +256,7 @@ export function CycleModal({ cycle, onClose, defaultProjectId }: {
               type="date"
               value={endDate}
               onChange={(event) => setEndDate(event.target.value)}
-              className="h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:dark]"
+              className="h-8 rounded-md border border-strong bg-surface px-2 text-row text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:dark]"
             />
           </div>
         </div>
@@ -292,7 +292,7 @@ export function CycleModal({ cycle, onClose, defaultProjectId }: {
         </div>
         {!editing && (
           <div className="flex flex-col gap-3 rounded-md border border-subtle bg-surface/40 p-3">
-            <label className="flex items-center gap-2 text-[13px] text-fg">
+            <label className="flex items-center gap-2 text-row text-fg">
               <input
                 type="checkbox"
                 checked={recurring}
@@ -300,7 +300,7 @@ export function CycleModal({ cycle, onClose, defaultProjectId }: {
                 className="size-3.5 accent-accent"
               />
               Recurring cycle
-              <span className="text-[11px] text-fg-muted">
+              <span className="text-meta text-fg-muted">
                 — future drafts of this label are created automatically
               </span>
             </label>
@@ -336,7 +336,7 @@ export function CycleModal({ cycle, onClose, defaultProjectId }: {
                     disabled={startWeekday === ""}
                     onChange={(event) => setDurationDays(Number(event.target.value))}
                     title="14 = a two-week cycle; future cycles chain back-to-back"
-                    className="h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading disabled:opacity-60"
+                    className="h-8 rounded-md border border-strong bg-surface px-2 text-row text-heading disabled:opacity-60"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -350,7 +350,7 @@ export function CycleModal({ cycle, onClose, defaultProjectId }: {
                     max={20}
                     value={draftsAhead}
                     onChange={(event) => setDraftsAhead(Number(event.target.value))}
-                    className="h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading"
+                    className="h-8 rounded-md border border-strong bg-surface px-2 text-row text-heading"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -370,7 +370,7 @@ export function CycleModal({ cycle, onClose, defaultProjectId }: {
                         ? "Taken from the name's trailing number"
                         : "Where numbering begins (e.g. 120 to continue after a Jira import)"
                     }
-                    className="h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading disabled:opacity-60"
+                    className="h-8 rounded-md border border-strong bg-surface px-2 text-row text-heading disabled:opacity-60"
                   />
                 </div>
               </div>
@@ -397,7 +397,7 @@ function CycleProjectChip({ projectId }: { projectId: string }) {
   if (!project.data) return null;
   return (
     <span title={project.data.name} data-cycle-project={project.data.key}
-      className="rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">
+      className="rounded bg-elevated px-1.5 py-px font-mono text-micro text-fg-secondary">
       {project.data.key}
     </span>
   );

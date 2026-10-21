@@ -53,7 +53,7 @@ function optionsFrom(children: ReactNode): SelectOption[] {
             // value only needs to never collide with a real option's.
             value: `__optgroup-${options.length}`,
             label: (
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+              <span className="text-meta font-semibold uppercase tracking-wide text-fg-faint">
                 {props.label}
               </span>
             ),

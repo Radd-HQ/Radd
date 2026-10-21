@@ -106,7 +106,7 @@ export function AttrPalette({
         if (columns.length === 0) return null;
         return (
           <div key={group.label}>
-            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+            <p className="mb-1.5 text-meta font-medium uppercase tracking-wide text-fg-muted">
               {group.label}
             </p>
             <div className="flex flex-wrap gap-1.5">{columns.map(chip)}</div>
@@ -115,7 +115,7 @@ export function AttrPalette({
       })}
       {pluginColumns.length > 0 && (
         <div data-palette-group="plugins">
-          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+          <p className="mb-1.5 text-meta font-medium uppercase tracking-wide text-fg-muted">
             From plugins
           </p>
           <div className="flex flex-wrap gap-1.5">{pluginColumns.map(chip)}</div>
@@ -123,14 +123,14 @@ export function AttrPalette({
       )}
       {customColumns.length > 0 && (
         <div>
-          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+          <p className="mb-1.5 text-meta font-medium uppercase tracking-wide text-fg-muted">
             Custom fields
           </p>
           <div className="flex flex-wrap gap-1.5">{customColumns.map(chip)}</div>
         </div>
       )}
       {staleIds.length > 0 && (
-        <p className="text-[11px] text-status-warning-ink" data-stale-attrs>
+        <p className="text-meta text-status-warning-ink" data-stale-attrs>
           On the card but no longer available (a deleted field or a disabled plugin):{" "}
           {staleIds.join(", ")}. They render nothing — remove them from the preview.
         </p>

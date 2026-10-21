@@ -177,7 +177,7 @@
    never changes, so contrast holds — a weight change, not an opacity one. */
 .radd-rich-editor .milkdown .milkdown-diff-controls button {
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px; /* editor chrome follows the app's one-step bump (RADD-1518) */
   line-height: 1;
   padding: 3px 7px;
   border-radius: 4px;
@@ -206,7 +206,7 @@
 .radd-rich-editor milkdown-link-preview,
 .radd-rich-editor milkdown-link-edit {
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px; /* one step up with the app (RADD-1518) */
 }
 .radd-rich-editor milkdown-link-preview .link-preview,
 .radd-rich-editor milkdown-link-edit .link-edit {

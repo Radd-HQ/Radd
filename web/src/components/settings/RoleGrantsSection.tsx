@@ -38,14 +38,14 @@ export function RoleGrantsSection({ subject, canManage }: { subject: GrantSubjec
   const revoke = useMutation({ mutationFn: (id: string) => api.delete(`${ApiPath.roleGrants}/${id}`), onSuccess: invalidate });
   return <section aria-label="Role grants">
     <div className="mb-2 flex items-center justify-between">
-      <h4 className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">Roles</h4>
+      <h4 className="text-meta font-medium uppercase tracking-wide text-fg-faint">Roles</h4>
       {canManage && <Button variant="ghost" onClick={() => setGranting(true)}><Plus size={13} aria-hidden />Grant role</Button>}
     </div>
     <div aria-busy={grants.isFetching}>
       {grants.isPending ? <Spinner label="Loading role grants…" /> : grants.isError ? <div className="space-y-2">
         <QueryError label="role grants" error={grants.error} /><Button variant="secondary" onClick={() => void grants.refetch()}>Retry role grants</Button>
       </div> : !grants.data.rows.length ? <p className="text-xs text-fg-muted">No role grants.</p> :
-        <ul className="flex flex-col gap-2">{grants.data.rows.map(grant => <li key={grant.id} data-grant-id={grant.id} className="flex min-w-0 flex-wrap items-center gap-2 text-[13px]">
+        <ul className="flex flex-col gap-2">{grants.data.rows.map(grant => <li key={grant.id} data-grant-id={grant.id} className="flex min-w-0 flex-wrap items-center gap-2 text-row">
           <ShieldCheck size={12} className="shrink-0 text-fg-faint" aria-hidden />
           {canManage ? <Button variant="ghost" className="min-w-0 max-w-full" disabled={changeRole.isPending} aria-label={`Change role ${grant.role_name ?? "unavailable"}`} onClick={() => setEditing(grant)}><span className="truncate">{grant.role_name ?? "Unavailable role"}</span></Button>
             : <span className="min-w-0 truncate">{grant.role_name ?? "Unavailable role"}</span>}

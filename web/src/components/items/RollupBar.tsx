@@ -45,7 +45,7 @@ export function RollupRowBar({
       className="inline-flex shrink-0 items-center gap-1"
     >
       <Bar rollup={rollup} className="h-1 w-14" />
-      <span className="text-[10px] tabular-nums text-fg-muted">
+      <span className="text-micro tabular-nums text-fg-muted">
         {rollup.done}/{rollup.total}
       </span>
     </span>

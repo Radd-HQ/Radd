@@ -18,7 +18,7 @@ export function VcsIdentityMap({ provider, connectionId }: { provider: string; c
   if (identities.isPending || unmatched.isPending) return <div role="status"><Spinner />Loading time-tracking identities…</div>;
   return (
     <CollapsibleCard title="Time-tracking identities" count={count} defaultOpen={(unmatched.data?.length ?? 0) > 0}>
-      <p className="mb-3 text-[12px] text-fg-muted">
+      <p className="mb-3 text-xs text-fg-muted">
         Time logged on a merge or pull request is mirrored into the linked issue as a worklog by
         the person who logged it. Accounts are matched by email; when the host hides emails, map
         them here. An account nobody matches has its entries held, not guessed.
@@ -69,18 +69,18 @@ function MappedList({ links, provider, connectionId }: { links: VcsUserLink[]; p
 
   return (
     <section className="mb-4">
-      <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">Mapped accounts</h4>
+      <h4 className="mb-1.5 text-meta font-semibold uppercase tracking-wide text-fg-muted">Mapped accounts</h4>
       {links.length === 0 ? (
-        <p className="text-[12px] text-fg-faint">No accounts mapped yet. Matches by email appear here as they happen.</p>
+        <p className="text-xs text-fg-faint">No accounts mapped yet. Matches by email appear here as they happen.</p>
       ) : (
         <ul className="divide-y divide-subtle/60 rounded-md border border-subtle">
           {links.map((link) => (
-            <li key={link.id} className="flex items-center gap-2 px-3 py-1.5 text-[12px]">
+            <li key={link.id} className="flex items-center gap-2 px-3 py-1.5 text-xs">
               <Link2 size={12} className="text-fg-faint" aria-hidden />
               <span className="font-mono text-fg">{link.external_username}</span>
               <span className="text-fg-faint">→</span>
               <span className="text-heading">{link.user_name}</span>
-              <span className="rounded bg-elevated px-1.5 py-px text-[10px] text-fg-muted">
+              <span className="rounded bg-elevated px-1.5 py-px text-micro text-fg-muted">
                 {link.matched_by === VcsMatchedBy.email ? "matched by email" : "mapped by hand"}
               </span>
               <IconButton
@@ -120,7 +120,7 @@ function MappedList({ links, provider, connectionId }: { links: VcsUserLink[]; p
             <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)}>
               Cancel
             </Button>
-            {add.isError && <span className="text-[12px] text-status-danger-ink">{errorMessage(add.error)}</span>}
+            {add.isError && <span className="text-xs text-status-danger-ink">{errorMessage(add.error)}</span>}
           </form>
         ) : (
           <Button size="sm" variant="ghost" className="mt-2" onClick={() => setAdding(true)}>
@@ -148,9 +148,9 @@ function UnmatchedList({ rows, provider, connectionId }: { rows: VcsUnmatchedAut
   });
   return (
     <section>
-      <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">Unmatched accounts</h4>
+      <h4 className="mb-1.5 text-meta font-semibold uppercase tracking-wide text-fg-muted">Unmatched accounts</h4>
       {rows.length === 0 ? (
-        <p className="text-[12px] text-fg-faint">
+        <p className="text-xs text-fg-faint">
           {Object.keys(replayed).length > 0
             ? `Replayed: ${Object.entries(replayed).map(([name, n]) => `${name} (${n})`).join(", ")}.`
             : "Every account that logged time is matched."}
@@ -158,7 +158,7 @@ function UnmatchedList({ rows, provider, connectionId }: { rows: VcsUnmatchedAut
       ) : (
         <ul className="divide-y divide-subtle/60 rounded-md border border-status-warning/40">
           {rows.map((row) => (
-            <li key={row.external_username} className="flex flex-wrap items-center gap-2 px-3 py-1.5 text-[12px]">
+            <li key={row.external_username} className="flex flex-wrap items-center gap-2 px-3 py-1.5 text-xs">
               <UserCheck size={12} className="text-status-warning-ink" aria-hidden />
               <span className="font-mono text-fg">{row.external_username}</span>
               {row.external_email && <span className="text-fg-muted">{row.external_email}</span>}
@@ -188,7 +188,7 @@ function UnmatchedList({ rows, provider, connectionId }: { rows: VcsUnmatchedAut
           ))}
         </ul>
       )}
-      {replay.isError && <p className="mt-1 text-[12px] text-status-danger-ink">{errorMessage(replay.error)}</p>}
+      {replay.isError && <p className="mt-1 text-xs text-status-danger-ink">{errorMessage(replay.error)}</p>}
     </section>
   );
 }

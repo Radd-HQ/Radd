@@ -49,7 +49,7 @@ export function TimeTrackingPanel({ project, itemId, compact = false }: Props) {
     return (
       <div className="flex flex-col gap-1.5">
         <TimeBar summary={data} />
-        <p className="text-[11px] text-fg-muted">
+        <p className="text-meta text-fg-muted">
           {/* The bar above already says "No estimate" — only the ORIGINAL
               estimate (which the bar doesn't show) earns a mention here. */}
           {data.original_estimate ? `Estimate: ${data.original_estimate} · ` : ""}
@@ -76,7 +76,7 @@ function TimeBar({ summary }: { summary: ItemTimeSummary }) {
   const pct = est && est > 0 ? Math.min(100, (logged / est) * 100) : logged > 0 ? 100 : 0;
   return (
     <div>
-      <div className="flex items-baseline justify-between text-[13px]">
+      <div className="flex items-baseline justify-between text-row">
         <span className="text-fg">
           <span className="font-medium text-heading">{summary.logged}</span> logged
         </span>
@@ -166,7 +166,7 @@ function EstimateEditor({
         onChange={(event) => setValue(event.target.value)}
         placeholder="e.g. 1d 4h"
         autoFocus
-        className="w-28 rounded border border-strong bg-surface px-2 py-1 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+        className="w-28 rounded border border-strong bg-surface px-2 py-1 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
       />
       <Button type="submit" disabled={save.isPending}>
         {save.isPending ? "…" : "Save"}
@@ -234,26 +234,26 @@ function LogWorkForm({ itemId }: { itemId: string }) {
       className="flex flex-col gap-2 rounded-xl border border-subtle bg-elevated p-3"
     >
       <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1 text-[11px] text-fg-muted">
+        <label className="flex flex-col gap-1 text-meta text-fg-muted">
           Time spent
           <input
             value={timeSpent}
             onChange={(event) => setTimeSpent(event.target.value)}
             placeholder={DURATION_HINT}
             autoFocus
-            className="w-24 rounded border border-strong bg-surface px-2 py-1 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+            className="w-24 rounded border border-strong bg-surface px-2 py-1 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
           />
         </label>
-        <label className="flex flex-col gap-1 text-[11px] text-fg-muted">
+        <label className="flex flex-col gap-1 text-meta text-fg-muted">
           Date
           <input
             type="date"
             value={workedOn}
             onChange={(event) => setWorkedOn(event.target.value)}
-            className="rounded border border-strong bg-surface px-2 py-1 text-[13px] text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+            className="rounded border border-strong bg-surface px-2 py-1 text-row text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus"
           />
         </label>
-        <label className="flex flex-col gap-1 text-[11px] text-fg-muted">
+        <label className="flex flex-col gap-1 text-meta text-fg-muted">
           Category
           <Select
             value={categoryId}
@@ -274,7 +274,7 @@ function LogWorkForm({ itemId }: { itemId: string }) {
         onChange={(event) => setNote(event.target.value)}
         placeholder="Note (optional)"
         maxLength={2000}
-        className="w-full rounded border border-strong bg-surface px-2 py-1 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+        className="w-full rounded border border-strong bg-surface px-2 py-1 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
       />
       {create.isError && <ErrorText error={create.error} />}
       <div className="flex justify-end gap-2">
@@ -359,13 +359,13 @@ function WorklogRow({
         <input
           value={timeSpent}
           onChange={(event) => setTimeSpent(event.target.value)}
-          className="w-20 rounded border border-strong bg-surface px-1.5 py-0.5 text-[13px] text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+          className="w-20 rounded border border-strong bg-surface px-1.5 py-0.5 text-row text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus"
         />
         <input
           value={note}
           onChange={(event) => setNote(event.target.value)}
           placeholder="Note"
-          className="flex-1 rounded border border-strong bg-surface px-1.5 py-0.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+          className="flex-1 rounded border border-strong bg-surface px-1.5 py-0.5 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
         />
         <button
           type="button"
@@ -393,13 +393,13 @@ function WorklogRow({
   const mirrored = Boolean(entry.external_source);
   const mirroredReason = `Logged on ${sourceLabel(entry.external_source)}; change it there and it will follow.`;
   return (
-    <li className="flex items-center gap-2 text-[13px]">
+    <li className="flex items-center gap-2 text-row">
       <Clock size={12} className="shrink-0 text-fg-faint" aria-hidden />
       <span className="font-medium text-fg">{entry.time_spent}</span>
       <span className="text-fg-muted">{entry.author.name}</span>
       <span className="text-fg-faint">{entry.worked_on}</span>
       {entry.category && (
-        <span className="rounded bg-elevated px-1.5 py-px text-[11px] text-fg">
+        <span className="rounded bg-elevated px-1.5 py-px text-meta text-fg">
           {entry.category.name}
         </span>
       )}

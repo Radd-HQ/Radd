@@ -82,7 +82,7 @@ export interface DocumentHost {
   EditorToolbarButton?: ComponentType<EditorToolbarButtonProps>;
 }
 
-const plain = "whitespace-pre-wrap text-[13px] leading-relaxed text-fg";
+const plain = "whitespace-pre-wrap text-row leading-relaxed text-fg";
 
 /** The host's rich markdown editor, else a plain text area. */
 export const RichEditor = bridged("RichEditor", (props) => (

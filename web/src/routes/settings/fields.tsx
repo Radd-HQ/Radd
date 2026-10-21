@@ -47,8 +47,8 @@ export function FieldsSettingsPage() {
                 : fields.rows.length === 0 ? <EmptyState icon={SlidersHorizontal} message={fields.q ? "No fields match this search." : "No custom fields available."} />
                 : <ul aria-label="Custom fields" className="flex max-h-[55dvh] flex-col gap-0.5 overflow-y-auto rounded-lg border border-subtle p-1">{fields.rows.map(field => <li key={field.id}>
                   <button type="button" aria-pressed={field.id === selected} onClick={() => setSelectedId(field.id)} className={`flex w-full min-w-0 cursor-pointer flex-col gap-0.5 rounded-md px-2.5 py-2 text-left ${field.id === selected ? "bg-accent/10 ring-1 ring-accent/40" : "hover:bg-surface/60"}`}>
-                    <span className="flex max-w-full items-center gap-2 text-[13px] text-heading"><span className="min-w-0 break-words">{field.name}</span>{field.restricted && <RestrictedBadge />}</span>
-                    <span className="text-[11px] text-fg-muted">{FIELD_TYPE_LABELS[field.type]} · {field.project_count ? `${field.project_count} project${field.project_count === 1 ? "" : "s"}` : "Global"}</span>
+                    <span className="flex max-w-full items-center gap-2 text-row text-heading"><span className="min-w-0 break-words">{field.name}</span>{field.restricted && <RestrictedBadge />}</span>
+                    <span className="text-meta text-fg-muted">{FIELD_TYPE_LABELS[field.type]} · {field.project_count ? `${field.project_count} project${field.project_count === 1 ? "" : "s"}` : "Global"}</span>
                   </button>
                 </li>)}</ul>}
             </div>

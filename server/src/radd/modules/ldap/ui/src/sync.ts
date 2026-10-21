@@ -13,4 +13,4 @@ export function lastRunLine(state: DirectorySyncState | null | undefined): strin
   return `Last run ${formatDateTime(state.last_run_at)}: ${counts}${errorSuffix}`;
 }
 
-export const sectionHeadClasses = "mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted";
+export const sectionHeadClasses = "mb-2 text-meta font-medium uppercase tracking-wide text-fg-muted";

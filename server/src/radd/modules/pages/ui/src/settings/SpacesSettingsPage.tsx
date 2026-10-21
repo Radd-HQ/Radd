@@ -57,10 +57,10 @@ export function PagesSettingsPage() {
       </div> : spaces.rows.length === 0 ? <EmptyState icon={BookOpen} message={spaces.filter.trim() ? `No spaces match “${spaces.filter.trim()}”.` : "No page spaces yet."} />
         : <ul aria-label="Manage page spaces" className="rounded-lg border border-subtle">{spaces.rows.map(space => <li key={space.id} className="border-b border-subtle/60 px-4 py-2.5 last:border-b-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Link to={PageRoute.space} params={{ spaceSlug: space.slug }} className="min-w-0 break-words text-[13px] font-medium text-heading hover:underline">{space.name}</Link>
-            <span className="min-w-0 break-all font-mono text-[11px] text-fg-faint">{space.slug}</span>
+            <Link to={PageRoute.space} params={{ spaceSlug: space.slug }} className="min-w-0 break-words text-row font-medium text-heading hover:underline">{space.name}</Link>
+            <span className="min-w-0 break-all font-mono text-meta text-fg-faint">{space.slug}</span>
             {space.public && <PublicBadge />}
-            <span className="ml-auto text-[11px] text-fg-muted">{space.page_count} page{space.page_count === 1 ? "" : "s"}</span>
+            <span className="ml-auto text-meta text-fg-muted">{space.page_count} page{space.page_count === 1 ? "" : "s"}</span>
             <IconButton aria-label={`Access for ${space.name}`} onClick={() => setShowingAccess(space)}><ShieldCheck size={13} aria-hidden /></IconButton>
             {spacePerms.space(space, PagePermission.manage) && <>
               <IconButton aria-label={`Edit ${space.name}`} onClick={() => setEditing(space)}><Pencil size={13} aria-hidden /></IconButton>

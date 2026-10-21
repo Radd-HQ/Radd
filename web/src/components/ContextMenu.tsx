@@ -143,7 +143,7 @@ function MenuPanel({
 
 function rowClass(danger?: boolean, disabled?: boolean): string {
   return (
-    "flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[13px] " +
+    "flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-row " +
     (disabled
       ? "cursor-not-allowed text-fg-faint "
       : "cursor-pointer hover:bg-elevated focus-visible:bg-elevated focus-visible:outline-none ") +

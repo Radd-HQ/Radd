@@ -13,8 +13,8 @@ function BooleanGroup({ property, value, onChange }: { property: SchemaProperty;
     typeof stored[key] === "boolean" ? stored[key] : defaults[key] === true,
   ]));
   return <fieldset className="flex flex-col gap-1" data-schema-group={property.title || ""}>
-    <legend className="text-[11px] font-medium uppercase tracking-wide text-fg-secondary">{property.title}</legend>
-    {Object.entries(property.properties ?? {}).map(([key, sub]) => <label key={key} className="flex cursor-pointer items-start gap-2 text-[13px] text-fg">
+    <legend className="text-meta font-medium uppercase tracking-wide text-fg-secondary">{property.title}</legend>
+    {Object.entries(property.properties ?? {}).map(([key, sub]) => <label key={key} className="flex cursor-pointer items-start gap-2 text-row text-fg">
       <input type="checkbox" data-schema-check={key} checked={normalized[key]} onChange={event => onChange({ ...stored, ...normalized, [key]: event.target.checked })} className="mt-0.5 size-3.5 cursor-pointer accent-[var(--accent-fill)]" />
       <span>{sub.title || key}</span>
     </label>)}
@@ -51,7 +51,7 @@ export function SchemaForm({ schema, params, onChange }: SchemaFormProps) {
       if (property.type === "object" && sub.length && sub.every(p => p.type === "boolean")) {
         return <BooleanGroup key={key} property={{ ...property, title: label }} value={value} onChange={next => set(key, next)} />;
       }
-      if (property.type === "boolean") return <label key={key} className="flex cursor-pointer items-center gap-2 text-[13px] text-fg">
+      if (property.type === "boolean") return <label key={key} className="flex cursor-pointer items-center gap-2 text-row text-fg">
         <input type="checkbox" checked={value === true} onChange={event => set(key, event.target.checked)} className="size-3.5 cursor-pointer accent-[var(--accent-fill)]" />{label}
       </label>;
       const numeric = property.type === "number" || property.type === "integer";

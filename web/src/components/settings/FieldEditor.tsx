@@ -55,7 +55,7 @@ function FieldDetail({
       <div className="flex items-start justify-between gap-3 border-b border-subtle/60 px-4 py-3">
         <div>
           <h4 className="text-sm font-semibold text-heading">{field.name}</h4>
-          <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-fg-muted">
+          <p className="mt-0.5 flex items-center gap-1.5 text-meta text-fg-muted">
             <span className="rounded bg-elevated px-1 font-mono">{field.key}</span>
             <span>{FIELD_TYPE_LABELS[field.type]}</span>
             {field.required && <span className="text-status-warning-ink">required</span>}

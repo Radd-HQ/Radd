@@ -32,12 +32,12 @@ export function ListSection({
     <section className="flex flex-col gap-2" aria-label={title}>
       <header className="flex items-center gap-1.5">
         <Icon size={12} className="text-fg-muted" aria-hidden />
-        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+        <h2 className="text-meta font-semibold uppercase tracking-wide text-fg-muted">
           {title}
         </h2>
-        {count > 0 && <span className="text-[11px] text-fg-faint" data-section-count>{count}</span>}
+        {count > 0 && <span className="text-meta text-fg-faint" data-section-count>{count}</span>}
         {badge ? (
-          <span className="rounded-full bg-accent px-1.5 text-[10px] font-medium text-black" data-section-badge>
+          <span className="rounded-full bg-accent px-1.5 text-micro font-medium text-black" data-section-badge>
             {badgeLabel(badge)}
           </span>
         ) : null}

@@ -34,7 +34,7 @@ export function RunStatusChip({ status }: { status: string }) {
   return (
     <span
       data-run-status={status}
-      className={`shrink-0 rounded px-1.5 py-px text-[10px] uppercase tracking-wide ${tone}`}
+      className={`shrink-0 rounded px-1.5 py-px text-micro uppercase tracking-wide ${tone}`}
     >
       {RUN_STATUS_LABEL[status] ?? status}
     </span>
@@ -67,7 +67,7 @@ export function RunsPanel({ ruleId, nodes = [], onResult }: RunsPanelProps) {
       <div className="flex items-center gap-2">
         <History size={14} className="text-accent-text" aria-hidden />
         <span className="text-xs font-medium text-fg">Runs</span>
-        <span className="text-[11px] text-fg-muted">
+        <span className="text-meta text-fg-muted">
           What each run did — every node, every action, and why one skipped.
         </span>
       </div>
@@ -76,7 +76,7 @@ export function RunsPanel({ ruleId, nodes = [], onResult }: RunsPanelProps) {
       {selectedId && detail.isError && <p role="alert" className="text-xs text-status-danger-ink">{errorMessage(detail.error)}</p>}
       {runs.isPending && <p className="text-xs text-fg-muted">Loading runs…</p>}
       {runs.data && runs.data.length === 0 && (
-        <p className="flex items-center gap-1.5 text-[13px]">
+        <p className="flex items-center gap-1.5 text-row">
           <CircleSlash size={14} className="text-fg-muted" aria-hidden />
           <span className="text-fg-secondary">This automation has not run yet.</span>
         </p>
@@ -98,19 +98,19 @@ export function RunsPanel({ ruleId, nodes = [], onResult }: RunsPanelProps) {
                 <span className="font-medium text-fg" title={shortDateTime(run.started_at)}>
                   {relativeTime(run.started_at)}
                 </span>
-                <span className="text-[11px] text-fg-muted">
+                <span className="text-meta text-fg-muted">
                   {run.source}
                   {run.event_type && run.source === "event" ? ` · ${run.event_type}` : ""}
                   {` · from ${run.trigger_node_id}`}
                 </span>
                 {run.item_keys.length > 0 && (
-                  <span className="text-[11px] text-fg-secondary">{run.item_keys.slice(0, 4).join(", ")}</span>
+                  <span className="text-meta text-fg-secondary">{run.item_keys.slice(0, 4).join(", ")}</span>
                 )}
-                <span className="ml-auto text-[11px] text-fg-faint">
+                <span className="ml-auto text-meta text-fg-faint">
                   {run.actions_applied} applied
                   {run.actions_skipped > 0 ? ` · ${run.actions_skipped} skipped` : ""}
                 </span>
-                {run.error && <span className="w-full text-[11px] text-status-danger-ink">{run.error}</span>}
+                {run.error && <span className="w-full text-meta text-status-danger-ink">{run.error}</span>}
               </button>
             </li>
           ))}

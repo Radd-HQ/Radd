@@ -24,7 +24,7 @@ export function SendersPanel() {
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-heading">Outgoing</h3>
-          <p className="text-[11px] text-fg-muted">
+          <p className="text-meta text-fg-muted">
             The relay Radd sends replies, acknowledgements and digests through.
           </p>
         </div>
@@ -43,11 +43,11 @@ export function SendersPanel() {
           {rows.map((sender) => (
             <li key={sender.id} data-mail-sender={sender.id} className="rounded-lg border border-subtle bg-surface px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[13px] text-heading">{sender.name}</span>
+                <span className="text-row text-heading">{sender.name}</span>
                 <Chip>{kindLabel(kinds.data?.senders, sender.kind)}</Chip>
                 {sender.is_default && <Chip>default</Chip>}
                 {!sender.enabled && <Chip tone="muted">disabled</Chip>}
-                <span className="font-mono text-[11px] text-fg-secondary">
+                <span className="font-mono text-meta text-fg-secondary">
                   {sender.from_address}
                 </span>
                 <span className="ml-auto flex gap-1">
@@ -60,7 +60,7 @@ export function SendersPanel() {
                   </Button>
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-fg-faint">
+              <p className="mt-1 text-meta text-fg-faint">
                 {connectionLine(
                   sender.resolved_username,
                   sender.resolved_host,

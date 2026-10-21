@@ -86,7 +86,7 @@ export function TeamPanel({ team, onDeleted }: TeamPanelProps) {
       />
       <div className="grid gap-5 sm:grid-cols-2">
       <section aria-label={`${team.name} members`}>
-        <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+        <h4 className="mb-2 text-meta font-medium uppercase tracking-wide text-fg-faint">
           Members
         </h4>
         <TextField label="Find members" type="search" value={members.filter}
@@ -101,12 +101,12 @@ export function TeamPanel({ team, onDeleted }: TeamPanelProps) {
         ) : (
           <ul aria-label="Team members" className="flex max-h-[45dvh] flex-col gap-1 overflow-y-auto">
             {members.rows.map((member) => (
-              <li key={member.user_id} className="flex flex-wrap items-center gap-2 py-1 text-[13px]">
+              <li key={member.user_id} className="flex flex-wrap items-center gap-2 py-1 text-row">
                 <span className="min-w-0 break-words text-fg">{member.name}</span>
                 <span className="truncate text-xs text-fg-muted">{member.email}</span>
                 {member.via_group && (
                   <span
-                    className="rounded border border-subtle bg-surface px-1 py-px text-[10px] text-fg-muted"
+                    className="rounded border border-subtle bg-surface px-1 py-px text-micro text-fg-muted"
                     title={`Member via the ${member.via_group} group — managed by the directory sync.`}
                   >
                     {member.via_group}

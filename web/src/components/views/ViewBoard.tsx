@@ -170,11 +170,11 @@ export function ViewBoard({
                 {group.dotClassName && (
                   <span className={`size-2 shrink-0 rounded-full ${group.dotClassName}`} aria-hidden />
                 )}
-                <span className="[writing-mode:vertical-rl] rotate-180 truncate text-[12px] font-semibold">
+                <span className="[writing-mode:vertical-rl] rotate-180 truncate text-xs font-semibold">
                   {group.label}
                 </span>
                 {limit !== undefined && (
-                  <span className="text-[10px] tabular-nums text-fg-faint" title={`WIP limit ${limit}`}>
+                  <span className="text-micro tabular-nums text-fg-faint" title={`WIP limit ${limit}`}>
                     0/{limit}
                   </span>
                 )}
@@ -186,7 +186,7 @@ export function ViewBoard({
                 {group.dotClassName && (
                   <span className={`size-2 rounded-full ${group.dotClassName}`} aria-hidden />
                 )}
-                <h2 className="truncate text-[13px] font-semibold text-fg">{group.label}</h2>
+                <h2 className="truncate text-row font-semibold text-fg">{group.label}</h2>
                 <ColumnCount count={group.total ?? group.items.length} limit={limit} />
                 <ForeignChildrenChip epicRef={group.epicRef} rollup={group.epicRef ? rollupByItem?.[group.epicRef.id] : undefined} projectKey={projectKey} />
                 {showPoints && points > 0 && (
@@ -214,7 +214,7 @@ export function ViewBoard({
                 </span>
               </div>
               {group.detail && (
-                <p className="mt-0.5 truncate text-[11px] text-fg-muted">{group.detail}</p>
+                <p className="mt-0.5 truncate text-meta text-fg-muted">{group.detail}</p>
               )}
               {group.progress !== undefined && (
                 <div className="mt-1.5 h-0.5 w-full rounded bg-elevated" aria-hidden>

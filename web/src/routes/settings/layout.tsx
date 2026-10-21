@@ -311,7 +311,7 @@ export function SettingsLayout() {
           {visibleGroups.map((group, index) => (
             <section key={group.label} aria-label={group.label}>
               <h2
-                className={`hidden lg:block px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-fg-faint ${
+                className={`hidden lg:block px-2 pb-1 text-micro font-semibold uppercase tracking-wider text-fg-faint ${
                   index === 0 ? "pt-1" : "pt-4"
                 }`}
               >
@@ -322,7 +322,7 @@ export function SettingsLayout() {
                   <li key={to}>
                     <Link
                       to={to}
-                      className="flex items-center whitespace-nowrap gap-2 rounded-md px-2 py-1.5 text-[13px] text-fg-secondary hover:bg-elevated hover:text-heading focus-visible:outline-2 focus-visible:outline-focus [&.active]:bg-elevated [&.active]:text-heading"
+                      className="flex items-center whitespace-nowrap gap-2 rounded-md px-2 py-1.5 text-row text-fg-secondary hover:bg-elevated hover:text-heading focus-visible:outline-2 focus-visible:outline-focus [&.active]:bg-elevated [&.active]:text-heading"
                     >
                       <Icon size={14} aria-hidden />
                       {label}

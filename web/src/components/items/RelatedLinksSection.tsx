@@ -31,7 +31,7 @@ export function RelatedLinksSection({ item, project }: { item: Item; project: Pr
   return (
     <div className="flex flex-col gap-2">
       {data.length === 0 ? (
-        <p className="text-[13px] text-fg-faint">No related links yet.</p>
+        <p className="text-row text-fg-faint">No related links yet.</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {data.map((link) => (
@@ -59,13 +59,13 @@ function WebLinkRow({ link, canWrite }: { link: WebLink; canWrite: boolean }) {
         href={link.url}
         target="_blank"
         rel="noreferrer"
-        className="flex min-w-0 flex-1 items-center gap-2 text-[13px] hover:underline"
+        className="flex min-w-0 flex-1 items-center gap-2 text-row hover:underline"
         title={link.url}
       >
         <span className="truncate text-fg">{link.title || link.url}</span>
         <ExternalLink size={11} className="shrink-0 text-fg-faint" aria-hidden />
       </a>
-      <span className="shrink-0 text-[11px] text-fg-faint">{meta?.label ?? link.category}</span>
+      <span className="shrink-0 text-meta text-fg-faint">{meta?.label ?? link.category}</span>
       {canWrite && (
         <IconButton
           danger
@@ -128,14 +128,14 @@ function AddWebLinkForm({ itemId }: { itemId: string }) {
         placeholder="URL"
         type="url"
         autoFocus
-        className="h-8 w-full rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+        className="h-8 w-full rounded-md border border-strong bg-surface px-2.5 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
       />
       <div className="flex flex-wrap gap-2">
         <input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Title (optional)"
-          className="h-8 min-w-40 flex-1 rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
+          className="h-8 min-w-40 flex-1 rounded-md border border-strong bg-surface px-2.5 text-row text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
         />
         <Select
           value={category}

@@ -56,7 +56,7 @@ export function CyclePicker({
       {/* Carryover trail (spec 56): cycles this item was in before — first-class
           data (SLQ `past_cycle`), not just an audit-log footnote. */}
       {(item.past_cycles ?? []).length > 0 && (
-        <div className="flex flex-wrap items-baseline gap-1 text-[11px] text-fg-muted">
+        <div className="flex flex-wrap items-baseline gap-1 text-meta text-fg-muted">
           <span>Previously in</span>
           {(item.past_cycles ?? []).map((cycle) => (
             <span

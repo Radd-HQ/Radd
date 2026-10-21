@@ -71,7 +71,7 @@ provideHostComponents({
   RichEditor,
   RichViewer: LazyRichViewer,
   Markdown: (props) => (
-    <Suspense fallback={<div className="whitespace-pre-wrap text-[13px] text-fg">{props.text}</div>}>
+    <Suspense fallback={<div className="whitespace-pre-wrap text-row text-fg">{props.text}</div>}>
       <Markdown {...props} />
     </Suspense>
   ),

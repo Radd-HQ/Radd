@@ -155,8 +155,8 @@ export function GraphInspector({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-[11px] uppercase tracking-wide text-fg-muted">{node.kind}</div>
-          <div className="truncate text-[13px] font-medium text-heading">{node.type}</div>
+          <div className="text-meta uppercase tracking-wide text-fg-muted">{node.kind}</div>
+          <div className="truncate text-row font-medium text-heading">{node.type}</div>
         </div>
         {/* A trigger cannot be removed: every graph starts at exactly one, and
             deleting it would make the automation unsaveable rather than empty. */}

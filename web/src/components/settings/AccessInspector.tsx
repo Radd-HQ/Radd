@@ -37,7 +37,7 @@ function PermissionExplanation({ userId }: { userId: string }) {
   });
   const picker = <div className="flex flex-wrap items-end gap-2">
     <div className="min-w-0 flex-1">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">Effective permissions</p>
+      <p className="mb-2 text-meta font-semibold uppercase tracking-wide text-fg-faint">Effective permissions</p>
       <SelectField label="Resolution scope" value={kind} onChange={event => { setKind(event.target.value); setTarget(""); }}>
         <option value="global">Instance-wide</option><option value="project">On a project</option><option value="space">In a wiki space</option>
       </SelectField>
@@ -102,7 +102,7 @@ function PermissionExplanation({ userId }: { userId: string }) {
                 key={atom.permission}
                 title={atomTitle(atom, source)}
                 className={
-                  "rounded border px-1 font-mono text-[10px] " +
+                  "rounded border px-1 font-mono text-micro " +
                   (atom.implied ? "border-subtle text-fg-muted" : "border-strong text-fg-secondary")
                 }
               >
@@ -112,7 +112,7 @@ function PermissionExplanation({ userId }: { userId: string }) {
           </div>
         ))
       )}
-      <p className="text-[10px] text-fg-faint">
+      <p className="text-micro text-fg-faint">
         Dimmed atoms are implied by an umbrella (project.manage implies state.create), not
         ticked on the role itself. Hover an atom for how its role reached this scope.
       </p>
@@ -128,7 +128,7 @@ export function ExpiryChip({ expiresAt }: { expiresAt: string }) {
   return (
     <span
       className={
-        "ml-1 rounded border px-1 text-[10px] " +
+        "ml-1 rounded border px-1 text-micro " +
         (soon ? "border-amber-500/40 text-amber-400" : "border-subtle text-fg-faint")
       }
       title={`Expires ${formatDateTime(expiresAt)}`}
@@ -141,7 +141,7 @@ export function ExpiryChip({ expiresAt }: { expiresAt: string }) {
 /** The source name, linked to the role that supplies it (RADD-809 backlinks). */
 function SourceLabel({ source, first }: { source: string; first: PermissionSource | undefined }) {
   const label = (
-    <span className="shrink-0 text-[11px] font-medium text-fg-secondary">
+    <span className="shrink-0 text-meta font-medium text-fg-secondary">
       {source}
       {first?.via === "team" && first.via_team ? (
         <span className="text-fg-faint"> via {first.via_team}</span>
@@ -199,7 +199,7 @@ export function ResourceAccessSection({ userId }: { userId: string }) {
   const summary = data.summary;
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+      <p className="text-meta font-semibold uppercase tracking-wide text-fg-faint">
         Resource access
       </p>
       {/* Full reach and own-items-only reach are DIFFERENT answers (RADD-933): counted together,
@@ -240,7 +240,7 @@ function MembershipsSection({ memberships }: { memberships: Membership[] }) {
   }
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+      <p className="text-meta font-semibold uppercase tracking-wide text-fg-faint">
         Teams and groups
       </p>
       <ul className="flex flex-col gap-1">
@@ -252,19 +252,19 @@ function MembershipsSection({ memberships }: { memberships: Membership[] }) {
               <span className="text-fg">{entry.name}</span>
               {entry.path && entry.path.length > 1 && (
                 <span
-                  className="text-[11px] text-fg-faint"
+                  className="text-meta text-fg-faint"
                   title={`Nesting chain, granted group first: ${entry.path.join(" ← ")}`}
                 >
                   ({entry.path.length - 1} level{entry.path.length > 2 ? "s" : ""} down)
                 </span>
               )}
               {entry.confers.length === 0 ? (
-                <span className="text-[11px] text-fg-faint">grants nothing</span>
+                <span className="text-meta text-fg-faint">grants nothing</span>
               ) : (
                 entry.confers.map((grant, index) => (
                   <span
                     key={`${grant.role_name}-${grant.scope_label ?? "global"}-${index}`}
-                    className="rounded border border-strong px-1.5 py-px text-[11px] text-fg-secondary"
+                    className="rounded border border-strong px-1.5 py-px text-meta text-fg-secondary"
                   >
                     {grant.role_name}
                     <span className="text-fg-faint">
@@ -300,7 +300,7 @@ function ResourceSections({
       ) : (
         withRows.map((section) => (
           <div key={section.resource_type} className="flex flex-col gap-0.5">
-            <p className="text-[11px] font-medium text-fg-secondary">{section.label}s</p>
+            <p className="text-meta font-medium text-fg-secondary">{section.label}s</p>
             <ul className="flex flex-col gap-0.5">
               {section.rows.map((row, index) => (
                 <li key={index} className="text-xs text-fg">
@@ -309,7 +309,7 @@ function ResourceSections({
                   </span>{" "}
                   — {row.access}
                   {row.effect === "deny" && (
-                    <span className="ml-1 rounded border border-red-500/40 px-1 text-[10px] uppercase text-red-400">
+                    <span className="ml-1 rounded border border-red-500/40 px-1 text-micro uppercase text-red-400">
                       deny
                     </span>
                   )}
@@ -328,7 +328,7 @@ function ResourceSections({
         ))
       )}
       {openTypes.length > 0 && (
-        <p className="text-[10px] text-fg-faint">
+        <p className="text-micro text-fg-faint">
           Default-open kinds ({openTypes.join(", ")}) are reachable with no grant at all —
           "readable because nothing restricts it" is different from "granted", and only the
           restricted ones need rows here.
@@ -357,7 +357,7 @@ export function TeamAccessSection({ teamId }: { teamId: string }) {
   }
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+      <p className="text-meta font-semibold uppercase tracking-wide text-fg-faint">
         What membership confers
       </p>
       {groups.size === 0 ? (
@@ -367,12 +367,12 @@ export function TeamAccessSection({ teamId }: { teamId: string }) {
       ) : (
         [...groups.entries()].map(([label, atoms]) => (
           <div key={label} className="flex flex-wrap items-baseline gap-1.5">
-            <span className="shrink-0 text-[11px] font-medium text-fg-secondary">{label}</span>
+            <span className="shrink-0 text-meta font-medium text-fg-secondary">{label}</span>
             {atoms.map((atom) => (
               <span
                 key={atom.permission}
                 className={
-                  "rounded border px-1 font-mono text-[10px] " +
+                  "rounded border px-1 font-mono text-micro " +
                   (atom.implied ? "border-subtle text-fg-muted" : "border-strong text-fg-secondary")
                 }
               >

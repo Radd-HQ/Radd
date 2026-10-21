@@ -157,7 +157,7 @@ function StatusCard({ status }: { status: BackupStatus }) {
       {problems.length > 0 && (
         <ul className="mt-3 flex flex-col gap-1 border-t border-subtle pt-3">
           {problems.map((problem) => (
-            <li key={problem} className="text-[13px] text-status-danger-ink">
+            <li key={problem} className="text-row text-status-danger-ink">
               {problem}
             </li>
           ))}
@@ -170,8 +170,8 @@ function StatusCard({ status }: { status: BackupStatus }) {
 function Fact({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="min-w-0">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-fg-faint">{label}</div>
-      <div className={`truncate text-[13px] text-fg ${mono ? "font-mono" : ""}`} title={value}>
+      <div className="text-meta font-medium uppercase tracking-wide text-fg-faint">{label}</div>
+      <div className={`truncate text-row text-fg ${mono ? "font-mono" : ""}`} title={value}>
         {value}
       </div>
     </div>
@@ -182,7 +182,7 @@ function RunBanner({ stage, kind }: { stage: string; kind: string }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-accent/25 bg-accent/5 px-4 py-3">
       <span className="size-2 shrink-0 animate-pulse rounded-full bg-accent" aria-hidden />
-      <span className="text-[13px] text-fg">
+      <span className="text-row text-fg">
         {kind === "restore" ? "Restoring" : "Backing up"} — {RUN_STAGE_LABELS[stage as string] ?? stage}…
       </span>
     </div>
@@ -352,7 +352,7 @@ function ScheduleModal({
           value={keepLast}
           onChange={(event) => setKeepLast(event.target.value)}
         />
-        <label className="flex items-center gap-2 text-[13px] text-fg">
+        <label className="flex items-center gap-2 text-row text-fg">
           <input
             type="checkbox"
             checked={attachments}
@@ -497,7 +497,7 @@ function ArtifactsCard({
                 <tr key={backup.name}>
                   <Td className="whitespace-nowrap">
                     <div className="text-fg">{when(backup.created_at)}</div>
-                    <div className="font-mono text-[11px] text-fg-faint">{backup.name}</div>
+                    <div className="font-mono text-meta text-fg-faint">{backup.name}</div>
                   </Td>
                   <Td>{BACKUP_KIND_LABELS[backup.kind] ?? backup.kind}</Td>
                   <Td className="whitespace-nowrap">{bytes(backup.size_bytes)}</Td>
@@ -509,7 +509,7 @@ function ArtifactsCard({
                       database{backup.includes_attachments ? " + attachments" : ""}
                     </span>
                     {backup.problem && (
-                      <div className="text-[11px] text-status-danger-ink">{backup.problem}</div>
+                      <div className="text-meta text-status-danger-ink">{backup.problem}</div>
                     )}
                   </Td>
                   <Td className="truncate">{backup.created_by ?? "—"}</Td>
@@ -596,11 +596,11 @@ function RestoreModal({
   return (
     <Modal onClose={onClose} title="Restore this backup?">
       <div className="flex flex-col gap-4">
-        <div className="rounded-md border border-status-danger/30 bg-status-danger/5 px-3.5 py-3 text-[13px] text-fg">
+        <div className="rounded-md border border-status-danger/30 bg-status-danger/5 px-3.5 py-3 text-row text-fg">
           Every row in this instance will be <strong>replaced</strong> with the contents of this
           backup. A safety backup is taken first, and Radd is unavailable while it runs.
         </div>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px]">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-row">
           <dt className="text-fg-muted">Taken</dt>
           <dd className="text-fg">{when(backup.created_at)}</dd>
           <dt className="text-fg-muted">By</dt>

@@ -20,7 +20,7 @@ export function WorklogTab({ itemId }: { itemId: string }) {
   const data = summary.data;
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-[13px] text-fg-secondary">
+      <p className="text-row text-fg-secondary">
         <span className="font-medium text-heading">{data.logged}</span> logged
         {data.original_estimate ? (
           <>
@@ -35,7 +35,7 @@ export function WorklogTab({ itemId }: { itemId: string }) {
       ) : (
         <ul className="flex flex-col gap-2">
           {data.entries.map((entry) => (
-            <li key={entry.id} className="flex items-start gap-2.5 text-[13px]">
+            <li key={entry.id} className="flex items-start gap-2.5 text-row">
               <Clock size={13} className="mt-0.5 shrink-0 text-fg-faint" aria-hidden />
               <div className="min-w-0">
                 <p className="flex flex-wrap items-baseline gap-x-1.5">
@@ -44,7 +44,7 @@ export function WorklogTab({ itemId }: { itemId: string }) {
                   <span className="font-medium text-heading">{entry.time_spent}</span>
                   <span className="text-fg-faint">on {entry.worked_on}</span>
                   {entry.category && (
-                    <span className="rounded bg-elevated px-1.5 py-px text-[11px] text-fg">
+                    <span className="rounded bg-elevated px-1.5 py-px text-meta text-fg">
                       {entry.category.name}
                     </span>
                   )}

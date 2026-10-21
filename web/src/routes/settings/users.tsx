@@ -109,7 +109,7 @@ export function UsersSettingsPage() {
         isInstanceAdmin && directoryPage ? (
           <Link
             to={directoryPage.to}
-            className="flex items-center gap-1 text-[13px] text-accent-text hover:text-accent-text-strong"
+            className="flex items-center gap-1 text-row text-accent-text hover:text-accent-text-strong"
           >
             Import from AD → {directoryPage.label} settings
             <ArrowRight size={13} aria-hidden />
@@ -304,12 +304,12 @@ function UsersTable({
                         title="An instance administrator bypasses every permission check."
                         className="size-3.5 cursor-pointer accent-[var(--accent-fill)]"
                       />
-                      <span className="text-[11px] text-fg-secondary">Administrator</span>
+                      <span className="text-meta text-fg-secondary">Administrator</span>
                     </label>
                   ) : (
                     <span
                       className={
-                        "rounded border px-1.5 py-px text-[11px] " +
+                        "rounded border px-1.5 py-px text-meta " +
                         (user.instance_role === InstanceRole.admin
                           ? "border-accent/50 text-accent-text"
                           : "border-strong text-fg-secondary")
@@ -350,7 +350,7 @@ function UsersTable({
                         type="button"
                         onClick={() => void onViewAs(user)}
                         disabled={busy}
-                        className="mr-1.5 rounded border border-strong px-2 py-0.5 text-[11px] text-fg-secondary hover:border-accent hover:text-accent-text cursor-pointer disabled:opacity-50"
+                        className="mr-1.5 rounded border border-strong px-2 py-0.5 text-meta text-fg-secondary hover:border-accent hover:text-accent-text cursor-pointer disabled:opacity-50"
                         title="See the app exactly as this person does (read-only)"
                       >
                         View as
@@ -362,7 +362,7 @@ function UsersTable({
                         onClick={() => onToggleActive(user)}
                         disabled={busy}
                         className={
-                          "rounded border px-2 py-0.5 text-[11px] cursor-pointer disabled:opacity-50 " +
+                          "rounded border px-2 py-0.5 text-meta cursor-pointer disabled:opacity-50 " +
                           (user.active
                             ? "border-strong text-fg-secondary hover:border-red-500/50 hover:text-red-400"
                             : "border-strong text-fg-secondary hover:border-emerald-500/50 hover:text-emerald-300")
@@ -378,7 +378,7 @@ function UsersTable({
                         type="button"
                         onClick={() => onDelete(user)}
                         disabled={busy}
-                        className="ml-1.5 rounded border border-strong px-2 py-0.5 text-[11px] text-fg-secondary hover:border-red-500/50 hover:text-red-400 cursor-pointer disabled:opacity-50"
+                        className="ml-1.5 rounded border border-strong px-2 py-0.5 text-meta text-fg-secondary hover:border-red-500/50 hover:text-red-400 cursor-pointer disabled:opacity-50"
                       >
                         Delete
                       </button>
@@ -443,7 +443,7 @@ function TwoFactorCell({
             type="button"
             onClick={onReset}
             disabled={busy}
-            className="rounded border border-strong px-2 py-0.5 text-[11px] text-fg-secondary hover:border-red-500/50 hover:text-red-400 cursor-pointer disabled:opacity-50"
+            className="rounded border border-strong px-2 py-0.5 text-meta text-fg-secondary hover:border-red-500/50 hover:text-red-400 cursor-pointer disabled:opacity-50"
             title="For someone who lost both their authenticator and their recovery codes"
           >
             Reset

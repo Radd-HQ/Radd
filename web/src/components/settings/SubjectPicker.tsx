@@ -140,7 +140,7 @@ export function SubjectPicker({
                 >
                   <Icon size={12} className="text-fg-muted" aria-hidden />
                   <span className="truncate">{s.name}</span>
-                  <span className="ml-auto text-[10px] uppercase text-fg-faint">{s.type}</span>
+                  <span className="ml-auto text-micro uppercase text-fg-faint">{s.type}</span>
                 </button>
               </li>
             );

@@ -198,7 +198,7 @@ export function Sidebar() {
         >
           <Search size={14} aria-hidden />
           Search
-          <kbd className="ml-auto rounded border border-subtle px-1 text-[10px] text-fg-muted">
+          <kbd className="ml-auto rounded border border-subtle px-1 text-micro text-fg-muted">
             {modShortcut('K')}
           </kbd>
         </button>
@@ -448,7 +448,7 @@ export function Sidebar() {
             {!sectionCollapsed("projects") && (
             <div aria-busy={directory.busy}>
             {contextProject && <div className="mb-2 border-b border-subtle pb-1">
-              <p className="px-2 text-[11px] text-fg-muted">Current project</p>
+              <p className="px-2 text-meta text-fg-muted">Current project</p>
               <ul><SidebarProjectRow project={contextProject}
                 expanded={projectExpanded(contextProject)} permissions={perms}
                 onToggle={() => toggleProject(contextProject.id, projectExpanded(contextProject))}
@@ -487,7 +487,7 @@ export function Sidebar() {
             {/* RADD-1041: a project you can read but don't SEE reads as a bug
                 without this — say what's hidden and offer the one click back. */}
             {!sectionCollapsed("projects") && hiddenRelatedProjectCount > 0 && (
-              <p className="px-2 pb-1 text-[11px] text-fg-faint">
+              <p className="px-2 pb-1 text-meta text-fg-faint">
                 {hiddenRelatedProjectCount} related project
                 {hiddenRelatedProjectCount === 1 ? "" : "s"} hidden —{" "}
                 <button

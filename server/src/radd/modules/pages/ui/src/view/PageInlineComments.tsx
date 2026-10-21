@@ -168,7 +168,7 @@ export function PageInlineComments({
             const pane = railRef.current?.closest<HTMLElement>("[data-page-comment-sidebar]");
             if (pane) pane.scrollTop = 0;
           }}
-          className="fixed z-[60] flex items-center gap-1 rounded-md border border-strong bg-overlay px-2 py-1 text-[12px] text-fg shadow-pop cursor-pointer"
+          className="fixed z-[60] flex items-center gap-1 rounded-md border border-strong bg-overlay px-2 py-1 text-xs text-fg shadow-pop cursor-pointer"
         >
           <MessageSquarePlus size={12} aria-hidden />
           Comment
@@ -186,7 +186,7 @@ export function PageInlineComments({
         )}
         {draftAnchor && (
           <div className="rounded-md border border-accent bg-surface p-2">
-            <p className="mb-1 text-[11px] italic text-fg-muted">“{draftAnchor.quote}”</p>
+            <p className="mb-1 text-meta italic text-fg-muted">“{draftAnchor.quote}”</p>
             <RichEditor
               value={draftBody}
               onChange={setDraftBody}
@@ -214,7 +214,7 @@ export function PageInlineComments({
         {detached.length > 0 && (
           <section data-detached-comments className="flex flex-col gap-2 border-t border-subtle pt-2">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-[11px] font-semibold text-heading">Detached ({detached.length})</h3>
+              <h3 className="text-meta font-semibold text-heading">Detached ({detached.length})</h3>
               {resolvableDetached.length > 0 && (
                 <Button size="sm" variant="ghost" onClick={() => void resolveAllDetached()} disabled={resolve.isPending}>
                   {resolvableDetached.length === detached.length
@@ -223,7 +223,7 @@ export function PageInlineComments({
                 </Button>
               )}
             </div>
-            <p className="text-[11px] text-fg-muted">
+            <p className="text-meta text-fg-muted">
               The passages these were written about were edited away, or now appear more than
               once. They stay until someone resolves them; a resolved comment keeps its quote.
             </p>
@@ -236,7 +236,7 @@ export function PageInlineComments({
             <button
               type="button"
               onClick={() => setShowResolved((on) => !on)}
-              className="rounded px-1 text-[11px] text-fg-muted hover:text-fg cursor-pointer"
+              className="rounded px-1 text-meta text-fg-muted hover:text-fg cursor-pointer"
             >
               Resolved ({resolved.length})
             </button>

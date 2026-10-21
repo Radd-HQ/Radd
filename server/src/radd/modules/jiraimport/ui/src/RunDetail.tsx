@@ -62,13 +62,13 @@ export function PlanSnapshot({ run }: { run: JiraRun }) {
       <div className="flex flex-col gap-3">
         {sections.map(([section, table]) => (
           <div key={section}>
-            <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-fg-faint">
+            <p className="mb-1 text-meta font-medium uppercase tracking-wide text-fg-faint">
               {section}
             </p>
             <ul className="flex flex-col gap-0.5 text-xs text-fg-secondary">
               {Object.entries(table).map(([key, entry]) => (
                 <li key={key} className="flex flex-wrap items-baseline gap-1.5">
-                  <span className="font-mono text-[11px] text-fg">{key}</span>
+                  <span className="font-mono text-meta text-fg">{key}</span>
                   <span className="text-fg-faint">→</span>
                   <span>
                     {entry?.action ?? "map"}

@@ -12,7 +12,7 @@ import type { CustomFieldValue } from "@radd-plugin-ui/fields/types";
  */
 
 export function Dash() {
-  return <span className="text-[11px] text-fg-faint">—</span>;
+  return <span className="text-meta text-fg-faint">—</span>;
 }
 
 export function DateText({ iso }: { iso: string }) {

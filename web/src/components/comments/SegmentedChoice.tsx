@@ -79,7 +79,7 @@ export function SegmentedChoice<T extends string>({
             data-option={option.value}
             onClick={() => onChange(option.value)}
             className={
-              "rounded px-2 py-0.5 text-[11px] font-medium cursor-pointer transition-colors " +
+              "rounded px-2 py-0.5 text-meta font-medium cursor-pointer transition-colors " +
               "focus-visible:outline-2 focus-visible:outline-focus " +
               (active ? option.activeClassName ?? "bg-elevated text-heading" : "text-fg-secondary hover:text-fg")
             }

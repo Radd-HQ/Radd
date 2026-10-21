@@ -164,7 +164,7 @@ export function ProviderDialog({
         {existing?.redirect_uri && <RedirectUriField uri={existing.redirect_uri} />}
 
         <div className="border-t border-subtle pt-4">
-          <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+          <div className="mb-2 text-meta font-medium uppercase tracking-wide text-fg-muted">
             Who may sign up
           </div>
           <div className="flex flex-col gap-3">
@@ -175,7 +175,7 @@ export function ProviderDialog({
               onChange={setAutoProvision}
             />
             <div>
-              <div className="mb-1 text-[13px] text-fg">Allowed sign-up domains</div>
+              <div className="mb-1 text-row text-fg">Allowed sign-up domains</div>
               <TokenMultiSelect
                 value={domains}
                 onChange={setDomains}
@@ -206,14 +206,14 @@ export function ProviderDialog({
         </div>
 
         <div className="border-t border-subtle pt-4">
-          <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+          <div className="mb-2 text-meta font-medium uppercase tracking-wide text-fg-muted">
             Starting access for new accounts (optional)
           </div>
           <StartingAccess rules={rules} onChange={setRules} />
         </div>
 
         <div className="border-t border-subtle pt-4">
-          <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+          <div className="mb-2 text-meta font-medium uppercase tracking-wide text-fg-muted">
             Admin group sync (optional)
           </div>
           <div className="flex flex-col gap-3">
