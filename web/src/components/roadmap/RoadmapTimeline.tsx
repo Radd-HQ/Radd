@@ -14,6 +14,7 @@ import { Plus } from "lucide-react";
 import {
   ROADMAP_BAND_THRESHOLD_PX,
   ROADMAP_HOVER_CARD_DELAY_MS,
+  ROADMAP_OVERSCAN_ROWS,
 } from "../../lib/constants";
 import type { CardAnchor } from "../../lib/floating-position";
 import { CATEGORY_CHART_COLORS, CATEGORY_CHART_INK } from "../../lib/meta";
@@ -38,6 +39,7 @@ import {
   rowBarProgress,
   rowDropFromY,
   trayDropPlacement,
+  visibleRowRange,
   type RoadmapCycleBand,
   type RoadmapModel,
   type RoadmapRow,
@@ -172,6 +174,44 @@ export function RoadmapTimeline({
   const bodyRef = useRef<HTMLDivElement>(null);
   /** The rows block — a tray drop's y is measured against ITS top (RADD-1522). */
   const rowsRef = useRef<HTMLDivElement>(null);
+
+  // Virtualized rows (RADD-1521): the pane's scroll position and height, read
+  // through one rAF-throttled scroll listener and a ResizeObserver; the row
+  // window is a pure function of them, so a zoom (rowH) or a filter (count)
+  // re-derives it in the same render with nothing stale to reconcile.
+  // A passive effect, not a layout one: the pane is this component's PARENT,
+  // and React attaches a parent's ref after its children's layout effects
+  // have run — a layout effect here saw a null ref, registered nothing, and
+  // the window sat at rows 0–28 whatever the scroll position (the proof's
+  // "scroll to the bottom" check is what caught it).
+  const [viewport, setViewport] = useState({ scrollTop: 0, clientHeight: 1000 });
+  useEffect(() => {
+    const pane = scrollRef.current;
+    if (!pane) return;
+    const read = () =>
+      setViewport((current) =>
+        current.scrollTop === pane.scrollTop && current.clientHeight === pane.clientHeight
+          ? current
+          : { scrollTop: pane.scrollTop, clientHeight: pane.clientHeight },
+      );
+    read();
+    let queued = false;
+    const onScroll = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        read();
+      });
+    };
+    pane.addEventListener("scroll", onScroll, { passive: true });
+    const observer = new ResizeObserver(read);
+    observer.observe(pane);
+    return () => {
+      pane.removeEventListener("scroll", onScroll);
+      observer.disconnect();
+    };
+  }, [scrollRef]);
   const [trayDropDay, setTrayDropDay] = useState<number | null>(null);
   // A tray drop the draft could not place (sorted view, header, cross-scope)
   // appends its row; scroll to it rather than leave it off-screen.
@@ -421,6 +461,29 @@ export function RoadmapTimeline({
     });
     return regions;
   }, [visibleRows, dayWidth]);
+
+  // The window of rows to mount. A row mid-gesture stays mounted wherever the
+  // pane scrolls: unmounting the HTML5-dragged label row loses its dragend,
+  // unmounting the pointer-captured bar drops the capture, and either leaves
+  // the UI mid-gesture. The range simply stretches to include it.
+  const rowRange = useMemo(() => {
+    const range = visibleRowRange(
+      viewport.scrollTop,
+      viewport.clientHeight,
+      roadmapAxisHeight(bands.length > 0),
+      rowH,
+      visibleRows.length,
+      ROADMAP_OVERSCAN_ROWS,
+    );
+    for (const pinned of [rowDrag?.item.id, drag.state?.row.item.id]) {
+      const index = pinned === undefined ? -1 : (rowIndexById.get(pinned) ?? -1);
+      if (index < 0) continue;
+      range.first = Math.min(range.first, index);
+      range.last = Math.max(range.last, index + 1);
+    }
+    return range;
+  }, [viewport, bands.length, rowH, visibleRows.length, rowDrag, drag.state, rowIndexById]);
+  const mountedRows = visibleRows.slice(rowRange.first, rowRange.last);
 
   const linkState = drag.state?.mode === BarDragMode.link && drag.state.started ? drag.state : null;
   const rubber: RubberBand | null =
@@ -742,8 +805,11 @@ export function RoadmapTimeline({
           )}
         </div>
 
-        <div ref={rowsRef} className="relative z-10">
-          {visibleRows.map((row) => (
+        <div ref={rowsRef} className="relative z-10" data-row-window={`${rowRange.first}-${rowRange.last}`}>
+          {/* Spacers hold the unmounted rows' height, so every index-based y
+              (group boxes, connectors, drop targets) stays exactly as it is. */}
+          {rowRange.first > 0 && <div style={{ height: rowRange.first * rowH }} aria-hidden />}
+          {mountedRows.map((row) => (
             <BarRow
               key={row.item.id}
               row={row}
@@ -789,6 +855,9 @@ export function RoadmapTimeline({
               onHoverEnd={clearHover}
             />
           ))}
+          {rowRange.last < visibleRows.length && (
+            <div style={{ height: (visibleRows.length - rowRange.last) * rowH }} aria-hidden />
+          )}
           {/* Open lane below the last row — drop space for tray scheduling. */}
           {canEdit && <div style={{ height: rowH }} aria-hidden />}
         </div>

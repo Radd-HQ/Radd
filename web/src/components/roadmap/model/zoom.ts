@@ -119,6 +119,27 @@ export function primaryAxisTicks(
   return ticks;
 }
 
+/** The rows to render (RADD-1521): those intersecting the pane plus `overscan`
+ *  each side, as a half-open index range into the visible rows; the rest are
+ *  two spacers that keep every index-based position exactly where it is. Row i
+ *  sits at content y = headerH + i * rowH, under a sticky header that takes
+ *  layout space. A zoom frame over 306 rows cost 55–95ms rendering them all;
+ *  the pane shows ~18 at the comfortable pitch and ~100 at the floor. */
+export function visibleRowRange(
+  scrollTop: number,
+  clientHeight: number,
+  headerH: number,
+  rowH: number,
+  count: number,
+  overscan: number,
+): { first: number; last: number } {
+  if (count <= 0 || rowH <= 0) return { first: 0, last: 0 };
+  const top = scrollTop - headerH;
+  const first = Math.max(0, Math.floor(top / rowH) - overscan);
+  const last = Math.min(count, Math.max(first, Math.ceil((top + clientHeight) / rowH) + overscan));
+  return { first, last };
+}
+
 /** Clamp a day width into the zoom range. */
 export function clampDayWidth(width: number): number {
   return Math.min(ROADMAP_DAY_WIDTH_MAX, Math.max(ROADMAP_DAY_WIDTH_MIN, width));

@@ -112,6 +112,16 @@ issues followed on 2026-10-21 from Hussein trying the build on real data and fro
   marks the landing row while dragging; an unplaceable drop scrolls to its row. Four more proof checks;
   the proof's own trap was assuming the row order — the default rank is newest FIRST, so the epics sat
   below thirty leaves, and rows are located by key now.
+- **RADD-1521** (the "smoother" half): a ctrl+wheel notch over 306 rows cost 49–70ms and a ten-notch
+  burst 944ms, because every `BarRow` re-rendered and re-laid-out per frame. The rows block mounts only
+  the rows intersecting the pane plus six of overscan (`visibleRowRange`), two spacers hold the rest's
+  height so every index-based y is untouched, and a row mid-gesture stays mounted wherever the pane
+  scrolls (an unmounted HTML5 source loses `dragend`, an unmounted bar loses its pointer capture).
+  After: 9–36ms a notch, 475ms the burst, no long tasks, 23 rows mounted at the default pitch and ~100
+  at the floor. Trap: the pane is the timeline's PARENT, and React attaches a parent's ref after its
+  children's layout effects — a `useLayoutEffect` reading `scrollRef` saw null, registered no scroll
+  listener, and the window sat at rows 0–28 at every scroll position; the proof's scroll-to-bottom check
+  caught it, and the reader is a passive effect.
 Traps: a drop earlier than every bar re-pads the domain by whole weeks and shifts every index (compare to
 the today line in proofs); the Bash harness here is zsh, not fish; pytest needs a reachable Postgres
 (`RADD_TEST_DATABASE_URL` at the clean stack's :5457 when the working one is down).

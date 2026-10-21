@@ -24,6 +24,7 @@ const zoom = evaluateTs(
     "clampDayWidth",
     "fitDayWidth",
     "zoomPercentLabel",
+    "visibleRowRange",
   ],
 );
 const { ROADMAP_DAY_WIDTH, ROADMAP_DAY_WIDTH_MIN, ROADMAP_DAY_WIDTH_MAX } = constants;
@@ -98,6 +99,21 @@ test("fit puts the domain in the pane width, clamped to the zoom range", () => {
   assert.equal(zoom.fitDayWidth(1000, 0), ROADMAP_DAY_WIDTH);
   assert.equal(zoom.clampDayWidth(0.01), ROADMAP_DAY_WIDTH_MIN);
   assert.equal(zoom.clampDayWidth(99), ROADMAP_DAY_WIDTH_MAX);
+});
+
+test("the virtual row window covers the pane plus the overscan, clamped to the rows", () => {
+  // Header 40, pitch 44, 306 rows, a 776px pane at the top: rows 0..16 intersect, +6 overscan.
+  assert.deepEqual(zoom.visibleRowRange(0, 776, 40, 44, 306, 6), { first: 0, last: 23 });
+  // Scrolled 4000px: (4000-40)/44 = 90 → 84 .. ceil((3960+776)/44)=108 + 6.
+  assert.deepEqual(zoom.visibleRowRange(4000, 776, 40, 44, 306, 6), { first: 84, last: 114 });
+  // The bottom: never past the row count.
+  assert.deepEqual(zoom.visibleRowRange(13000, 776, 40, 44, 306, 6), { first: 288, last: 306 });
+  // At the 8px floor the same pane holds ~100 rows.
+  const floor = zoom.visibleRowRange(0, 776, 40, 8, 306, 6);
+  assert.equal(floor.first, 0);
+  assert.ok(floor.last >= 97 && floor.last <= 110, `${floor.last}`);
+  assert.deepEqual(zoom.visibleRowRange(0, 776, 40, 44, 0, 6), { first: 0, last: 0 });
+  assert.deepEqual(zoom.visibleRowRange(0, 776, 40, 44, 5, 6), { first: 0, last: 5 }, "fewer rows than the pane: all of them");
 });
 
 test("an off-preset level reads as a share of the default", () => {

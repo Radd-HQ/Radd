@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * RADD-1520 proof — the roadmap zoom, measured in a real browser:
+ * RADD-1520 / 1521 / 1522 proof — the roadmap zoom, measured in a real browser:
  *
+ *   RADD-1521  fewer rows are in the DOM than exist, the content height is unchanged, and scrolling
+ *              to the bottom mounts the last row and unmounts the first
  *   RADD-1522  a tray drop takes the row it was dropped on: beside a top-level row, after an epic's
  *              block when dropped on one of its children, first child when a child is dropped on its
  *              epic — with the insertion line on the landing row while dragging; Undo reverts each
@@ -61,10 +63,11 @@ const STATE = `(() => {
   const bars = [...document.querySelectorAll("[data-bar-item]")].map((el) => ({ id: el.dataset.barItem, h: el.getBoundingClientRect().height, w: el.getBoundingClientRect().width, left: parseFloat(el.style.left) }));
   const regions = [...document.querySelectorAll("[data-epic-region]")].map((el) => { const r = el.getBoundingClientRect(); return { id: el.dataset.epicRegion, top: r.top, bottom: r.bottom }; });
   const sel = document.querySelector("[aria-label='Zoom (day width)']");
+  const windowFirst = Number((document.querySelector("[data-row-window]")?.dataset.rowWindow ?? "0-0").split("-")[0]);
   return {
-    dayWidth: Number(root.dataset.dayWidth), rowH: Number(root.dataset.rowH), tier: root.dataset.axisTier,
+    dayWidth: Number(root.dataset.dayWidth), rowH: Number(root.dataset.rowH), tier: root.dataset.axisTier, windowFirst,
     clientWidth: pane.clientWidth, clientHeight: pane.clientHeight, scrollWidth: pane.scrollWidth, scrollHeight: pane.scrollHeight,
-    scrollTop: pane.scrollTop, labelWidth: parseFloat(root.querySelector(".sticky.top-0 > div").style.width),
+    scrollTop: pane.scrollTop, paneTop: pane.getBoundingClientRect().top + pane.clientTop, labelWidth: parseFloat(root.querySelector(".sticky.top-0 > div").style.width),
     rows, labels: labels.length, overlaps, weekLabels: root.querySelectorAll(".sticky.top-0 span.absolute.top-5").length,
     bars, regions, zoomLabel: sel?.textContent ?? null, keys: rows.map((r) => r.text.slice(0, 12)),
   };
@@ -130,15 +133,48 @@ async function main() {
     const pitchOk = (state) => state.rows.every((row, i) => i === 0 || Math.abs(row.top - state.rows[i - 1].bottom) < 0.01) && state.rows.every((row) => Math.abs(row.h - state.rowH) < 0.01);
     check("rows are exactly one pitch apart at the default", s && pitchOk(s), JSON.stringify(s?.rows.slice(0, 3).map((r) => [r.top, r.h])));
 
+    // --- RADD-1521: virtualized rows ---------------------------------------------------------------
+    const total = 2 + 12 + 30;
+    check("fewer rows are in the DOM than exist (44) while the content height counts them all", s && s.rows.length < total && s.rows.length >= Math.ceil((s.clientHeight - 40) / ROW_PX) && s.scrollHeight >= 40 + total * ROW_PX, JSON.stringify({ rendered: s?.rows.length, total, scrollHeight: s?.scrollHeight }));
+    const firstKey = s?.keys[0];
+    await session.eval(`(() => { const p = document.querySelector("[data-roadmap-timeline]").parentElement; p.scrollTop = p.scrollHeight; return p.scrollTop; })()`);
+    await sleep(300);
+    s = await session.eval(STATE);
+    // At the bottom the last row ends one open drop lane (ROW_PX) above the pane's visible edge
+    // (clientTop + clientHeight: inside the pane's border, above its horizontal scrollbar).
+    const lastBottom = s ? Math.max(...s.rows.map((r) => r.bottom)) : NaN;
+    const visibleBottom = s ? s.paneTop + s.clientHeight : NaN;
+    check("scrolling to the bottom mounts the last row and unmounts the first", s && s.rows.length < total && !s.keys.includes(firstKey) && Math.abs(lastBottom - (visibleBottom - ROW_PX)) < 1, JSON.stringify({ first: firstKey, rendered: s?.rows.length, lastBottom, visibleBottom }));
+    await session.eval(`(() => { const p = document.querySelector("[data-roadmap-timeline]").parentElement; p.scrollTop = 0; return true; })()`);
+    await sleep(200);
+
     // --- RADD-1522: a tray drop lands on the row it was dropped on ----------------------------------
-    const hasKey = (text, key) => text.startsWith(key) && !/\d/.test(text.charAt(key.length));
-    const ROW_INDEX = (key) => `(() => [...document.querySelectorAll("[data-row-kind]")].findIndex((cell) => { const t = cell.textContent.trim(); return t.startsWith(${JSON.stringify(key)}) && !/\\d/.test(t.charAt(${key.length})); }))()`;
-    const INDICATOR = `(() => [...document.querySelectorAll("[data-row-kind]")].findIndex((cell) => /shadow-\\[inset_0_-?2px/.test(cell.parentElement.className)))()`;
+    // Absolute row indices: the rows block mounts a window (RADD-1521), so a DOM index is offset by
+    // the window's first absolute index; -1 when the row is not mounted.
+    const WINDOW_FIRST = `Number((document.querySelector("[data-row-window]")?.dataset.rowWindow ?? "0-0").split("-")[0])`;
+    const ROW_INDEX = (key) => `(() => { const i = [...document.querySelectorAll("[data-row-kind]")].findIndex((cell) => { const t = cell.textContent.trim(); return t.startsWith(${JSON.stringify(key)}) && !/\\d/.test(t.charAt(${key.length})); }); return i < 0 ? -1 : ${WINDOW_FIRST} + i; })()`;
+    const INDICATOR = `(() => { const i = [...document.querySelectorAll("[data-row-kind]")].findIndex((cell) => /shadow-\\[inset_0_-?2px/.test(cell.parentElement.className)); return i < 0 ? -1 : ${WINDOW_FIRST} + i; })()`;
+    /** Scroll the pane so absolute row `index` is centred (and therefore mounted). */
+    const scrollToRow = async (index) => {
+      await session.eval(`(() => { const p = document.querySelector("[data-roadmap-timeline]").parentElement; p.scrollTop = Math.max(0, 40 + ${index} * ${ROW_PX} - p.clientHeight / 2); return p.scrollTop; })()`);
+      await sleep(250);
+    };
+    /** The absolute index of the row with `key`, scanning the pane a screen at a time. */
+    const rowIndex = async (key) => {
+      const screens = await session.eval(`(() => { const p = document.querySelector("[data-roadmap-timeline]").parentElement; return Math.ceil(p.scrollHeight / p.clientHeight); })()`);
+      for (let screen = 0; screen <= screens; screen++) {
+        await session.eval(`(() => { const p = document.querySelector("[data-roadmap-timeline]").parentElement; p.scrollTop = ${screen} * p.clientHeight; return true; })()`);
+        await sleep(200);
+        const index = await session.eval(ROW_INDEX(key));
+        if (index >= 0) return index;
+      }
+      return -1;
+    };
     /** Drag a tray card and drop it on the `before` (top) or bottom half of the row at `index`. */
     const dropOnRow = async (item, index, before) => {
+      await scrollToRow(index);
       const geometry = await session.eval(`(() => {
-        const rowEl = document.querySelectorAll("[data-row-kind]")[${index}].parentElement;
-        rowEl.scrollIntoView({ block: "center" });
+        const rowEl = document.querySelectorAll("[data-row-kind]")[${index} - ${WINDOW_FIRST}].parentElement;
         const row = rowEl.getBoundingClientRect();
         // The pane is scrolled to today, so the root's left is far off-screen: measure from the PANE.
         const pane = document.querySelector("[data-roadmap-timeline]").parentElement.getBoundingClientRect();
@@ -173,7 +209,7 @@ async function main() {
     };
     // The default rank is newest first, so the thirty leaves lead and the two epic blocks follow;
     // rows are located by key, never assumed.
-    const rowIndex = (key) => session.eval(ROW_INDEX(key));
+    const heightBefore = await session.eval(`document.querySelector("[data-roadmap-timeline]").parentElement.scrollHeight`);
     const d1 = await dropOnRow(trayOne, 15, true);
     check("a tray item dropped on the top half of row 15 IS row 15, with the insertion line there first", d1.indicator === 15 && d1.index === 15 && /Save · 1/.test(d1.save ?? ""), JSON.stringify(d1));
     const e1 = await rowIndex(epic1.key);
@@ -187,11 +223,12 @@ async function main() {
       await session.eval(`(() => { document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true })); return true; })()`);
       await sleep(150);
     }
-    s = await session.eval(STATE);
+    const heightAfter = await session.eval(`document.querySelector("[data-roadmap-timeline]").parentElement.scrollHeight`);
     const undoneSave = await session.eval(SAVE);
-    check("three Undos remove the three drops and leave the draft clean", s && s.rows.filter((r) => hasKey(r.text, trayOne.key) || hasKey(r.text, trayTwo.key) || hasKey(r.text, trayChild.key)).length === 0 && /^Saved/.test(undoneSave ?? ""), JSON.stringify({ undoneSave, rows: s?.rows.length }));
+    const trayRows = await Promise.all([trayOne, trayTwo, trayChild].map((item) => rowIndex(item.key)));
+    check("three Undos remove the three drops and leave the draft clean", heightAfter === heightBefore && trayRows.every((index) => index === -1) && /^Saved/.test(undoneSave ?? ""), JSON.stringify({ undoneSave, heightBefore, heightAfter, trayRows }));
+    await scrollToRow(0);
 
-    const total = 2 + 12 + 30;
     // --- Fit ---------------------------------------------------------------------------------------
     await session.eval(`(() => { document.querySelector("button[aria-label='Fit the whole timeline']")?.click(); return true; })()`);
     await sleep(500);

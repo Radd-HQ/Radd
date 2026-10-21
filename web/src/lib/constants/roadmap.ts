@@ -31,6 +31,9 @@ export const ROADMAP_DAY_WIDTH_MAX = 40;
 export const ROADMAP_ZOOM_WHEEL_FACTOR = 1.18;
 /** One ± toolbar click multiplies the day width by this. */
 export const ROADMAP_ZOOM_BUTTON_FACTOR = 1.4;
+/** Virtualized rows (RADD-1521): rows rendered beyond each edge of the pane,
+ *  so a wheel notch never shows a blank strip before the next render. */
+export const ROADMAP_OVERSCAN_ROWS = 6;
 /** Rubber-band drags shorter than this (px) count as plain clicks. */
 export const ROADMAP_BAND_THRESHOLD_PX = 4;
 /** Frame-selected (F): the selection span fills this fraction of the pane. */
