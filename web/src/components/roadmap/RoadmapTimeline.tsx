@@ -16,7 +16,7 @@ import {
   ROADMAP_HOVER_CARD_DELAY_MS,
 } from "../../lib/constants";
 import type { CardAnchor } from "../../lib/floating-position";
-import { CATEGORY_CHART_COLORS } from "../../lib/meta";
+import { CATEGORY_CHART_COLORS, CATEGORY_CHART_INK } from "../../lib/meta";
 import type { Item, RollupResponse, TimelogBatchResponse } from "../../lib/types";
 import { BarRow } from "./BarRow";
 import { Connectors, type ConnectorEdge, type RubberBand } from "./Connectors";
@@ -344,6 +344,9 @@ export function RoadmapTimeline({
        *  alpha so adjacent groups differ and each reads as ITS epic's
        *  (RADD-1508; the bar itself uses the same colour at 20%). */
       color: string;
+      /** The category's INK tier for the 2px frame (RADD-1515): the fill tier
+       *  is 2:1 on the light page for yellow, the ink tier clears 3:1 in both. */
+      ink: string;
     }[] = [];
     visibleRows.forEach((row, index) => {
       if (row.rowKind !== RoadmapRowKind.epic) return;
@@ -368,6 +371,7 @@ export function RoadmapTimeline({
         startIndex,
         rightX,
         color: CATEGORY_CHART_COLORS[row.item.state.category],
+        ink: CATEGORY_CHART_INK[row.item.state.category],
       });
     });
     return regions;
@@ -616,12 +620,17 @@ export function RoadmapTimeline({
                 <div
                   key={region.epicId}
                   data-epic-region={region.epicId}
-                  className="absolute rounded-lg border border-strong/70"
+                  className="absolute rounded-lg border-2"
                   style={{
                     left: (region.startIndex + delta) * dayWidth,
                     width: region.rightX - region.startIndex * dayWidth,
                     top: region.rowIndex * ROADMAP_ROW_H,
                     height: region.rowCount * ROADMAP_ROW_H,
+                    // RADD-1515: 2px in the category's ink tier. A neutral border
+                    // was the day grid's grey — ~1.1:1 on the light page, and
+                    // invisible wherever it sat on a day line; the fill tier
+                    // is 2:1 there for yellow.
+                    borderColor: region.ink,
                     backgroundColor: `color-mix(in srgb, ${region.color} ${ROADMAP_REGION_TINT_PERCENT}%, transparent)`,
                   }}
                 />

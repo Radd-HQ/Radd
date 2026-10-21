@@ -22,7 +22,8 @@ A colleague's first real session with the roadmap on the Cinesite instance came 
 bugs, three UX asks, two design debates. Read against the code, every one had a concrete mechanism, and
 the "data loss" one was the ugliest: Save was one PATCH per item, children first and the epic last, stopping
 at the first refusal — exactly "one child saved, the epic's dates gone". Seven issues, one browser proof
-(`web/scripts/roadmap-feedback-proof.mjs`, 34 measured checks), three node test files, one pytest.
+(`web/scripts/roadmap-feedback-proof.mjs`, 36 measured checks), three node test files, one pytest. Three more
+issues followed on 2026-10-21 from Hussein trying the build on real data and from the thread's later replies.
 - **RADD-1505**: `PATCH /items` applies a list of per-item patches in ONE transaction and re-raises the
   first refusal with the item's key in front; Save sends one request, awaits the item refetch before
   clearing the draft (inserted rows used to blink out for the length of the paged stream), and parks a
@@ -50,6 +51,14 @@ at the first refusal — exactly "one child saved, the epic's dates gone". Seven
   pixel per row, and a DEVICE pixel per row zoomed out (Chrome never draws a border thinner than one):
   six rows over a 92-child epic. The row owns the height now, border-box, cells stretch. Since the
   initial commit; the tinted box made it visible.
+- **RADD-1514** (the thread's call on the auto-plan: "renaming it to spread children across epic would be
+  more suitable"): "Auto-schedule children" and `autoSchedulePlan` are gone; Spread (blocks-ordered equal
+  slots, epic untouched, one undo step) is the one layout verb, Bring-in the one estimate reader.
+- **RADD-1515** (Aurelien: "barely visible in light mode... bigger borders... the lines overlap with the
+  days vertical lines"): measured, the 1px `border-strong/70` frame was ~1.1:1 on the light page and the
+  same grey as the day grid. It is 2px in the category's INK tier now (`CATEGORY_CHART_INK`, new in
+  `meta.ts`): the fill tier is 2:1 there for yellow, the ink tier clears 3:1 in both themes, which the
+  proof asserts by toggling `html.light`.
 Traps: a drop earlier than every bar re-pads the domain by whole weeks and shifts every index (compare to
 the today line in proofs); the Bash harness here is zsh, not fish; pytest needs a reachable Postgres
 (`RADD_TEST_DATABASE_URL` at the clean stack's :5457 when the working one is down).

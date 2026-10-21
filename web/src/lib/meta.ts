@@ -363,6 +363,19 @@ export const CATEGORY_CHART_COLORS: Record<StateCategoryValue, string> = {
   [StateCategory.canceled]: "var(--chart-canceled)",
 };
 
+/** The same categories' INK tier — the per-theme variant that clears 4.5:1 as text on the page,
+ *  so a line drawn in it clears 3:1 in both themes. For strokes that must read against the page
+ *  (the roadmap's epic group box, RADD-1515); fills keep `CATEGORY_CHART_COLORS`. Canceled shares
+ *  done's ink, as its fill shares done's. */
+export const CATEGORY_CHART_INK: Record<StateCategoryValue, string> = {
+  [StateCategory.triage]: "var(--chart-triage-ink)",
+  [StateCategory.backlog]: "var(--chart-backlog-ink)",
+  [StateCategory.todo]: "var(--chart-todo-ink)",
+  [StateCategory.in_progress]: "var(--chart-progress-ink)",
+  [StateCategory.done]: "var(--chart-done-ink)",
+  [StateCategory.canceled]: "var(--chart-done-ink)",
+};
+
 /** Report bucket-interval labels + ordering for the throughput/CFD toggle (spec 19). */
 export const REPORT_INTERVAL_LABELS: Record<ReportIntervalValue, string> = {
   [ReportInterval.day]: "Day",

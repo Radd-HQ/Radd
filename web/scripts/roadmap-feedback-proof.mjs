@@ -10,6 +10,7 @@
  *              Undo reverts the dates and the order together; it tiles the epic with contiguous bars
  *   RADD-1508  child rows indent ≥ 24px under their epic with a tree guide; the group box is
  *              tinted with the epic's category colour
+ *   RADD-1515  the group box border is 2px in the category's ink tier and ≥ 3:1 against the page in both themes
  *   RADD-1513  consecutive rows are exactly ROADMAP_ROW_H apart and the box ends on the last child
  *   RADD-1505  Save writes every child in one request and a reload shows them all; a refused save
  *              stays on the button with the draft intact; PATCH /items is all-or-nothing over HTTP
@@ -63,6 +64,17 @@ const parseColor = (text) => {
   return null;
 };
 const sameHue = (a, b) => Boolean(a && b) && a.rgb.every((v, i) => Math.abs(v - b.rgb[i]) <= 2);
+/** WCAG relative luminance and contrast, with the foreground composited over the page first. */
+const luminance = ({ rgb }) => {
+  const [r, g, b] = rgb.map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (fg, bg) => {
+  if (!fg || !bg) return 0;
+  const over = { rgb: fg.rgb.map((v, i) => Math.round(v * fg.a + bg.rgb[i] * (1 - fg.a))), a: 1 };
+  const [hi, lo] = [luminance(over), luminance(bg)].sort((x, y) => y - x);
+  return +((hi + 0.05) / (lo + 0.05)).toFixed(2);
+};
 const MENU_ON_EPIC = (id) => `(() => {
   const bar = document.querySelector("[data-bar-item='${id}']");
   const r = bar.getBoundingClientRect();
@@ -166,6 +178,25 @@ async function main() {
     const barFill = parseColor(tint?.barFill);
     check("the epic's group box is tinted with the epic bar's own colour at a visible alpha", sameHue(regionBg, barBorder) && regionBg.a > 0.08 && regionBg.a < 0.2, JSON.stringify(tint));
     check("the epic bar itself has a translucent fill of its category colour (the hex-alpha-on-a-token bug)", sameHue(barFill, barBorder) && barFill.a > 0.1 && barFill.a < 0.3, JSON.stringify(tint));
+
+    // --- RADD-1515: the box border is 2px in the epic's hue and reads in BOTH themes ----------
+    const BORDER = `(() => {
+      const s = getComputedStyle(document.querySelector("[data-epic-region='${epic.id}']"));
+      const bodyBg = getComputedStyle(document.body).backgroundColor;
+      const page = bodyBg === "rgba(0, 0, 0, 0)" ? getComputedStyle(document.documentElement).backgroundColor : bodyBg;
+      return { width: s.borderTopWidth, color: s.borderTopColor, page, light: document.documentElement.classList.contains("light") };
+    })()`;
+    const darkBorder = await session.eval(BORDER);
+    await session.eval(`document.documentElement.classList.add("light")`);
+    await sleep(300);
+    const lightBorder = await session.eval(BORDER);
+    await session.eval(`document.documentElement.classList.remove("light")`);
+    await sleep(300);
+    const ratio = (m) => contrast(parseColor(m.color), parseColor(m.page));
+    context.border = { dark: { ...darkBorder, ratio: ratio(darkBorder) }, light: { ...lightBorder, ratio: ratio(lightBorder) } };
+    const chroma = (c) => (c ? Math.max(...c.rgb) - Math.min(...c.rgb) : 0);
+    check("the group box border is 2px and chromatic — the category's ink tier, not the grid's grey", darkBorder.width === "2px" && chroma(parseColor(darkBorder.color)) > 40 && chroma(parseColor(lightBorder.color)) > 40, JSON.stringify(context.border));
+    check("the group box border reads against the page at ≥ 3:1 in dark AND in light", !darkBorder.light && lightBorder.light && ratio(darkBorder) >= 3 && ratio(lightBorder) >= 3, JSON.stringify(context.border));
 
     // --- RADD-1513: the row grid is exact — rows ROADMAP_ROW_H apart, box ends on the last child
     const grid = await session.eval(`(() => {
