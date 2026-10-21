@@ -29,6 +29,7 @@ const PORT = 9491;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-roadmap-feedback-proof");
 const KEY = `RF${Date.now().toString(36).slice(-4).toUpperCase()}`;
 const DAY_PX = 9; // ROADMAP_DAY_WIDTH at the default zoom
+const ROW_PX = 44; // ROADMAP_ROW_H
 
 const pad = (n) => String(n).padStart(2, "0");
 /** Local calendar date `days` from today — the page's todayIso is local too. */
@@ -161,6 +162,21 @@ async function main() {
     const barFill = parseColor(tint?.barFill);
     check("the epic's group box is tinted with the epic bar's own colour at a visible alpha", sameHue(regionBg, barBorder) && regionBg.a > 0.08 && regionBg.a < 0.2, JSON.stringify(tint));
     check("the epic bar itself has a translucent fill of its category colour (the hex-alpha-on-a-token bug)", sameHue(barFill, barBorder) && barFill.a > 0.1 && barFill.a < 0.3, JSON.stringify(tint));
+
+    // --- RADD-1513: the row grid is exact — rows ROADMAP_ROW_H apart, box ends on the last child
+    const grid = await session.eval(`(() => {
+      const cells = [...document.querySelectorAll("[data-row-kind]")];
+      const roots = cells.map((el) => el.parentElement.getBoundingClientRect());
+      const kinds = cells.map((el) => el.dataset.rowKind);
+      const pitches = [...new Set(roots.slice(1).map((r, i) => +(r.top - roots[i].top).toFixed(2)))];
+      const region = document.querySelector("[data-epic-region='${epic.id}']")?.getBoundingClientRect() ?? null;
+      const epicAt = kinds.indexOf("epic");
+      const lastChildAt = kinds.lastIndexOf("child");
+      return { pitches, regionTop: region?.top ?? null, regionBottom: region?.bottom ?? null, epicTop: roots[epicAt]?.top ?? null, lastChildBottom: roots[lastChildAt]?.bottom ?? null };
+    })()`);
+    context.grid = grid;
+    check("consecutive rows are exactly ROADMAP_ROW_H apart (the separator lives inside the row)", grid.pitches.length === 1 && grid.pitches[0] === ROW_PX, JSON.stringify(grid));
+    check("the group box starts on its epic row and ends on its last child row", grid.regionTop !== null && Math.abs(grid.regionTop - grid.epicTop) < 0.5 && Math.abs(grid.regionBottom - grid.lastChildBottom) < 0.5, JSON.stringify(grid));
 
     // --- RADD-1510: spread tiles the epic ----------------------------------------------------
     await session.eval(MENU_ON_EPIC(epic.id));

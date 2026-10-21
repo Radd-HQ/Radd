@@ -201,6 +201,14 @@ export function BarRow({
         (reordering ? " opacity-60" : "") +
         (selected ? " bg-accent/10" : "")
       }
+      // The ROW owns the height (RADD-1513): with border-box sizing the 1px
+      // separator is INSIDE these ROADMAP_ROW_H px and the two cells stretch
+      // to fill, so consecutive rows are exactly ROADMAP_ROW_H apart — which
+      // is what every `rowIndex * ROADMAP_ROW_H` (group boxes, connectors,
+      // drop targets) assumes. Cells that carried the height themselves put
+      // the border outside and drifted a pixel per row (a DEVICE pixel when
+      // zoomed out: six rows over a 92-child epic at 30%).
+      style={{ height: ROADMAP_ROW_H }}
       onContextMenu={
         canEdit
           ? (event) => {
@@ -254,7 +262,7 @@ export function BarRow({
               : "Drag to reorder among top-level rows"
             : undefined
         }
-        style={{ width: labelWidth, height: ROADMAP_ROW_H }}
+        style={{ width: labelWidth }}
         // Sticky: the labels are the timeline's y-axis — they ride horizontal
         // scroll (opaque bg, above bars + connectors) so a row never loses its
         // identity. Sticky is paint-only, so the pointer↔day math (layout
@@ -373,7 +381,7 @@ export function BarRow({
         )}
       </div>
 
-      <div className="relative" style={{ width: innerWidth, height: ROADMAP_ROW_H }}>
+      <div className="relative" style={{ width: innerWidth }}>
         {/* Original position placeholder while the ghost is out. */}
         {preview && (
           <div
