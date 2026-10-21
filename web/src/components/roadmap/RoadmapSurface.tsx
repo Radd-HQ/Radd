@@ -67,7 +67,6 @@ import {
   NO_EXTENSION,
   ROADMAP_ROW_H,
   RoadmapRowKind,
-  autoSchedulePlan,
   blocksEdges,
   buildRoadmapModel,
   cycleBands,
@@ -409,40 +408,19 @@ export function RoadmapSurface({
     [items],
   );
 
-  const handleAutoSchedule = useCallback(
-    async (row: RoadmapRow) => {
-      const loaded = await loadChildrenWithEstimates(row);
-      if (!loaded) return;
-      const { children, durations } = loaded;
-      // No-estimate children take the plan's default length.
-      const plan = autoSchedulePlan(
-        children,
-        blocksEdges(children),
-        row.item.start_date ?? todayIso(),
-        durations,
-        row.item,
-      );
-      // Spec 82: on a rank-ordered view the children also rank in schedule
-      // order so the result reads top-to-bottom — one undo step with the
-      // dates (RADD-1510 / RADD-1433); a view with its own ORDER BY gets no chain.
-      editing.applyPlan(
-        withInserts(plan.patches, children),
-        `Auto-schedule ${row.item.key}'s children`,
-        rankOrdered ? plan.orderedIds : null,
-      );
-      pushToast(`Scheduled ${plan.scheduledCount} item${plan.scheduledCount === 1 ? "" : "s"}`);
-    },
-    [loadChildrenWithEstimates, editing, withInserts, rankOrdered],
-  );
-
   // "Spread children across the epic" (RADD-1510): a layout verb — equal
   // back-to-back slots across the epic's OWN window, no estimates involved.
+  // The one layout verb since RADD-1514 (the thread's call: auto-schedule's
+  // estimate-sized packing "means nothing scheduling wise").
   const handleSpreadChildren = useCallback(
     async (row: RoadmapRow) => {
       const children = await loadChildren(row);
       if (!children) return;
       const plan = spreadChildrenPlan(children, blocksEdges(children), row.item);
       if (plan.patches.length === 0) return;
+      // Spec 82: on a rank-ordered view the children also rank in slot order
+      // so the result reads top-to-bottom — one undo step with the dates
+      // (RADD-1510 / RADD-1433); a view with its own ORDER BY gets no chain.
       editing.applyPlan(
         withInserts(plan.patches, children),
         `Spread ${row.item.key}'s children`,
@@ -454,8 +432,9 @@ export function RoadmapSurface({
     [loadChildren, editing, withInserts, rankOrdered],
   );
 
-  // "Bring children into roadmap": Auto-schedule's anchor and estimate source,
-  // but only MISSING dates fill (no-estimate children take the 1-day default).
+  // "Bring children into roadmap": the as-is placement — only MISSING dates
+  // fill, at the epic's start, estimate-sized or one day. The one verb that
+  // reads estimates now that auto-schedule is gone (RADD-1514).
   const handleImportChildren = useCallback(
     async (row: RoadmapRow) => {
       const loaded = await loadChildrenWithEstimates(row);
@@ -925,7 +904,6 @@ export function RoadmapSurface({
           onToggleMember={onToggleMember}
           onPatch={editing.applyPatches}
           onImportChildren={handleImportChildren}
-          onAutoSchedule={handleAutoSchedule}
           onSpreadChildren={handleSpreadChildren}
           onOrderChildren={editing.orderChildrenByDate}
           onRemoveLink={editing.deleteLink}

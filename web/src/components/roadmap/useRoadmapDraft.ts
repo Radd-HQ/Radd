@@ -23,7 +23,7 @@ export interface RoadmapDraft {
   changedCount: number;
   canUndo: boolean;
   canRedo: boolean;
-  /** Labels for the undo/redo tooltips ("Undo: Auto-schedule 8 items"). */
+  /** Labels for the undo/redo tooltips ("Undo: Spread PX-1's children"). */
   undoLabel: string | null;
   redoLabel: string | null;
   applyTo: (items: Item[]) => Item[];

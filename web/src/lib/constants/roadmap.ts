@@ -32,8 +32,7 @@ export const ROADMAP_FRAME_FILL = 0.8;
 /**
  * Default bar length when an unscheduled item is dragged onto the roadmap
  * (spec 77): start = the drop day, target = start + N days (inclusive spans —
- * 6 extra days = a one-week bar, 20 = about three weeks). The leaf span is also
- * Auto-schedule's length for a child with no estimate.
+ * 6 extra days = a one-week bar, 20 = about three weeks).
  */
 export const ROADMAP_LEAF_SPAN_DAYS = 6;
 export const ROADMAP_EPIC_SPAN_DAYS = 20;

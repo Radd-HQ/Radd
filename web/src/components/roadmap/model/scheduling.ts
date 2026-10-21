@@ -1,5 +1,7 @@
-/** Roadmap schedulers: estimate/dependency/assignee-aware auto-schedule,
- *  import-children (spec 78) and the even spread (RADD-1510). */
+/** Roadmap planners: import-children (spec 78, as-is placement) and the even
+ *  spread (RADD-1510) — the one layout verb since RADD-1514, when the
+ *  estimate/dependency/assignee-aware auto-schedule went (the thread's "it
+ *  means nothing scheduling wise"). */
 
 import { shiftIsoDay } from "@radd/plugin-sdk";
 import { ROADMAP_LEAF_SPAN_DAYS } from "../../../lib/constants";
@@ -76,71 +78,8 @@ export function topoOrder(children: Item[], edges: BlocksEdge[]): TopoOrder {
   return { order, blockersOf };
 }
 
-interface AutoSchedulePlan {
-  /** Child date patches in schedule order, then the epic's grow patch (if any). */
-  patches: RoadmapPlanPatch[];
-  scheduledCount: number;
-  /** Child ids in the plan's schedule order — the spec-82 rank chain input,
-   *  so a freshly scheduled epic reads top-to-bottom by date. */
-  orderedIds: string[];
-}
-
-/**
- * "Auto-schedule children" (spec 78 §4): `topoOrder` over the `blocks` edges,
- * then each child starts at `max(anchor, blockers' end + 1d, same-assignee
- * last end + 1d)`: different or missing assignees parallelize freely, a
- * shared assignee serializes in topo-then-rank order. `end = start +
- * duration − 1` (inclusive spans). The epic's OUTWARD-only grow patch
- * (`epicGrowPatch`, RADD-1510) is appended last when the result overflows it.
- */
-export function autoSchedulePlan(
-  children: Item[],
-  edges: BlocksEdge[],
-  anchorIso: string,
-  durations: ReadonlyMap<string, number>,
-  epic: Item,
-): AutoSchedulePlan {
-  if (children.length === 0) return { patches: [], scheduledCount: 0, orderedIds: [] };
-  const { order, blockersOf } = topoOrder(children, edges);
-
-  const endOf = new Map<string, string>();
-  const lastEndByAssignee = new Map<string, string>();
-  const patches: RoadmapPlanPatch[] = [];
-  let minStart: string | null = null;
-  let maxEnd: string | null = null;
-  for (const child of order) {
-    let start = anchorIso;
-    for (const blockerId of blockersOf.get(child.id) ?? []) {
-      const blockerEnd = endOf.get(blockerId);
-      if (!blockerEnd) continue; // cycle fallback — the blocker isn't placed yet
-      const candidate = shiftIsoDay(blockerEnd, 1);
-      if (candidate > start) start = candidate;
-    }
-    const assigneeId = child.assignee?.id ?? null;
-    if (assigneeId) {
-      const lastEnd = lastEndByAssignee.get(assigneeId);
-      if (lastEnd) {
-        const candidate = shiftIsoDay(lastEnd, 1);
-        if (candidate > start) start = candidate;
-      }
-    }
-    const duration = Math.max(1, durations.get(child.id) ?? ROADMAP_LEAF_SPAN_DAYS);
-    const end = shiftIsoDay(start, duration - 1);
-    endOf.set(child.id, end);
-    if (assigneeId) lastEndByAssignee.set(assigneeId, end);
-    patches.push({ itemId: child.id, patch: { start_date: start, target_date: end } });
-    if (minStart === null || start < minStart) minStart = start;
-    if (maxEnd === null || end > maxEnd) maxEnd = end;
-  }
-  if (minStart !== null && maxEnd !== null) {
-    const grow = epicGrowPatch(epic, minStart, maxEnd);
-    if (grow) patches.push({ itemId: epic.id, patch: grow });
-  }
-  return { patches, scheduledCount: order.length, orderedIds: order.map((child) => child.id) };
-}
-
 /** Date-less children imported AS-IS with no estimate span a single day —
- *  the bar exists; sizing it is left to the user (or Auto-schedule). */
+ *  the bar exists; sizing it is left to the user (or Spread). */
 const ROADMAP_IMPORT_SPAN_DAYS = 1;
 
 interface ImportChildrenPlan {
@@ -151,8 +90,8 @@ interface ImportChildrenPlan {
 }
 
 /**
- * "Bring children into roadmap" — the AS-IS counterpart to `autoSchedulePlan`:
- * no reflow, no serialization, no rank chain. Only MISSING dates fill: a start
+ * "Bring children into roadmap" — the AS-IS verb: no reflow, no
+ * serialization, no rank chain. Only MISSING dates fill: a start
  * gets the caller's anchor, clamped to an existing target (the server rejects
  * inverted spans); a target gets start + estimate days − 1, or
  * `ROADMAP_IMPORT_SPAN_DAYS`. The epic's OUTWARD-only grow patch over every
@@ -201,7 +140,8 @@ interface SpreadChildrenPlan {
   /** One date patch per child, in slot order. The epic is never patched. */
   patches: RoadmapPlanPatch[];
   spreadCount: number;
-  /** Child ids in slot order — the rank chain input, like auto-schedule's. */
+  /** Child ids in slot order — the spec-82 rank chain input, so a freshly
+   *  spread epic reads top-to-bottom by date. */
   orderedIds: string[];
 }
 

@@ -21,10 +21,10 @@ const { epicGrowPatch, blocksEdges } = evaluateTs(
   { shiftIsoDay, ROADMAP_CASCADE_MAX_ITEMS: 50, ItemLinkType, isoDaysBetween, isScheduled },
   ["epicGrowPatch", "blocksEdges"],
 );
-const { autoSchedulePlan, importChildrenPlan, spreadChildrenPlan } = evaluateTs(
+const { importChildrenPlan, spreadChildrenPlan } = evaluateTs(
   readFileSync("web/src/components/roadmap/model/scheduling.ts", "utf8"),
   { shiftIsoDay, ROADMAP_LEAF_SPAN_DAYS: 6, isoDaysBetween, epicGrowPatch },
-  ["autoSchedulePlan", "importChildrenPlan", "spreadChildrenPlan"],
+  ["importChildrenPlan", "spreadChildrenPlan"],
 );
 
 const epic = (start, target) => ({ id: "e1", key: "PX-1", kind: "epic", start_date: start, target_date: target });
@@ -32,27 +32,7 @@ const child = (id, extra = {}) => ({ id, key: `PX-${id}`, kind: "issue", parent:
 const children = [child("a"), child("b"), child("c")];
 const patchFor = (plan, id) => plan.patches.find((entry) => entry.itemId === id)?.patch;
 
-test("auto-schedule leaves an epic wider than its children untouched", () => {
-  // Three 6-day children in parallel (no assignee, no edges) span Sep 1–6.
-  const plan = autoSchedulePlan(children, [], "2026-09-01", new Map(), epic("2026-08-20", "2026-10-15"));
-  assert.equal(plan.scheduledCount, 3);
-  assert.equal(patchFor(plan, "e1"), undefined, "the epic was shrunk to the children");
-  assert.deepEqual(patchFor(plan, "a"), { start_date: "2026-09-01", target_date: "2026-09-06" });
-});
-
-test("auto-schedule grows an epic the children overflow, on that edge only", () => {
-  const plan = autoSchedulePlan(children, [], "2026-09-01", new Map(), epic("2026-09-02", "2026-09-04"));
-  assert.deepEqual(patchFor(plan, "e1"), { start_date: "2026-09-01", target_date: "2026-09-06" });
-  const later = autoSchedulePlan(children, [], "2026-09-01", new Map(), epic("2026-08-01", "2026-09-04"));
-  assert.deepEqual(patchFor(later, "e1"), { target_date: "2026-09-06" });
-});
-
-test("auto-schedule gives a date-less epic the children's union", () => {
-  const plan = autoSchedulePlan(children, [], "2026-09-01", new Map(), epic(null, null));
-  assert.deepEqual(patchFor(plan, "e1"), { start_date: "2026-09-01", target_date: "2026-09-06" });
-});
-
-test("bring-children-in follows the same outward-only rule", () => {
+test("bring-children-in only grows the epic (outward-only), never shrinks it", () => {
   const plan = importChildrenPlan(children, epic("2026-08-01", "2026-12-01"), "2026-09-01", new Map());
   assert.equal(plan.importedCount, 3);
   assert.equal(patchFor(plan, "e1"), undefined);
@@ -94,7 +74,7 @@ test("a compound op applies its leaves in order and is one undo step", () => {
   const base = [epic("2026-09-01", "2026-09-30"), { ...child("b"), start_date: "2026-09-01", target_date: "2026-09-02" }];
   const compound = {
     kind: "compound",
-    label: "Auto-schedule PX-1's children",
+    label: "Spread PX-1's children",
     ops: [
       {
         kind: "patch",

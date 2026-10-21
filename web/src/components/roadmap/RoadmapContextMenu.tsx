@@ -12,7 +12,6 @@ import {
   Focus,
   Link2,
   Shrink,
-  Wand2,
   X,
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
@@ -47,8 +46,6 @@ interface RoadmapContextMenuProps {
   onPatch: (patches: RoadmapDatePatch[]) => void;
   /** "Bring children into roadmap" — as-is date fills, no reflow. */
   onImportChildren: (row: RoadmapRow) => void;
-  /** "Auto-schedule children" (spec 78) — the owner supplies durations/edges. */
-  onAutoSchedule: (row: RoadmapRow) => void;
   /** "Spread children across the epic" (RADD-1510) — equal slots, a layout. */
   onSpreadChildren: (row: RoadmapRow) => void;
   /** "Order children by date" (spec 82) — rank chain over the loaded children. */
@@ -100,7 +97,6 @@ export function RoadmapContextMenu({
   onToggleMember,
   onPatch,
   onImportChildren,
-  onAutoSchedule,
   onSpreadChildren,
   onOrderChildren,
   onRemoveLink,
@@ -177,16 +173,10 @@ export function RoadmapContextMenu({
       onSelect: () => onImportChildren(row),
     });
 
-    nodes.push({
-      kind: "action",
-      label: "Auto-schedule children",
-      icon: Wand2,
-      hint: "Lay out ALL the epic's children from its start: estimates set bar lengths, blocks-links order them, and issues sharing an assignee run one after another. The epic grows to hold the result and never shrinks — Fit to children is the verb that does.",
-      onSelect: () => onAutoSchedule(row),
-    });
-
     // RADD-1510: the even spread Aurelien asked for, as what it is — a
-    // layout across the epic's window, not a schedule.
+    // layout across the epic's window, not a schedule. Since RADD-1514 it is
+    // the ONLY layout verb: "Auto-schedule children" (estimate-sized bars
+    // packed from the epic's start) was the thread's "means nothing" and went.
     nodes.push({
       kind: "action",
       label: "Spread children across the epic",

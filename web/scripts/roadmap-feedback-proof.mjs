@@ -6,10 +6,11 @@
  *              (priority icon + avatar, no title), a 14-day bar the full info
  *   RADD-1511  cycle bands sit at the right x on the axis; Flat hides the epic rows, chips the
  *              parent on every leaf, and survives a reload
- *   RADD-1510  auto-schedule leaves a wide epic's bar untouched; ONE Undo reverts the dates and
- *              the order together; Spread tiles the epic with contiguous child bars
+ *   RADD-1510  Spread — the one layout verb since RADD-1514 — leaves the epic's bar untouched; ONE
+ *              Undo reverts the dates and the order together; it tiles the epic with contiguous bars
  *   RADD-1508  child rows indent ≥ 24px under their epic with a tree guide; the group box is
  *              tinted with the epic's category colour
+ *   RADD-1513  consecutive rows are exactly ROADMAP_ROW_H apart and the box ends on the last child
  *   RADD-1505  Save writes every child in one request and a reload shows them all; a refused save
  *              stays on the button with the draft intact; PATCH /items is all-or-nothing over HTTP
  *   RADD-1507  a tray drop lands on the axis header, on the empty space below the rows, and on the
@@ -119,17 +120,20 @@ async function main() {
     check("the cycle band spans 14 day columns, labelled, with a body band", band && band.width === 14 * DAY_PX && band.text === "Sprint 1" && band.body, JSON.stringify(band));
     check("the cycle band starts 3 days before the today line", band && band.todayLeft - band.left === 3 * DAY_PX, JSON.stringify(band));
 
-    // --- RADD-1510: auto-schedule is outward-only; one Undo --------------------------------
+    // --- RADD-1510 / RADD-1514: Spread is the one layout verb; it never touches the epic; one Undo
     const epicWidthBefore = bars[epic.id]?.width;
     await session.eval(MENU_ON_EPIC(epic.id));
     await sleep(300);
-    await session.click("button", (t) => t.includes("Auto-schedule children"));
+    const verbs = await session.eval(`[...document.querySelectorAll("button")].map((b) => b.textContent || "").filter((t) => /children|Fit to/.test(t))`);
+    context.verbs = verbs;
+    check("the epic menu offers Spread and Bring-in, and nothing named auto-schedule", verbs.some((t) => t.includes("Spread children across the epic")) && verbs.some((t) => t.includes("Bring children into roadmap")) && !verbs.some((t) => /auto-?schedule/i.test(t)), JSON.stringify(verbs));
+    await session.click("button", (t) => t.includes("Spread children across the epic"));
     await sleep(1500);
     let rows = await session.eval(ROWS);
     bars = await session.eval(BARS);
-    context.afterAutoSchedule = { rows: rows.map((r) => [r.kind, r.key]), epicWidth: bars[epic.id]?.width, before: epicWidthBefore };
-    check("auto-schedule drafted the three children in as child rows", rows.filter((r) => r.kind === "child").length === 3, JSON.stringify(rows.map((r) => r.kind)));
-    check("auto-schedule left the (wider) epic's bar untouched", bars[epic.id]?.width === epicWidthBefore && epicWidthBefore === 31 * DAY_PX, `${epicWidthBefore} → ${bars[epic.id]?.width}`);
+    context.afterSpread = { rows: rows.map((r) => [r.kind, r.key]), epicWidth: bars[epic.id]?.width, before: epicWidthBefore };
+    check("spread drafted the three children in as child rows", rows.filter((r) => r.kind === "child").length === 3, JSON.stringify(rows.map((r) => r.kind)));
+    check("spread left the epic's bar untouched", bars[epic.id]?.width === epicWidthBefore && epicWidthBefore === 31 * DAY_PX, `${epicWidthBefore} → ${bars[epic.id]?.width}`);
     const save = await session.eval(SAVE);
     check("the draft counts the three children, not the epic", save?.text === "Save · 3", JSON.stringify(save));
     await session.click("button[aria-label='Undo']");

@@ -34,7 +34,7 @@ export interface RoadmapRow {
   parentEpicId: string | null;
   /** Epic rows: the scheduled children's date union (fit-to-children source). */
   childrenBounds: { minStart: string; maxTarget: string } | null;
-  /** Epic rows: ALL loaded children, fetch order ("Auto-schedule children" input). */
+  /** Epic rows: ALL loaded children, fetch order (the plan verbs' input). */
   children: Item[];
   /** Epic rows: how many scheduled child rows render beneath (expand/collapse). */
   scheduledChildCount: number;
