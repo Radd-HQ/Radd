@@ -2,11 +2,16 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Identity, Index, SmallInteger, String, Text, false, func
+from sqlalchemy import BigInteger, Identity, Index, SmallInteger, String, Text, false, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base
+
+
+#: `pg_current_xact_id()` is an xid8; through text it is a plain bigint, which is
+#: what a cursor column and a row-value comparison want.
+XACT_ID_DEFAULT = "(pg_current_xact_id()::text)::bigint"
 
 
 class ConsumerOffset(Base):
@@ -16,11 +21,17 @@ class ConsumerOffset(Base):
 
     name: Mapped[str] = mapped_column(String(100), primary_key=True)
     last_event_id: Mapped[int] = mapped_column(BigInteger, default=0)
+    #: The transaction half of the cursor (RADD-1524): consumers walk the stream
+    #: in `(xact_id, id)` order, so the position is that pair, never the id alone.
+    last_xact_id: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 
 class Event(Base):
-    """Append-only. `id` is the monotonic offset consumers track."""
+    """Append-only. Consumers track `(xact_id, id)` — NOT `id` alone: an id is
+    taken at flush, so a transaction that commits late holds an id below ones
+    already consumed, and a cursor on `id` passed over its event for good
+    (RADD-1524). See `service.read_after`."""
 
     __tablename__ = "events"
     __table_args__ = (
@@ -30,12 +41,17 @@ class Event(Base):
         Index("ix_events_actor_id", "actor_id"),
         # Spec 123: "everything that happened in project X".
         Index("ix_events_project_id", "project_id"),
+        # The consumer walk: `(xact_id, id) > cursor` in that order (RADD-1524).
+        Index("ix_events_xact_id_id", "xact_id", "id"),
         # Two more live in the migration (`d123ledger`) because Alembic cannot
         # express them: a trigram GIN over `search_text` (guarded on pg_trgm)
         # and a GIN over `payload -> 'changes'` for the changed-field filter.
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    #: The id of the transaction that wrote the row, stamped by the database.
+    #: Rows from before the column existed carry 0, below every real transaction.
+    xact_id: Mapped[int] = mapped_column(BigInteger, server_default=text(XACT_ID_DEFAULT))
     # User who caused the mutation; None for system/anonymous actions. Plain UUID (no FK) —
     # events stays module-agnostic and must not depend on auth being enabled.
     actor_id: Mapped[uuid.UUID | None]

@@ -541,7 +541,7 @@ async def run_once(session_factory=SessionLocal) -> int:
         except Exception:
             logger.exception("automations: failed processing event %s", event.id)
     async with session_factory() as session:
-        await events.set_offset(session, CONSUMER_NAME, batch[-1].id)
+        await events.set_offset(session, CONSUMER_NAME, batch[-1])
         await session.commit()
     return len(batch)
 

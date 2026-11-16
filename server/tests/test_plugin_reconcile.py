@@ -160,12 +160,12 @@ async def test_reenabled_head_consumer_skips_the_backlog(monkeypatch):
         await service.enable(session, plugin.id)
         # Skips the backlog: resumes at the head as of the re-enable (the enable's
         # own plugin.enabled event follows it).
-        assert await events.get_offset(session, head_name) == backlog_end
-        assert await events.get_offset(session, cursor_name) == before  # an index catches up
+        assert (await events.get_offset(session, head_name)).event_id == backlog_end
+        assert (await events.get_offset(session, cursor_name)).event_id == before  # an index catches up
         # Enabling what is already enabled is not a re-enable: it never skips.
         await events.set_offset(session, head_name, backlog_end)
         await service.enable(session, plugin.id)
-        assert await events.get_offset(session, head_name) == backlog_end
+        assert (await events.get_offset(session, head_name)).event_id == backlog_end
         await session.rollback()
     with pytest.raises(ValueError, match='own consumers'):
         RaddPlugin(name='bad', consumer_resume=(('not.mine', ConsumerResume.HEAD),))

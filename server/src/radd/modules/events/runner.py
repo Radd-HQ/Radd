@@ -34,7 +34,7 @@ async def run_head_seeded[P](
     events consumed (0 on first-start seeding / an empty stream)."""
     async with SessionLocal() as session:
         if not await service.offset_exists(session, consumer_name):
-            head = await service.latest_event_id(session)
+            head = await service.head_cursor(session)
             await service.set_offset(session, consumer_name, head)
             await session.commit()
             logger.info(
@@ -63,7 +63,7 @@ async def run_head_seeded[P](
                     deliveries.append((event, []))
                     previous_cause = cause
                 deliveries[-1][1].append(planned)
-        await service.set_offset(session, consumer_name, batch[-1].id)
+        await service.set_offset(session, consumer_name, batch[-1])
         await session.commit()  # planning writes + the cursor land BEFORE delivery
     for event, plans in deliveries:  # post-commit, post-cursor: at-most-once delivery
         with service.derived_from(event):

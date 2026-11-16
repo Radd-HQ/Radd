@@ -212,7 +212,7 @@ async def fanout_events(session: AsyncSession) -> int:
                     next_attempt_at=now,
                 )
             )
-    await events.set_offset(session, CONSUMER_NAME, batch[-1].id)
+    await events.set_offset(session, CONSUMER_NAME, batch[-1])
     return len(batch)
 
 

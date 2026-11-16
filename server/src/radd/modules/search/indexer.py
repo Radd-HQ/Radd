@@ -91,7 +91,7 @@ async def run_once() -> int:
                     await _handle(session, event)
             except Exception:
                 logger.exception("search: failed indexing event %s (%s)", event.id, event.event_type)
-        await events.set_offset(session, CONSUMER_NAME, batch[-1].id)
+        await events.set_offset(session, CONSUMER_NAME, batch[-1])
         await session.commit()
         return len(batch)
 

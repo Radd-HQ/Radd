@@ -3,9 +3,9 @@ from contextlib import contextmanager
 from collections.abc import Iterable, Sequence
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, NamedTuple
 
-from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import Select, and_, func, or_, select, text, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
@@ -21,7 +21,7 @@ from .types import EventSource
 
 __all__ = [
     "Event", "quiet", "is_quiet", "automated", "is_automated",
-    "AutomationCause", "current_cause", "run_cause", "derived_from",
+    "AutomationCause", "current_cause", "run_cause", "derived_from", "EventCursor",
 ]  # re-exported public seam (see above)
 
 
@@ -154,11 +154,103 @@ async def _with_subjects(
     return result
 
 
-async def read_after(session: AsyncSession, after: int, limit: int) -> list[Event]:
+class EventCursor(NamedTuple):
+    """A consumer's position in the stream: the pair `read_after` orders by.
+
+    Opaque to consumers — take it from `get_offset` / `cursor_of` / `head_cursor`
+    and hand it back; never build one from an event id."""
+
+    xact_id: int = 0
+    event_id: int = 0
+
+
+#: Every later position compares greater than this half of a head cursor.
+_MAX_EVENT_ID = 2**63 - 1
+#: The oldest transaction still in flight, as the bigint `Event.xact_id` holds.
+_SNAPSHOT_XMIN = text("(pg_snapshot_xmin(pg_current_snapshot())::text)::bigint")
+#: The reading transaction's own id, NULL until it writes. A consumer that emitted
+#: in this very transaction (and every test, which runs inside one) reads its own rows.
+_OWN_XACT = text("(pg_current_xact_id_if_assigned()::text)::bigint")
+
+
+#: What a caller may name a position with: a cursor, the event AT that position,
+#: or that event's id (resolved through the row, so it carries the row's real
+#: transaction — an id is never paired with a guessed one).
+type Position = EventCursor | Event | int
+
+
+def cursor_of(event: Event) -> EventCursor:
+    return EventCursor(event.xact_id, event.id)
+
+
+async def cursor_at(session: AsyncSession, position: Position) -> EventCursor:
+    if isinstance(position, EventCursor):
+        return position
+    if isinstance(position, Event):
+        return cursor_of(position)
+    if position <= 0:
+        return EventCursor()
+    xact_id = (
+        await session.execute(select(Event.xact_id).where(Event.id == position))
+    ).scalar_one_or_none()
+    # No such row (a head read on an empty stream, a pruned event): everything
+    # written before the column existed sorts first, which is where an id with
+    # no surviving row belongs.
+    return EventCursor(xact_id or 0, position)
+
+
+async def read_after(session: AsyncSession, after: Position, limit: int) -> list[Event]:
+    """The next events for a consumer at `after`, in `(xact_id, id)` order.
+
+    Only rows whose writing transaction is OLDER than every transaction still in
+    flight are returned (RADD-1524). An id is assigned at flush, so ordering by id
+    let a consumer pass id 101 while the transaction holding id 100 was still
+    open; when it committed, its event was below the cursor and never delivered —
+    a notification, webhook, automation run or search update lost with no error.
+    Below the snapshot's xmin nothing can still appear, and everything committed
+    later carries a larger transaction id than anything already read.
+
+    The cost is that ONE long-running writing transaction holds every consumer
+    back until it ends: lag instead of loss."""
+    after = await cursor_at(session, after)
     result = await session.execute(
-        select(Event).where(Event.id > after).order_by(Event.id).limit(limit)
+        select(Event)
+        .where(
+            tuple_(Event.xact_id, Event.id) > tuple_(after.xact_id, after.event_id),
+            or_(Event.xact_id < _SNAPSHOT_XMIN, Event.xact_id == _OWN_XACT),
+        )
+        .order_by(Event.xact_id, Event.id)
+        .limit(limit)
     )
     return list(result.scalars())
+
+
+async def read_by_id_after(session: AsyncSession, after_id: int, limit: int) -> list[Event]:
+    """Committed events in id order — the administrative feed (`GET /events`), a
+    page to look at. NOT a consumer cursor: an id-ordered poll can pass over a
+    late commit, which is exactly what `read_after` exists to prevent."""
+    result = await session.execute(
+        select(Event).where(Event.id > after_id).order_by(Event.id).limit(limit)
+    )
+    return list(result.scalars())
+
+
+async def head_cursor(session: AsyncSession) -> EventCursor:
+    """The position just past everything a consumer could read NOW — where an
+    ephemeral tail (realtime) starts and where a head-seeded consumer begins.
+
+    From a session that has written nothing: just below the snapshot's xmin, so
+    every transaction still in flight lands after it and is delivered.
+
+    From a transaction that HAS written (a plugin re-enable resuming its
+    consumers in the enabling transaction): this transaction at the newest id it
+    can see — what it emits next follows the cursor, what it emitted before does
+    not. Transactions that began earlier and commit later fall before it; they
+    belong to the stretch the caller is skipping."""
+    xmin, own = (await session.execute(select(_SNAPSHOT_XMIN, _OWN_XACT))).one()
+    if own is not None:
+        return EventCursor(int(own), await latest_event_id(session))
+    return EventCursor(int(xmin) - 1, _MAX_EVENT_ID)
 
 
 def declaring_event_types(entity_type: str) -> list[str]:
@@ -319,14 +411,15 @@ async def get_event(session: AsyncSession, event_id: int) -> Event | None:
 
 
 async def latest_event_id(session: AsyncSession) -> int:
-    """The stream head — where an ephemeral tail (realtime) starts. 0 on empty."""
+    """The newest event id, for display and lag arithmetic. 0 on empty. A consumer
+    starts from `head_cursor`, never from this."""
     result = await session.execute(select(func.max(Event.id)))
     return result.scalar() or 0
 
 
-async def get_offset(session: AsyncSession, consumer: str) -> int:
+async def get_offset(session: AsyncSession, consumer: str) -> EventCursor:
     row = await session.get(ConsumerOffset, consumer)
-    return row.last_event_id if row else 0
+    return EventCursor(row.last_xact_id, row.last_event_id) if row else EventCursor()
 
 
 async def offset_exists(session: AsyncSession, consumer: str) -> bool:
@@ -335,22 +428,30 @@ async def offset_exists(session: AsyncSession, consumer: str) -> bool:
     return await session.get(ConsumerOffset, consumer) is not None
 
 
-async def set_offset(session: AsyncSession, consumer: str, event_id: int) -> None:
+async def set_offset(session: AsyncSession, consumer: str, position: Position) -> None:
+    """Move a consumer to `position`: the last event of the batch it just read
+    (pass the event itself), or a cursor from `head_cursor`."""
+    cursor = await cursor_at(session, position)
     row = await session.get(ConsumerOffset, consumer)
     if row is None:
-        session.add(ConsumerOffset(name=consumer, last_event_id=event_id))
+        session.add(
+            ConsumerOffset(
+                name=consumer, last_xact_id=cursor.xact_id, last_event_id=cursor.event_id
+            )
+        )
     else:
-        row.last_event_id = event_id
+        row.last_xact_id = cursor.xact_id
+        row.last_event_id = cursor.event_id
 
 
 async def resume_at_head(session: AsyncSession, consumers: Iterable[str]) -> int:
     """Move each named consumer's cursor to the stream head and return it — how a
     `ConsumerResume.HEAD` consumer resumes on re-enable (RADD-1372), in the enabling
     transaction, so the skipped stretch is exactly the time the plugin was off."""
-    head = await latest_event_id(session)
+    head = await head_cursor(session)
     for name in consumers:
         await set_offset(session, name, head)
-    return head
+    return await latest_event_id(session)
 
 
 async def consumer_status(session: AsyncSession) -> list[dict[str, Any]]:

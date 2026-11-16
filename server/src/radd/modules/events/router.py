@@ -26,4 +26,4 @@ async def list_events(
     # Raw instance-wide payloads are for administrative integrations.
     # Project managers use the scoped, redacted audit endpoint.
     await authz.require(session, user, authz.Permission.GLOBAL_MANAGE)
-    return [EventRead.model_validate(e) for e in await service.read_after(session, after, limit)]
+    return [EventRead.model_validate(e) for e in await service.read_by_id_after(session, after, limit)]

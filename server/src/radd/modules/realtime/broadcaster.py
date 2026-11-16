@@ -86,15 +86,15 @@ def _coalesce(batch: list[Event]) -> list[InvalidationEvent]:
 
 async def _run() -> None:
     async with SessionLocal() as session:
-        last_id = await events.latest_event_id(session)
+        position = await events.head_cursor(session)
     while True:
         try:
             async with SessionLocal() as session:
-                batch = await events.read_after(session, last_id, settings.realtime_batch)
+                batch = await events.read_after(session, position, settings.realtime_batch)
             for event in _coalesce(batch):
                 await _fan_out(event)
             if batch:
-                last_id = batch[-1].id
+                position = events.cursor_of(batch[-1])
         except asyncio.CancelledError:
             raise
         except Exception:

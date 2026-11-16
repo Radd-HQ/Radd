@@ -186,8 +186,8 @@ async def test_webhook_fanout_skips_silent_events_but_still_advances_the_cursor(
     delivered = [d.event_id for d in result.scalars()]
     assert delivered == [loud_event.id]  # ...only the loud one is delivered
     # and the cursor is past the silent one, so it is never rescanned.
-    assert await events.get_offset(db, WEBHOOK_CONSUMER) == loud_event.id
-    assert await events.get_offset(db, WEBHOOK_CONSUMER) > silent_event.id
+    assert await events.get_offset(db, WEBHOOK_CONSUMER) == events.cursor_of(loud_event)
+    assert await events.get_offset(db, WEBHOOK_CONSUMER) > events.cursor_of(silent_event)
 
 
 # --- consumers that build internal state (the deliberate asymmetry) -----------

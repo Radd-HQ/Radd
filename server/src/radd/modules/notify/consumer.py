@@ -106,7 +106,7 @@ async def _consume(session: AsyncSession, *, watch_only: bool) -> int:
                 await _handle(session, event, watch_only=watch_only)
         except Exception:
             logger.exception("notify: failed handling event %s (%s)", event.id, event.event_type)
-    await events.set_offset(session, CONSUMER_NAME, batch[-1].id)
+    await events.set_offset(session, CONSUMER_NAME, batch[-1])
     return len(batch)
 
 
