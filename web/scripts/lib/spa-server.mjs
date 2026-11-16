@@ -1,5 +1,6 @@
 /** The built SPA over a mocked API, for the fixture proofs: `web/dist` with an index.html fallback
  *  and each plugin's built remote under /plugins/<name>/. The proof's own handler goes first. */
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
@@ -11,6 +12,20 @@ const MIME = { ".js": "text/javascript", ".mjs": "text/javascript", ".css": "tex
   ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2" };
 
 const isFile = (file) => existsSync(file) && statSync(file).isFile();
+
+/** The server's own Content-Security-Policy, ENFORCED on every proof (RADD-1531). The server
+ *  ships it report-only; the proofs are where it has to hold, so a script, style, font, worker
+ *  or connection the policy would block breaks a proof here instead of a deployment later.
+ *  Read from the backend (never restated) by the same venv the contract proofs use. */
+let cachedPolicy;
+export function contentSecurityPolicy() {
+  cachedPolicy ??= execFileSync(
+    resolve(root, "server/.venv/bin/python"),
+    ["-c", "from radd.security_headers import content_security_policy as p; print(p(), end='')"],
+    { cwd: resolve(root, "server"), encoding: "utf8" },
+  );
+  return cachedPolicy;
+}
 
 /** Send a file with the content type its extension implies. */
 export function sendFile(res, file) {
@@ -59,6 +74,7 @@ export function sendSpa(res, pathname) {
 export async function serveBuiltSpa(handle = () => false) {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
+    res.setHeader("Content-Security-Policy", contentSecurityPolicy());
     if (await handle(req, res, url)) return;
     if (url.pathname.startsWith("/plugins/")) sendRemote(res, url.pathname);
     else sendSpa(res, url.pathname);

@@ -78,7 +78,7 @@ async def oidc_login(
         max_age=OIDC_FLOW_TTL_SECONDS,
         httponly=True,
         samesite="lax",
-        secure=settings.session_cookie_secure,
+        secure=settings.effective_cookie_secure,
     )
     return response
 
@@ -116,6 +116,6 @@ async def oidc_callback(code: str, state: str, request: Request, session: Sessio
         max_age=settings.session_ttl_hours * 3600,
         httponly=True,
         samesite="lax",
-        secure=settings.session_cookie_secure,
+        secure=settings.effective_cookie_secure,
     )
     return response

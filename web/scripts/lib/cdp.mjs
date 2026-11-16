@@ -81,6 +81,10 @@ export async function openBrowser({ port: basePort, profile, width = 1440, heigh
   });
 
   const consoleErrors = [];
+  /** What the browser REFUSED under the Content-Security-Policy the proof server enforces
+   *  (RADD-1531). These arrive on the Log domain, not as console calls, so nothing saw them
+   *  before; `close()` fails the proof when there are any. */
+  const cspViolations = [];
   const pending = new Map();
   let nextId = 1;
   ws.addEventListener("message", (ev) => {
@@ -93,6 +97,8 @@ export async function openBrowser({ port: basePort, profile, width = 1440, heigh
       consoleErrors.push(m.params.args.map((a) => a.value ?? a.description ?? "").join(" "));
     } else if (m.method === "Runtime.exceptionThrown") {
       consoleErrors.push("EXCEPTION: " + (m.params.exceptionDetails?.exception?.description || ""));
+    } else if (m.method === "Log.entryAdded" && /Content Security Policy/i.test(m.params.entry?.text ?? "")) {
+      cspViolations.push(m.params.entry.text.slice(0, 300));
     }
   });
 
@@ -108,6 +114,7 @@ export async function openBrowser({ port: basePort, profile, width = 1440, heigh
 
   await send("Page.enable");
   await send("Runtime.enable");
+  await send("Log.enable");
   // A persistent profile happily serves the PREVIOUS bundle, which makes a proof
   // report on code that is not running — passing against broken code or failing
   // against fixed code, depending on what was cached. Always fetch fresh.
@@ -127,6 +134,7 @@ export async function openBrowser({ port: basePort, profile, width = 1440, heigh
     /** Raw CDP for what the helpers do not cover (extra headers, emulation). */
     send,
     consoleErrors,
+    cspViolations,
     eval: (expression) => evalInPage(send, expression),
     click: (selector, match) => clickAt(send, selector, match),
     hover: (selector) => hoverOver(send, selector),
@@ -155,10 +163,18 @@ export async function openBrowser({ port: basePort, profile, width = 1440, heigh
   return {
     session,
     // Wait for Chrome to exit before removing its profile, or it may still be writing into it.
-    close: () => new Promise((done) => {
-      if (chrome.exitCode !== null || chrome.signalCode !== null) { dispose(); done(); return; }
-      chrome.once("exit", () => { dispose(); done(); });
-      try { chrome.kill(); } catch { dispose(); done(); }
+    close: () => new Promise((done, fail) => {
+      // A proof that finished with the browser having refused something under the CSP did
+      // not pass: the policy would break that screen for a real person (RADD-1531).
+      const settle = () => {
+        dispose();
+        if (cspViolations.length === 0) { done(); return; }
+        const unique = [...new Set(cspViolations)];
+        fail(new Error(`Content-Security-Policy violations (${unique.length}):\n  ${unique.slice(0, 8).join("\n  ")}`));
+      };
+      if (chrome.exitCode !== null || chrome.signalCode !== null) { settle(); return; }
+      chrome.once("exit", settle);
+      try { chrome.kill(); } catch { settle(); }
     }),
   };
 }

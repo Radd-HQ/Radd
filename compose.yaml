@@ -33,7 +33,10 @@ services:
       POSTGRES_PASSWORD: ${RADD_DB_PASSWORD:-radd}
       POSTGRES_DB: radd
     ports:
-      - "5455:5432"
+      # Loopback only (RADD-1531): the app reaches the database over the compose
+      # network, so publishing it on every interface only exposed it. Remove the
+      # address to reach it from another host, and set RADD_DB_PASSWORD first.
+      - "127.0.0.1:5455:5432"
     volumes:
       - radd-pgdata:/var/lib/postgresql/data
     healthcheck:

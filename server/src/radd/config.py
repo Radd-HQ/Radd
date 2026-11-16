@@ -64,7 +64,17 @@ class Settings(BaseSettings):
     comments_per_window: int = Field(default=120, gt=0)
     write_throttle_bucket_limit: int = Field(default=10000, gt=0)
     auth_password_workers: int = Field(default=4, gt=0)
-    session_cookie_secure: bool = False  # enable behind HTTPS
+    # The session cookie's Secure flag. Left False it is still FORCED on whenever
+    # `app_base_url` is https (`effective_cookie_secure`, RADD-1531): a deployment
+    # that says it is served over TLS must not send its session cookie in clear
+    # because one variable was forgotten.
+    session_cookie_secure: bool = False
+    # Security response headers (radd/security_headers.py, RADD-1531).
+    # off | report (the browser logs violations and blocks nothing) | enforce.
+    csp_mode: str = "report"
+    # Who may frame the app: a CSP source list. "'none'" forbids all framing.
+    frame_ancestors: str = "'none'"
+    hsts_max_age_seconds: int = 15_552_000  # 180 days; sent only when app_base_url is https
     token_last_used_throttle_seconds: int = 60  # min interval between PAT last_used_at writes
     # Staleness bound for module-level snapshots (RADD-899) — capability pills,
     # login-page provider buttons, the default-storage-host mirror. A second web
@@ -605,5 +615,10 @@ class Settings(BaseSettings):
     # (docs/plugin-platform.md §10); boot also loads those ENABLED in `installed_plugins`.
     installable_plugins: tuple[str, ...] = ("radd.modules.milestones",)
 
+
+    @property
+    def effective_cookie_secure(self) -> bool:
+        """The Secure flag every session cookie is set with (RADD-1531)."""
+        return self.session_cookie_secure or self.app_base_url.startswith("https://")
 
 settings = Settings()

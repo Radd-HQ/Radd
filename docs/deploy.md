@@ -65,6 +65,24 @@ and every one of them fails **silently** if skipped:
    CLI — use a throwaway shell history (`fish -P`, `HISTCONTROL=ignorespace`)
    or change it in Profile → Security immediately after first login.
 
+### Response headers and the session cookie
+
+Radd sets its own security headers on every response: `X-Content-Type-Options:
+nosniff`, a referrer policy, frame protection (`frame-ancestors 'none'` and
+`X-Frame-Options: DENY`), and `Strict-Transport-Security` when
+`RADD_APP_BASE_URL` is https. Do not duplicate them at the proxy.
+
+- **`RADD_FRAME_ANCESTORS`** (default `'none'`) is a CSP source list. Set it to an
+  origin to let that site embed Radd in a frame.
+- **`RADD_CSP_MODE`** is `report` by default: the browser logs what the
+  Content-Security-Policy would block and blocks nothing. Once your browser
+  console is clean on the screens you use (plugins, diagrams, attachments from
+  object storage), set `enforce`. `off` removes the policy; framing stays protected.
+- **The session cookie is `Secure` whenever `RADD_APP_BASE_URL` is https**, whether
+  or not `RADD_SESSION_COOKIE_SECURE` is set. Setting the base URL correctly is
+  therefore what protects the cookie; a wrong `http://` base URL behind TLS leaves
+  it unprotected unless that variable is true.
+
 ## TLS in front (compose)
 
 Radd itself speaks plain HTTP on :8000; TLS is the reverse proxy's job. The

@@ -21,6 +21,7 @@ from radd.clientip import ClientIpMiddleware
 from radd.maintenance import MaintenanceMiddleware
 from radd.middleware import CommitBeforeSendMiddleware
 from radd.collection_compression import CollectionCompressionMiddleware
+from radd.security_headers import SecurityHeadersMiddleware
 
 # Repo-layout fallback for the built SPA; harmless when absent (API-only mode).
 _DEFAULT_WEB_DIST = Path(__file__).resolve().parents[3] / "web" / "dist"
@@ -125,6 +126,8 @@ def create_app() -> FastAPI:
 
     app.add_middleware(CommitBeforeSendMiddleware)
     app.add_middleware(CollectionCompressionMiddleware)
+    # nosniff, frame protection, referrer policy, HSTS over https, and the CSP (RADD-1531).
+    app.add_middleware(SecurityHeadersMiddleware)
     # Resolves the client IP (trusted-proxy XFF walk) into request.state.client_ip.
     app.add_middleware(ClientIpMiddleware)
     # Outermost: while a restore is replacing the database, everything but the
