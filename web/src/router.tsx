@@ -14,6 +14,7 @@ import { setAnonymousMode } from "./lib/api";
 import { PageRoute } from "@radd-plugin-ui/pages/links";
 const AppLayout = lazyRouteComponent(() => import("./routes/app-layout"), "AppLayout");
 import { PluginPage } from "./components/shell/PluginPage";
+import { NotFoundScreen, RouteErrorScreen } from "./components/AppError";
 import { SettingsPluginPage } from "./components/shell/SettingsPluginPage";
 import { ProjectReleasesPage } from "./routes/project-releases";
 const CyclePage = lazyRouteComponent(() => import("./routes/cycle"), "CyclePage");
@@ -699,6 +700,10 @@ export function createAppRouter(queryClient: QueryClient) {
     routeTree,
     context: { queryClient },
     defaultPreload: "intent",
+    // RADD-1528: a route that throws, or a URL that matches nothing, gets the app's
+    // own screen (and a report) rather than the router library's default output.
+    defaultErrorComponent: RouteErrorScreen,
+    defaultNotFoundComponent: NotFoundScreen,
   });
 }
 

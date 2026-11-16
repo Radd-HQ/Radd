@@ -668,6 +668,11 @@ class SlotErrorBoundary extends Component<
   componentDidCatch(error: Error, info: ErrorInfo) {
     // Quarantine at the render layer: a plugin section that throws is hidden, not fatal.
     console.error(`[radd-plugin-sdk] slot contribution from "${this.props.plugin}" crashed`, error, info);
+    // The host reports it (RADD-1528). An event, not an import: the SDK cannot reach the host,
+    // and a remote built without one simply has nobody listening.
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("radd:client-error", { detail: { error, plugin: this.props.plugin } }));
+    }
   }
   render() {
     if (this.state.failed) return this.props.fallback ?? null;

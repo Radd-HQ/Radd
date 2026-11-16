@@ -22,6 +22,7 @@ In load order (`Settings.modules`), then the installable plugins. **Depends on**
 | [events](#events) | core | host | — | auth |
 | [projects](#projects) | core | bundled | events | auth, settings |
 | [auth](#auth) | core | bundled | events, projects | access, groups, teams, settings |
+| [diagnostics](#diagnostics) | core | host | auth | — |
 | [capabilities](#capabilities) | core | host | auth | — |
 | [pluginmgr](#pluginmgr) | core | host | auth, events | access |
 | [settings](#settings) | core | host | events, projects, auth | — |
@@ -117,9 +118,18 @@ Owns `users`, `sessions`, `api_tokens`, `roles` and `global_role_grants` (subjec
 - **Contributes:** MCP tools `list_users`, `list_service_accounts`, `create_service_account`
 - **Data:** entity refs `user`; audit links `user`, `service_account`, `role`
 
-### capabilities
+### diagnostics
 
 **core** · UI: host · load order 4
+
+Receives the browser's error reports and writes them to the server log.
+
+Owns one route, `POST /client-errors`, and no table: a browser error report becomes one structured line on the `radd.client_error` logger (message, stack, route path, the hook that caught it, the plugin that threw, the tab's build, the user if signed in). Open before sign-in because the login page can crash too, so the schema bounds its size and an in-process per-address window bounds its rate (`client_error_reports_per_minute`); a report over the allowance is a 429, never logged. Core: reporting must work when something optional broke. The SPA side is `web/src/lib/report-error.ts`; the SDK's slot boundary reaches it through the `radd:client-error` DOM event.
+
+
+### capabilities
+
+**core** · UI: host · load order 5
 
 Reports which features are available and configured on this server.
 
@@ -129,7 +139,7 @@ Serves `GET /capabilities`, the backend-assembled manifest the SPA renders from:
 
 ### pluginmgr
 
-**core** · UI: host · load order 5
+**core** · UI: host · load order 6
 
 Installs, enables and disables plugins.
 
@@ -140,7 +150,7 @@ Owns `installed_plugins` (each non-core plugin's desired state) and `plugin_proc
 
 ### settings
 
-**core** · UI: host · load order 6
+**core** · UI: host · load order 7
 
 Settings that apply to every project, with per-project overrides.
 
@@ -151,7 +161,7 @@ Owns the scalar cascade: `scoped_settings` rows (scope `instance` or `project`) 
 
 ### groups
 
-**core** · UI: bundled · load order 7
+**core** · UI: bundled · load order 8
 
 Directory groups mirrored from Active Directory or LDAP, for granting access to whole groups.
 
@@ -163,7 +173,7 @@ Owns the read-only mirror of directory groups: `groups`, `group_parents` (the ne
 
 ### teams
 
-**core** · UI: bundled · load order 8
+**core** · UI: bundled · load order 9
 
 Teams: groups of people you can give access to projects.
 
@@ -176,7 +186,7 @@ Owns `teams` (unique names, an `owner_id`), `team_managers` and `team_members`, 
 
 ### access
 
-**core** · UI: host · load order 9
+**core** · UI: host · load order 10
 
 Who may see or change a field, view or dashboard: grants to people, teams or roles, globally or per project.
 
@@ -187,7 +197,7 @@ Owns `access_grants`: a resource (`resource_type`, a string `resource_id`), a su
 
 ### workflow
 
-**core** · UI: bundled · load order 10
+**core** · UI: bundled · load order 11
 
 Workflow: each project's states and the rules for moving between them.
 
@@ -201,7 +211,7 @@ Owns per-project `states` and the optional `workflow_transitions` graph; each st
 
 ### labels
 
-**core** · UI: bundled · load order 11
+**core** · UI: bundled · load order 12
 
 Labels: shared free-form tags for issues and pages.
 
@@ -213,7 +223,7 @@ Owns the instance-wide `labels` catalog (names unique across the instance); issu
 
 ### fields
 
-**core** · UI: bundled · load order 12
+**core** · UI: bundled · load order 13
 
 Custom fields: typed, searchable data on issues, scoped to projects.
 
@@ -226,7 +236,7 @@ Owns `field_definitions` (typed custom fields with options and `default_value`) 
 
 ### cycles
 
-**core** · UI: bundled · load order 13
+**core** · UI: bundled · load order 14
 
 Cycles (sprints) with dates and optional recurring series.
 
@@ -238,7 +248,7 @@ Owns `cycles` (one cycle holds issues from any project; its optional home `proje
 
 ### releases
 
-**core** · UI: bundled · load order 14
+**core** · UI: bundled · load order 15
 
 Releases: versions of a project, and what shipped in each.
 
@@ -251,7 +261,7 @@ Owns `releases`, project-scoped versions, planned or released. Shipping is a wor
 
 ### itemtypes
 
-**core** · UI: bundled · load order 15
+**core** · UI: bundled · load order 16
 
 Issue types (Bug, Task, Story…) per project.
 
@@ -263,7 +273,7 @@ Owns `issue_types`, the per-project classification axis (Bug, Task, Story…), o
 
 ### screens
 
-**core** · UI: host · load order 16
+**core** · UI: host · load order 17
 
 Screens: which fields an issue type shows, collapses or hides.
 
@@ -274,7 +284,7 @@ Owns `screens` and `screen_fields`: per project, optionally per issue type, whet
 
 ### linktypes
 
-**core** · UI: host · load order 17
+**core** · UI: host · load order 18
 
 Issue link types (blocks, duplicates, relates, or your own).
 
@@ -285,7 +295,7 @@ Owns the link-type catalog `item_link_types` (outward and inward names, directed
 
 ### items
 
-**core** · UI: bundled · load order 18
+**core** · UI: bundled · load order 19
 
 Issues: projects' work items, with keys, hierarchy, assignees, dates and links.
 
@@ -300,7 +310,7 @@ Owns `work_items` (keys, the `kind` ladder, `rank`), `item_links`, `item_labels`
 
 ### comments
 
-**core** · UI: host + contracts · load order 19
+**core** · UI: host + contracts · load order 20
 
 Comments and threaded discussions on issues and pages.
 
@@ -314,7 +324,7 @@ Owns `comments` on any parent registered in `comments/parents.py` (issues built 
 
 ### weblinks
 
-**core** · UI: host · load order 20
+**core** · UI: host · load order 21
 
 Related links on issues: docs, designs and other references.
 
@@ -326,7 +336,7 @@ Owns `item_web_links`: URLs related to an issue (documents, designs, specs), eac
 
 ### webhooks
 
-**core** · UI: host · load order 21
+**core** · UI: host · load order 22
 
 Webhooks: signed event deliveries to your own endpoints, with retries.
 
@@ -340,7 +350,7 @@ Owns `webhook_endpoints` (secret encrypted at rest) and the `webhook_deliveries`
 
 ### views
 
-**core** · UI: host · load order 22
+**core** · UI: host · load order 23
 
 Saved views: boards, lists, planning and roadmaps over a query.
 
@@ -353,7 +363,7 @@ Owns `views` (a saved definition: SLQ `query`, axes and the shared shape such as
 
 ### reporting
 
-**core** · UI: bundled · load order 23
+**core** · UI: bundled · load order 24
 
 Reports: throughput, cumulative flow, time in state, velocity and burnup.
 
@@ -362,7 +372,7 @@ Owns no tables: every report is recomputed per request from the event log, with 
 
 ### forms
 
-**core** · UI: bundled · load order 24
+**core** · UI: bundled · load order 25
 
 Intake forms that create issues from a structured request.
 
@@ -377,7 +387,7 @@ Owns `forms` (fields over the project's registry, `defaults` resolved by NAME at
 
 ### automations
 
-**core** · UI: bundled · load order 25
+**core** · UI: bundled · load order 26
 
 Automations: rules that react to events or run on a schedule and change issues, notify people or call out.
 
@@ -393,7 +403,7 @@ Owns `automations` (a graph in `nodes`/`edges`), the `automation_triggers` index
 
 ### timelogging
 
-**core** · UI: bundled · load order 26
+**core** · UI: bundled · load order 27
 
 Time logging: worklogs, estimates and the timesheet.
 
@@ -408,7 +418,7 @@ Owns `worklogs` (booked to a `worked_on` date; itemless ones need a category), `
 
 ### vcs
 
-**core** · UI: bundled · load order 27
+**core** · UI: bundled · load order 28
 
 Links from issues to branches, commits and pull requests in your code hosts.
 
@@ -421,7 +431,7 @@ Owns `item_vcs_links` (one row per ref per item per connection), the author iden
 
 ### audit
 
-**core** · UI: bundled · load order 28
+**core** · UI: bundled · load order 29
 
 The audit log: who changed what, from what, to what — searchable by project, person, field and date.
 
@@ -432,7 +442,7 @@ Owns no tables: a read-only projection of the event log through `events.query_ev
 
 ### backup
 
-**core** · UI: bundled · load order 29
+**core** · UI: bundled · load order 30
 
 Scheduled and on-demand encrypted backups of the database and attachments, with restore.
 
@@ -443,7 +453,7 @@ The engine lives in `radd/backup/` (with the `python -m radd.backup` CLI) and im
 
 ### notify
 
-**core** · UI: host · load order 30
+**core** · UI: host · load order 31
 
 Notifications: the inbox, email and watching.
 
@@ -455,7 +465,7 @@ Owns `item_watchers`, the per-person `notifications` rows (`inbox`/`email` stamp
 
 ### realtime
 
-**core** · UI: host · load order 31
+**core** · UI: host · load order 32
 
 Live updates in the browser as other people make changes.
 
@@ -464,7 +474,7 @@ Owns no tables. `GET /api/v1/ws` authenticates by session cookie. `broadcaster.p
 
 ### search
 
-**core** · UI: host · load order 32
+**core** · UI: host · load order 33
 
 Search across issues and pages.
 
@@ -475,7 +485,7 @@ Owns `search_index` (one row per item: key, title, description, PUBLIC comment t
 
 ### attachments
 
-**core** · UI: host · load order 33
+**core** · UI: host · load order 34
 
 File attachments on issues and pages, stored on the hosts you configure and routed by rules you set.
 
@@ -489,7 +499,7 @@ Owns polymorphic `attachments` (an `(entity_type, entity_id)` parent), `storage_
 
 ### avatars
 
-**core** · UI: host · load order 34
+**core** · UI: host · load order 35
 
 Profile pictures: upload your own, or use your sign-in provider's.
 
@@ -498,7 +508,7 @@ Owns only the bytes of a profile picture: uploads are normalised to a 256px squa
 
 ### canned
 
-**core** · UI: host · load order 35
+**core** · UI: host · load order 36
 
 Canned responses: reusable reply snippets for service-desk comments, with placeholders.
 
@@ -510,7 +520,7 @@ Owns `canned_responses`: one instance-wide list. A body may carry the fixed `Can
 
 ### slas
 
-**optional** · UI: remote · load order 36
+**optional** · UI: remote · load order 37
 
 Service levels: response and resolution targets with timers and breach alerts.
 
@@ -524,7 +534,7 @@ Owns `sla_policies` (per project, ordered by `position`) and `sla_item_states`, 
 
 ### gitlab
 
-**optional** · UI: none · load order 37
+**optional** · UI: none · load order 38
 
 GitLab integration: links branches, commits and merge requests to issues, shows CI status, mirrors time spent on merge requests, and offers merges, CI results, deployments and releases as automation triggers.
 
@@ -536,7 +546,7 @@ GitLab does not sign bodies: the hook echoes its secret as `X-Gitlab-Token`, com
 
 ### sso
 
-**optional** · UI: remote · load order 38
+**optional** · UI: remote · load order 39
 
 Single sign-on with Google, GitHub or any OpenID Connect provider.
 
@@ -548,7 +558,7 @@ Owns `sso_providers`, `user_identities` (provider + immutable subject to user) a
 
 ### ldap
 
-**optional** · UI: remote · load order 39
+**optional** · UI: remote · load order 40
 
 Sign-in and user sync with Active Directory or LDAP.
 
@@ -561,7 +571,7 @@ Sign-in is a direct bind with the person's own password, so no stored account is
 
 ### pages
 
-**core** · UI: bundled · load order 40
+**core** · UI: bundled · load order 41
 
 The wiki: page spaces, page trees, version history and links to issues.
 
@@ -576,7 +586,7 @@ Owns `page_spaces`, the `pages` tree (keyed by id, permalinked by `number`, addr
 
 ### collab
 
-**optional** · UI: remote · load order 41
+**optional** · UI: remote · load order 42
 
 Live co-editing of wiki pages, with presence.
 
@@ -585,7 +595,7 @@ Holds one pycrdt document per page in this process (so one app replica, `docs/de
 
 ### ai
 
-**optional** · UI: remote · load order 42
+**optional** · UI: remote · load order 43
 
 AI features: summaries, similar-issue suggestions, natural-language search and editor actions, using the providers you configure.
 
@@ -600,7 +610,7 @@ Owns the provider registry (`ai_providers`, `ai_model_roles`, `ai_preset_prompts
 
 ### mcp
 
-**optional** · UI: none · load order 43
+**optional** · UI: none · load order 44
 
 An MCP server so AI agents can work with Radd using a person's or service account's permissions.
 
@@ -609,7 +619,7 @@ No tables. `POST /mcp` is a hand-rolled JSON-RPC 2.0 server authenticated by the
 
 ### forgejo
 
-**optional** · UI: none · load order 44
+**optional** · UI: none · load order 45
 
 Forgejo and Gitea integration: links branches, commits and pull requests to issues, shows CI status, mirrors time tracked on pull requests, and offers merges, CI results and releases as automation triggers.
 
@@ -621,7 +631,7 @@ Also serves Gitea. Deliveries carry a hex HMAC-SHA256 of the raw body in `X-Forg
 
 ### github
 
-**optional** · UI: none · load order 45
+**optional** · UI: none · load order 46
 
 GitHub integration: links branches, commits and pull requests to issues, shows CI status, mirrors time logged with /spend on pull requests, and offers merges, CI results and releases as automation triggers.
 
@@ -633,7 +643,7 @@ Deliveries are verified from `X-Hub-Signature-256` (`service.verify_signature`);
 
 ### alertmanager
 
-**optional** · UI: remote · load order 46
+**optional** · UI: remote · load order 47
 
 Turns firing Prometheus Alertmanager alerts into issues, and offers firing, repeats and resolutions as automation triggers.
 
@@ -646,7 +656,7 @@ Owns `alertmanager_receivers` (a token, a project, and behaviours off by default
 
 ### mailintake
 
-**optional** · UI: remote · load order 47
+**optional** · UI: remote · load order 48
 
 Email in and out: turns incoming mail into issues and comments, and replies to requesters.
 
@@ -661,7 +671,7 @@ Owns `mail_sources` (each with an ordered `mail_rules` routing chain), `mail_sen
 
 ### csat
 
-**optional** · UI: remote · load order 48
+**optional** · UI: remote · load order 49
 
 Customer satisfaction surveys emailed to requesters when their issue is resolved.
 
@@ -673,7 +683,7 @@ Owns `csat_surveys`: one survey per item for its lifetime, keyed by a token that
 
 ### approvals
 
-**optional** · UI: remote · load order 49
+**optional** · UI: remote · load order 50
 
 Approvals on workflow transitions: a move can wait for named people or team members to approve it.
 
@@ -684,7 +694,7 @@ Owns `approval_requests` (approver entries snapshotted; one live request per ite
 
 ### participants
 
-**optional** · UI: remote · load order 50
+**optional** · UI: remote · load order 51
 
 Participants: people and teams who follow a request alongside its reporter.
 
@@ -697,7 +707,7 @@ Owns `item_participants` (a user or a whole team per row, never both) and regist
 
 ### scripts
 
-**optional** · UI: remote · load order 51 · plugin id `radd.scripts`
+**optional** · UI: remote · load order 52 · plugin id `radd.scripts`
 
 Python scripts that automations can run, with their own packages.
 
@@ -710,7 +720,7 @@ Owns `script_packages` (name and version specifiers only) and the one-row `scrip
 
 ### dashboards
 
-**core** · UI: bundled · load order 52
+**core** · UI: bundled · load order 53
 
 Dashboards: widgets that chart and list your issues.
 
@@ -721,7 +731,7 @@ Owns `dashboards` and `dashboard_widgets` and nothing about the data they show: 
 
 ### jiraimport
 
-**optional** · UI: remote · load order 53
+**optional** · UI: remote · load order 54
 
 Imports projects, issues and history from Jira Server or Data Center, reversibly.
 
@@ -733,7 +743,7 @@ Owns connections, a snapshot (a JQL result downloaded once into `jira_snapshots`
 
 ### confluenceimport
 
-**optional** · UI: remote · load order 54
+**optional** · UI: remote · load order 55
 
 Imports spaces and pages from Confluence Server or Data Center.
 
@@ -745,7 +755,7 @@ Server and Data Center only (storage-format XHTML bodies). It keeps the jiraimpo
 
 ### monitoring
 
-**optional** · UI: remote · load order 55
+**optional** · UI: remote · load order 56
 
 Server health for admins: database, background workers and search coverage.
 
@@ -755,7 +765,7 @@ Owns no tables. `GET /monitoring/overview` (instance admins) answers database he
 
 ### leave
 
-**optional** · UI: remote · load order 56
+**optional** · UI: remote · load order 57
 
 Leave and team holidays, shown on the timesheet and beside people's names.
 

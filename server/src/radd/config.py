@@ -518,10 +518,16 @@ class Settings(BaseSettings):
     backup_max_upload_bytes: int = 0  # 0 = unlimited (free-space guard still applies)
 
     # Ordered module assembly — the plugin system's root configuration.
+    # Browser error reports (radd/modules/diagnostics, RADD-1528): one log line each.
+    # The route is open before sign-in, so both its size and its rate are capped.
+    client_error_reports_per_minute: int = 20
+    client_error_max_chars: int = 8000
+
     modules: tuple[str, ...] = (
         "radd.modules.events",
         "radd.modules.projects",
         "radd.modules.auth",
+        "radd.modules.diagnostics",
         "radd.modules.capabilities",
         "radd.modules.pluginmgr",
         "radd.modules.settings",

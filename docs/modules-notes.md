@@ -165,6 +165,10 @@ Owns polymorphic `attachments` (an `(entity_type, entity_id)` parent), `storage_
 
 Owns only the bytes of a profile picture: uploads are normalised to a 256px square WebP and stored through the attachments blob API (`save_blob`, `read_blob`, `remove_blob`). `auth` owns the columns and the one rule, `User.avatar_url` (uploaded picture, else the identity provider's, else none), which every user shape carries; `sso` records the provider's picture through `auth.service.set_idp_picture`. `GET /users/{id}/avatar` serves anyone who can read a name, cached as immutable because the URL carries a version. Trap: an avatar is deliberately not an attachment (no listing, no per-file grants, no storage-host prompt), so never route it through the attachment parent bindings.
 
+### diagnostics
+
+Owns one route, `POST /client-errors`, and no table: a browser error report becomes one structured line on the `radd.client_error` logger (message, stack, route path, the hook that caught it, the plugin that threw, the tab's build, the user if signed in). Open before sign-in because the login page can crash too, so the schema bounds its size and an in-process per-address window bounds its rate (`client_error_reports_per_minute`); a report over the allowance is a 429, never logged. Core: reporting must work when something optional broke. The SPA side is `web/src/lib/report-error.ts`; the SDK's slot boundary reaches it through the `radd:client-error` DOM event.
+
 ### canned
 
 Owns `canned_responses`: one instance-wide list. A body may carry the fixed `CannedToken` variables, resolved against an item the caller can read by `GET /canned-responses/{id}/render` through the pure `render.render_canned`, the same `{{token}}` idiom as automation templating; the comment composer inserts through it. The list needs the revocable `canned.read` atom and answers an empty list without it. Trap: an unknown token, or one with no value (an unassigned item's assignee name), renders verbatim by design so it stays visible in the composer — never turn a missing value into an empty string or an error.
