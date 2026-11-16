@@ -127,10 +127,10 @@ try {
   assert.equal(await s.eval(`document.querySelector('[data-thread-toggle="locked"]').getAttribute('aria-expanded')`), "false");
   assert.equal(await s.eval(`!!document.querySelector('[data-comment-replies="thread"] [contenteditable=true]')`), false, "reading replies opened composer");
   // RADD-1335's readable controls, on the kit (RADD-1448): the disclosure and the Reply action are
-  // full-size buttons — 32px targets with 13px words.
+  // full-size buttons — 32px targets with row-size (14px, RADD-1518) words.
   const control = (selector) => `(() => { const b = document.querySelector('${selector}'); return b && [getComputedStyle(b).fontSize, b.getBoundingClientRect().height]; })()`;
-  assert.deepEqual(await s.eval(control('[data-thread-toggle="thread"]')), ["13px", 32]);
-  assert.deepEqual(await s.eval(control('[data-open-reply="thread"]')), ["13px", 32]);
+  assert.deepEqual(await s.eval(control('[data-thread-toggle="thread"]')), ["14px", 32]);
+  assert.deepEqual(await s.eval(control('[data-open-reply="thread"]')), ["14px", 32]);
   await s.click('[data-thread-toggle="locked"]');
   assert.equal(await s.eval(`document.querySelector('[data-thread-toggle="thread"]').getAttribute('aria-expanded')`), "true", "opening another thread closed first");
   await new Promise(resolve => setTimeout(resolve, 4500));

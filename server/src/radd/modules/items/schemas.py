@@ -203,7 +203,9 @@ class ItemBatchUpdate(BaseModel):
     item. Unlike `/bulk-update`, each item carries its OWN patch and nothing
     is skipped."""
 
-    patches: list[ItemBatchPatch] = Field(min_length=1, max_length=settings.bulk_max_items)
+    patches: list[ItemBatchPatch] = Field(
+        min_length=1, max_length=settings.items_batch_patch_max
+    )
 
 
 # --- bulk operations (spec 68) ---

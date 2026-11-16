@@ -76,7 +76,7 @@ function remarkRaddTokens() {
 }
 
 const HEADING = {
-  h1: "mt-3 mb-1.5 text-base font-semibold text-heading",
+  h1: "mt-3 mb-1.5 text-lg font-semibold text-heading",
   h2: "mt-3 mb-1 text-base font-semibold text-heading",
   h3: "mt-2.5 mb-1 text-row font-semibold text-fg",
   h4: "mt-2 mb-1 text-row font-semibold text-fg",

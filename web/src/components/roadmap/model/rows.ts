@@ -93,7 +93,7 @@ interface EpicGroup {
   epic: Item;
   /** Scheduled children only — these render as child rows, fetch order. */
   scheduledChildren: Item[];
-  /** ALL loaded children in fetch order (auto-schedule input). */
+  /** ALL loaded children in fetch order (the spread verb's input). */
   allChildren: Item[];
   /** Union of the epic's own window and its children's (domain sizing). */
   start: Date;

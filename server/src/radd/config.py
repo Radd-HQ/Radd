@@ -463,6 +463,11 @@ class Settings(BaseSettings):
     # Bulk operations (spec 68) — max items per bulk-update/bulk-move request and
     # the id cap on GET /items/ids ("select all matching").
     bulk_max_items: int = 500
+    # `PATCH /items` (RADD-1505), the roadmap's all-or-nothing Save: one patch per
+    # item. Larger than the bulk cap because a plan verb (spread, bring children
+    # in) drafts every loaded child of an epic and Save must take the draft whole
+    # (RADD-1542); the client mirrors it as ROADMAP_SAVE_MAX_ITEMS.
+    items_batch_patch_max: int = 2000
 
     # Time logging (see radd/modules/timelogging) — a working day/week, not calendar,
     # so Jira-style durations (`1d`, `2w`) convert to seconds consistently everywhere.

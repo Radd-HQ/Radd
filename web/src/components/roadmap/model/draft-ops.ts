@@ -38,6 +38,14 @@ export function flattenOps(ops: readonly DraftOp[]): DraftLeafOp[] {
   return ops.flatMap((op) => (op.kind === "compound" ? op.ops : [op]));
 }
 
+/** The ops left once a Save has written `saved` (RADD-1542): identity, not
+ *  position — an op pushed while the save was settling is kept, and one that
+ *  was undone mid-save is dropped from whichever stack now holds it. */
+export function settleOps(ops: readonly DraftOp[], saved: readonly DraftOp[]): DraftOp[] {
+  const written = new Set(saved);
+  return ops.filter((op) => !written.has(op));
+}
+
 export function applyOp(items: Item[], op: DraftOp): Item[] {
   switch (op.kind) {
     case "compound":

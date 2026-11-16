@@ -5,7 +5,7 @@
  *                fetch (tray drop, a child a plan verb brings in) carries its
  *                full Item as an INSERT so it draws before Save;
  *  - `reorder` — one row's rank intent (anchor ids; the server ranks at save);
- *  - `chain`   — a sequential rank chain (date-order verb, auto-schedule);
+ *  - `chain`   — a sequential rank chain (date-order verb, a plan's order);
  *  - `compound` — several of the above as ONE step (a plan's patches + its
  *                 rank chain), so Undo reverts the whole verb (RADD-1510).
  *  Derivation recomputes from base on every change, which keeps undo trivially
@@ -15,7 +15,14 @@
 
 import { useCallback, useMemo, useState } from "react";
 import type { Item, ItemUpdate } from "../../lib/types";
-import { DRAFT_FIELDS, applyOp, flattenOps, type DraftLeafOp, type DraftOp } from "./model/draft-ops";
+import {
+  DRAFT_FIELDS,
+  applyOp,
+  flattenOps,
+  settleOps,
+  type DraftLeafOp,
+  type DraftOp,
+} from "./model/draft-ops";
 
 export interface RoadmapDraft {
   dirty: boolean;
@@ -31,6 +38,12 @@ export interface RoadmapDraft {
   undo: () => void;
   redo: () => void;
   clear: () => void;
+  /** The live ops, oldest first — what a Save captures before it starts. */
+  ops: readonly DraftOp[];
+  /** Drop exactly the ops a Save wrote (RADD-1542). An op pushed WHILE the
+   *  save and its refetch were settling is not among them, so it stays in the
+   *  draft instead of being wiped by a blanket clear under a "saved" toast. */
+  settle: (saved: readonly DraftOp[]) => void;
   /** Per-item NET field changes vs the base set (no-ops dropped) — the save
    *  batch. Inserted items diff against their own carried base values. */
   netPatches: (base: Item[]) => { itemId: string; patch: ItemUpdate }[];
@@ -69,6 +82,12 @@ export function useRoadmapDraft(): RoadmapDraft {
   const clear = useCallback(() => {
     setOps([]);
     setRedoOps([]);
+  }, []);
+
+  const settle = useCallback((saved: readonly DraftOp[]) => {
+    setOps((previous) => settleOps(previous, saved));
+    // An op undone mid-save is already on the server: redoing it would be a no-op at best.
+    setRedoOps((previous) => settleOps(previous, saved));
   }, []);
 
   const applyTo = useCallback(
@@ -146,6 +165,8 @@ export function useRoadmapDraft(): RoadmapDraft {
     undo,
     redo,
     clear,
+    ops,
+    settle,
     netPatches,
     intents,
     insertedItems,

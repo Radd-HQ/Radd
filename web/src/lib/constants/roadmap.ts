@@ -55,6 +55,10 @@ export const ROADMAP_EDGE_AUTOSCROLL_PX = 40;
 /** Dependency-cascade cap (spec 78): more pushed items than this aborts the
  *  cascade portion — only the dragged bar commits. */
 export const ROADMAP_CASCADE_MAX_ITEMS = 50;
+/** The most item patches one roadmap Save sends. Mirrors the server's
+ *  `items_batch_patch_max` (`PATCH /items`); the Save says so in words before
+ *  the request, where the server's own refusal is a generic validation error. */
+export const ROADMAP_SAVE_MAX_ITEMS = 2000;
 /** Hover dwell before a roadmap bar shows its floating info card. */
 export const ROADMAP_HOVER_CARD_DELAY_MS = 350;
 /** Staleness for the roadmap's progress-tint batches (timelog + rollup) —

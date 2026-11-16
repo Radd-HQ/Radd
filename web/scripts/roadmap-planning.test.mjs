@@ -1,4 +1,4 @@
-// The roadmap plan verbs (RADD-1510): auto-schedule only GROWS the epic, the
+// The roadmap plan verbs (RADD-1510, RADD-1514): a plan only GROWS the epic, the
 // spread tiles the epic's window with equal slots, and a plan is ONE undo step.
 //
 //   node --test web/scripts/roadmap-planning.test.mjs   (from the repo root)
@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { evaluateTs, importTs } from "./lib/load-ts.mjs";
 
 const { shiftIsoDay } = await importTs("web/packages/plugin-sdk/src/dates.ts");
-const { applyOp, flattenOps } = await importTs("web/src/components/roadmap/model/draft-ops.ts");
+const { applyOp, flattenOps, settleOps } = await importTs("web/src/components/roadmap/model/draft-ops.ts");
 
 // `scheduling.ts` and `planning.ts` import the SDK and the host alias, which
 // node cannot resolve — their imports are supplied by name instead.
@@ -93,4 +93,18 @@ test("a compound op applies its leaves in order and is one undo step", () => {
   assert.equal(drafted[2].start_date, "2026-09-05");
   const leaves = flattenOps([compound, { kind: "reorder", label: "y", itemId: "b", afterId: null, beforeId: "a" }]);
   assert.deepEqual(leaves.map((op) => op.kind), ["patch", "chain", "reorder"]);
+});
+
+test("a Save drops only the ops it wrote: a gesture made while it settled stays in the draft (RADD-1542)", () => {
+  const op = (label) => ({ kind: "patch", label, patches: [{ itemId: label, after: { start_date: "2026-11-02" } }] });
+  const first = op("a"), second = op("b"), duringSave = op("c");
+  const captured = [first, second];
+  // The draft as it stands when the refetch lands: the saved ops plus one pushed meanwhile.
+  assert.deepEqual(settleOps([first, second, duringSave], captured), [duringSave]);
+  // Nothing happened meanwhile: the draft is clean.
+  assert.deepEqual(settleOps(captured, captured), []);
+  // An op undone mid-save sits on the redo stack; it is on the server, so it goes from there too.
+  assert.deepEqual(settleOps([second], captured), []);
+  // Identity, not shape: an equal-looking op pushed later is a different gesture.
+  assert.deepEqual(settleOps([first, op("a")], [first]).length, 1);
 });

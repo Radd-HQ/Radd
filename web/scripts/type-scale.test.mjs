@@ -9,7 +9,7 @@ import { test } from "node:test";
 
 const ROOTS = ["web/src", "web/packages/plugin-sdk/src", "server/src/radd/modules"];
 const SOURCE = /\.(tsx|ts)$/;
-const PX_SIZE = /text-\[\d+px\]/g;
+const PX_SIZE = /text-\[\d+(?:\.\d+)?px\]/g;
 
 function* walk(dir) {
   for (const name of readdirSync(dir)) {

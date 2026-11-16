@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
-from radd.exceptions import ConflictError, RaddError
+from radd.exceptions import ConflictError, NotFoundError, RaddError
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
@@ -224,8 +224,17 @@ async def update_items(
             # permission read, so this is two lookups, not two queries.
             item = await session.get(WorkItem, entry.item_id)
             project = await projects_service.get_project(session, item.project_id) if item else None
-            if item is not None and project is not None:
-                error.args = (f"{project.key}-{item.number}: {error}",)
+            # A missing-or-hidden item answers exactly as the single PATCH does:
+            # naming its key here would confirm an item the caller cannot see.
+            if item is not None and project is not None and not isinstance(error, NotFoundError):
+                key = f"{project.key}-{item.number}"
+                error.args = (f"{key}: {error}",)
+                # The 422 handlers (transition, field validation) render the
+                # error's `errors` list, not its message — name the item there
+                # too, or the client is told a rule failed and not on which row.
+                failures = getattr(error, "errors", None)
+                if isinstance(failures, list):
+                    error.errors = [f"{key}: {failure}" for failure in failures]
             raise
     return updated
 

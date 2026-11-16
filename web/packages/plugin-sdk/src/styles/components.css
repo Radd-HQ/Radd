@@ -14,7 +14,7 @@
   padding: 0 0.75rem;
   border-radius: var(--radd-radius);
   border: 1px solid transparent;
-  font-size: 13px;
+  font-size: var(--text-row, 14px);
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
@@ -54,7 +54,7 @@
 .radd-btn--sm {
   height: 1.625rem;
   padding: 0 0.5rem;
-  font-size: 12px;
+  font-size: var(--text-xs, 13px);
 }
 
 .radd-field {
@@ -63,7 +63,7 @@
   gap: 0.375rem;
 }
 .radd-field__label {
-  font-size: 12px;
+  font-size: var(--text-xs, 13px);
   font-weight: 500;
   color: var(--radd-text-muted);
 }
@@ -75,7 +75,7 @@
   border: 1px solid var(--radd-border-strong);
   background: var(--radd-panel);
   padding: 0 0.625rem;
-  font-size: 13px;
+  font-size: var(--text-row, 14px);
   color: var(--radd-heading);
   width: 100%;
 }
@@ -99,11 +99,11 @@
   border-color: var(--radd-danger);
 }
 .radd-field__hint {
-  font-size: 12px;
+  font-size: var(--text-xs, 13px);
   color: var(--radd-text-faint);
 }
 .radd-field__error {
-  font-size: 12px;
+  font-size: var(--text-xs, 13px);
   color: var(--radd-danger);
 }
 
@@ -115,7 +115,7 @@
   border-radius: 9999px;
   border: 1px solid var(--radd-border-strong);
   background: var(--radd-panel);
-  font-size: 11px;
+  font-size: var(--text-meta, 12px);
   font-weight: 500;
   color: var(--radd-text-muted);
 }
@@ -127,7 +127,7 @@
   padding: 0.75rem;
 }
 .radd-card__title {
-  font-size: 12px;
+  font-size: var(--text-xs, 13px);
   font-weight: 500;
   color: var(--radd-text-muted);
   margin-bottom: 0.5rem;
@@ -141,7 +141,7 @@
   padding: 1.5rem;
   text-align: center;
   color: var(--radd-text-faint);
-  font-size: 13px;
+  font-size: var(--text-row, 14px);
 }
 
 .radd-spinner {

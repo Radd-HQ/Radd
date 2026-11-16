@@ -300,7 +300,7 @@ export function RoadmapSurface({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Timelog seconds: ONE chunked batch over every leaf row plus every epic's
-  // loaded children (tints + auto-schedule durations). Viewers included; any
+  // loaded children (tints + spread durations). Viewers included; any
   // failure/disabled/estimate-less project degrades quietly to no tint and
   // default durations. Generous staleTime, no polling — roadmaps can be huge.
   const durationConfig = useDurationConfig();
@@ -600,9 +600,12 @@ export function RoadmapSurface({
       ) {
         return;
       }
-      if (event.key === "f" || event.key === "F") {
+      // Bare keys only (RADD-1542): Ctrl/Cmd+A is the browser's select-all, and
+      // answering it with Fit overwrote the zoom this view remembers.
+      const bare = !event.ctrlKey && !event.metaKey && !event.altKey;
+      if (bare && (event.key === "f" || event.key === "F")) {
         frameSelection();
-      } else if (event.key === "a" || event.key === "A") {
+      } else if (bare && (event.key === "a" || event.key === "A")) {
         fitAll();
       } else if (event.key === "Escape") {
         setSelectedIds(new Set());
@@ -761,7 +764,12 @@ export function RoadmapSurface({
         )}
         <ToolbarToggle
           pressed={epicsOnly}
-          onClick={onToggleEpicsOnly}
+          // Epics-only keeps only epic rows and Flat removes them: together they
+          // drew nothing (RADD-1542), so turning one on turns the other off.
+          onClick={() => {
+            if (!epicsOnly && flat) toggleFlat();
+            onToggleEpicsOnly();
+          }}
           icon={Gem}
           title="Drown out the noise: only epics and their scheduled children draw — standalone scheduled issues and subtasks are hidden."
         >
@@ -769,7 +777,10 @@ export function RoadmapSurface({
         </ToolbarToggle>
         <ToolbarToggle
           pressed={flat}
-          onClick={toggleFlat}
+          onClick={() => {
+            if (!flat && epicsOnly) onToggleEpicsOnly();
+            toggleFlat();
+          }}
           icon={Rows3}
           title={
             flat
@@ -911,7 +922,7 @@ export function RoadmapSurface({
               }}
               trayDragItem={trayDragItem}
               onTrayDrop={(item, dayIndex, placement) => {
-                const placed = editing.scheduleFromTray(item, dayIndex, placement);
+                const placed = editing.scheduleFromTray(item, dayIndex, placement, visibleRows);
                 setTrayDragItem(null);
                 return placed;
               }}

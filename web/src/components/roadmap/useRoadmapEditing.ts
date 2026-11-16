@@ -4,6 +4,7 @@ import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import {
   ROADMAP_CASCADE_MAX_ITEMS,
+  ROADMAP_SAVE_MAX_ITEMS,
   ROADMAP_EPIC_SPAN_DAYS,
   ROADMAP_LEAF_SPAN_DAYS,
   apiItemRankPath,
@@ -152,7 +153,7 @@ export function useRoadmapEditing(
   );
 
   /**
-   * Record a PLAN (auto-schedule, spread) as ONE draft op (RADD-1510, closing
+   * Record a PLAN (spread, date order) as ONE draft op (RADD-1510, closing
    * RADD-1433's box): the date patches and — when the view is rank-ordered
    * and the caller passes the plan's order — the rank chain that makes the
    * result read top-to-bottom, compounded so a single Undo reverts both.
@@ -193,14 +194,29 @@ export function useRoadmapEditing(
    * inserted row vanish until the paged stream completed, seconds on a big
    * instance, which read as data loss. A refusal stays on the Save button
    * (`saveError`) with the item named, and the draft stays intact to retry.
+   * Only the ops this Save captured are dropped afterwards (RADD-1542): a
+   * gesture made while the refetch settles stays in the draft. When the field
+   * PATCH landed and a rank write then failed, the message says so — the
+   * dates ARE saved, and Save again replays only the ordering.
    */
   const saveDraft = useCallback(async () => {
     if (!draft.dirty || saving) return;
     setSaving(true);
     setSaveError(null);
+    const savedOps = draft.ops;
+    let fieldsLanded = false;
     try {
       const patches = draft.netPatches(baseItems);
-      if (patches.length > 0) await patchItems.mutateAsync({ patches });
+      if (patches.length > ROADMAP_SAVE_MAX_ITEMS) {
+        setSaveError(
+          `This draft changes ${patches.length} items; one Save takes at most ${ROADMAP_SAVE_MAX_ITEMS}. Undo the last plan and save in smaller steps.`,
+        );
+        return;
+      }
+      if (patches.length > 0) {
+        await patchItems.mutateAsync({ patches });
+        fieldsLanded = true;
+      }
       for (const intent of draft.intents()) {
         if (intent.kind === "reorder") {
           await reorderItem.mutateAsync({
@@ -218,10 +234,14 @@ export function useRoadmapEditing(
         }
       }
       await invalidateEntities(queryClient, Entity.item);
-      draft.clear();
+      draft.settle(savedOps);
       pushToast("Roadmap changes saved");
     } catch (error) {
-      setSaveError(errorMessage(error));
+      setSaveError(
+        fieldsLanded
+          ? `Dates saved; the row order was not — ${errorMessage(error)}. Save again to retry the ordering.`
+          : errorMessage(error),
+      );
       void invalidateEntities(queryClient, Entity.item);
     } finally {
       setSaving(false);
@@ -312,6 +332,9 @@ export function useRoadmapEditing(
       item: Item,
       dayIndex: number | null,
       placement: { target: RoadmapRow; before: boolean } | null,
+      /** The rows the insertion line was computed over (the VISIBLE ones), so
+       *  the drop lands where the line said it would (RADD-1542). */
+      rows: RoadmapRow[] = model.rows,
     ): boolean => {
       const start =
         dayIndex !== null && model.domainStart
@@ -331,7 +354,7 @@ export function useRoadmapEditing(
         ],
       };
       const placed = placement
-        ? trayDropPlacement(model.rows, item, placement.target, placement.before)
+        ? trayDropPlacement(rows, item, placement.target, placement.before)
         : null;
       if (!placed) {
         draft.pushOp(patch);

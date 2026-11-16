@@ -264,7 +264,7 @@ export function TypeChip({ type, withLabel = false }: { type: TypeRef; withLabel
  *  cards, where labels are context, not signal). */
 const LABEL_SKIN = {
   pill: "rounded-full border border-strong bg-elevated/60 px-1.5 py-px text-meta leading-4",
-  quiet: "rounded border border-subtle/70 bg-surface/70 px-1.5 py-px font-mono text-[10.5px] leading-4",
+  quiet: "rounded border border-subtle/70 bg-surface/70 px-1.5 py-px font-mono text-micro leading-4",
 } as const;
 
 export function LabelChip({ name }: { name: string }) {

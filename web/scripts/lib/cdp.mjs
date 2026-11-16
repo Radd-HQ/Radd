@@ -240,6 +240,10 @@ export async function hoverOver(send, selector) {
   const at = await evalInPage(send, `(() => {
     const el = document.querySelector(${JSON.stringify(selector)});
     if (!el) return null;
+    // Scroll into view first, as clickAt does: a pointer move to an off-screen rect hovers
+    // nothing, the revealed chrome stays display:none, and the click that follows lands on
+    // (0,0) — which read as "the editor never opened" once a taller page scrolled (RADD-1542).
+    el.scrollIntoView({ block: "nearest", inline: "nearest" });
     const r = el.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + Math.min(12, r.height / 2) };
   })()`);
