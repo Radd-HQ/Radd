@@ -290,18 +290,25 @@ async def search(
             tsquery,
             text("'MaxWords=18, MinWords=6, MaxFragments=1'"),
         )
-        rank = func.ts_rank_cd(SearchIndexRow.tsv, tsquery)
-        candidates = (
+        # Rank a WINDOW, not every match (RADD-1533). ts_rank_cd has to read each
+        # match's tsvector, so a word matching 223k rows cost 1.9 s before a LIMIT
+        # could help. The window is the most recently updated matches the reader may
+        # see; a query matching fewer rows than the window is ranked in full, so only
+        # very common words lose their oldest matches from the ranking.
+        matches = (
             _scope(
-                select(SearchIndexRow.item_id, rank.label("rank"), SearchIndexRow.updated_at)
+                select(SearchIndexRow.item_id, SearchIndexRow.tsv, SearchIndexRow.updated_at)
                 .where(SearchIndexRow.tsv.op("@@")(tsquery)),
                 readable,
                 relation_clause,
             )
-            .order_by(
-                rank.desc(),
-                SearchIndexRow.updated_at.desc(),
-            )
+            .order_by(SearchIndexRow.updated_at.desc())
+            .limit(max(settings.search_rank_candidates, limit + len(seen)))
+        ).cte("recent_matches").prefix_with("MATERIALIZED")
+        rank = func.ts_rank_cd(matches.c.tsv, tsquery)
+        candidates = (
+            select(matches.c.item_id, rank.label("rank"), matches.c.updated_at)
+            .order_by(rank.desc(), matches.c.updated_at.desc())
             .limit(limit + len(seen))
         ).cte("ranked_hits").prefix_with("MATERIALIZED")
         # Rank first, then read large text and compute previews for only the

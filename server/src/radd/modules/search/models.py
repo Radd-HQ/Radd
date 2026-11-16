@@ -21,6 +21,10 @@ class SearchIndexRow(Base):
         Index("ix_search_index_tsv", "tsv", postgresql_using="gin"),
         Index("ix_search_key_prefix", text("lower(key) text_pattern_ops")),
         Index("ix_search_number_prefix", text("split_part(key, '-', 2) text_pattern_ops")),
+        # RADD-1533: the candidate window is "the newest N matches". With this the
+        # planner walks recent rows and stops at N for a common word (dense matches),
+        # and still goes through the GIN index for a rare one.
+        Index("ix_search_index_updated_at", text("updated_at DESC")),
     )
 
     item_id: Mapped[uuid.UUID] = mapped_column(
