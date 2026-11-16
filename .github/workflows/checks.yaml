@@ -62,8 +62,16 @@ jobs:
   # for real. `docs/deploy.md` makes restore the only rollback path, and before
   # this nothing called it; migrations had only ever run on an EMPTY database.
   drills:
-    name: drills (backup → restore, upgrade from the previous release)
+    name: drills (client ${{ matrix.client }} → server 16)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 17 is the client major the IMAGE ships (Containerfile: postgresql-client-17);
+        # 16 is the one that matches the server. RADD-1543: with only the matching
+        # one tested, a newer client that could not restore went unnoticed.
+        # tests/test_backup_tool_majors.py refuses a Containerfile major missing here.
+        client: [16, 17]
     services:
       postgres:
         image: postgres:16
@@ -90,13 +98,15 @@ jobs:
       - name: Install
         working-directory: server
         run: uv sync --locked
-      # pg_dump/pg_restore must match the SERVER's major version: a newer
-      # pg_restore emits settings an older server refuses.
-      - name: PostgreSQL 16 client tools
+      - name: PostgreSQL ${{ matrix.client }} client tools
+        working-directory: server
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-16
-          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+          sh scripts/pg_client_shims.sh ${{ matrix.client }} /tmp/pgclient
+          {
+            echo "RADD_BACKUP_PG_DUMP_PATH=/tmp/pgclient/pg_dump"
+            echo "RADD_BACKUP_PG_RESTORE_PATH=/tmp/pgclient/pg_restore"
+            echo "RADD_BACKUP_PSQL_PATH=/tmp/pgclient/psql"
+          } >> "$GITHUB_ENV"
       - name: Restore drill (backup, empty database, restore, compare every table)
         working-directory: server
         run: uv run python scripts/drills.py restore

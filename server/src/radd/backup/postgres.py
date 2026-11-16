@@ -11,8 +11,12 @@ pre-flight runs at startup and fails loudly; `backup_tools_optional` downgrades
 it to a warning for dev boxes without a Postgres client.
 
 The client major must be >= the server it dumps (a 15 client cannot dump a 16
-server), which is why the image installs `postgresql-client-16` from PGDG —
-Debian bookworm ships 15.
+server). The image's client is usually NEWER than the server, and that has a
+cost on the way back in (RADD-1543): a newer `pg_dump` writes session settings
+an older server does not know (`transaction_timeout`, new in 17), and one
+unknown `SET` aborted the whole single-transaction restore — every backup
+"verified", none restorable. `restore_from` therefore replays the archive as SQL
+with the settings the SERVER does not have removed from its header.
 """
 
 import asyncio
@@ -51,6 +55,8 @@ class ToolStatus:
     pg_dump: ToolInfo
     pg_restore: ToolInfo
     problem: str | None
+    #: Restore applies the archive through psql (RADD-1543); same client package.
+    psql: ToolInfo | None = None
 
     @property
     def available(self) -> bool:
@@ -145,15 +151,17 @@ async def tool_status() -> ToolStatus:
     dump = await _tool_info(settings.backup_pg_dump_path)
     restore = await _tool_info(settings.backup_pg_restore_path)
     problem: str | None = None
+    psql = await _tool_info(settings.backup_psql_path)
     missing = [
         name
-        for name, info in (("pg_dump", dump), ("pg_restore", restore))
+        for name, info in (("pg_dump", dump), ("pg_restore", restore), ("psql", psql))
         if info.path is None
     ]
     if missing:
         problem = (
             f"{' and '.join(missing)} not found — install the PostgreSQL client "
-            f"(the container image ships postgresql-client-16)"
+            f"(the container image ships postgresql-client; a backup needs pg_dump, "
+            f"a restore needs pg_restore and psql)"
         )
     else:
         try:
@@ -165,7 +173,7 @@ async def tool_status() -> ToolStatus:
                 f"pg_dump {dump.major} is older than the server ({server}); "
                 f"a dump requires a client at least as new as the server"
             )
-    return ToolStatus(dump, restore, problem)
+    return ToolStatus(dump, restore, problem, psql)
 
 
 async def preflight() -> None:
@@ -199,16 +207,99 @@ async def dump_to(path: Path) -> None:
     )
 
 
+#: How much of the script is examined for session settings. The header (a block of
+#: `SET` lines before the first object) is a few hundred bytes; nothing past this
+#: is ever rewritten, so a row of table data that reads like a `SET` is safe.
+_HEADER_BYTES = 16 * 1024
+_SET_LINE = re.compile(rb"^SET ([a-z_.]+) = [^\n]*;\r?\n", re.MULTILINE)
+
+
+def strip_unknown_settings(header: bytes, known: set[str]) -> bytes:
+    """Drop `SET name = …;` lines whose `name` this server does not have.
+
+    Pure, and deliberately keyed on what the SERVER knows rather than on a list
+    of settings: the next PostgreSQL release will add another one."""
+
+    def keep(match: re.Match[bytes]) -> bytes:
+        name = match.group(1).decode()
+        if name in known or "." in name:  # extension settings (`a.b`) are not in pg_settings
+            return match.group(0)
+        logger.info("restore: dropping `SET %s` — this server has no such setting", name)
+        return b""
+
+    return _SET_LINE.sub(keep, header)
+
+
+async def _server_settings() -> set[str]:
+    from sqlalchemy import text
+
+    from radd.db import engine
+
+    async with engine.connect() as connection:
+        return {row[0] for row in await connection.execute(text("SELECT name FROM pg_settings"))}
+
+
 async def restore_from(path: Path) -> None:
-    """`pg_restore` into the (already emptied) database, all or nothing."""
-    await _run(
-        settings.backup_pg_restore_path,
-        "--no-owner",
-        "--no-acl",
-        "--single-transaction",
-        f"--dbname={database_name()}",
-        str(path),
+    """Replay the archive into the (already emptied) database, all or nothing.
+
+    `pg_restore` turns the archive into SQL and `psql` applies it in ONE
+    transaction with ON_ERROR_STOP, so the all-or-nothing guarantee is unchanged.
+    What changes is that the two no longer have to agree on every session setting
+    (RADD-1543, see the module docstring)."""
+    import os
+
+    known = await _server_settings()
+    env = {**os.environ, **_connection_env()}
+    source = await asyncio.create_subprocess_exec(
+        settings.backup_pg_restore_path, "--no-owner", "--no-acl", "--file=-", str(path),
+        stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE, env=env,
     )
+    sink = await asyncio.create_subprocess_exec(
+        settings.backup_psql_path, "--quiet", "--no-psqlrc", "--single-transaction",
+        "--set=ON_ERROR_STOP=1", f"--dbname={database_name()}",
+        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE, env=env,
+    )
+
+    async def pump() -> None:
+        assert source.stdout is not None and sink.stdin is not None
+        try:
+            header = b""
+            while len(header) < _HEADER_BYTES:
+                chunk = await source.stdout.read(_HEADER_BYTES - len(header))
+                if not chunk:
+                    break
+                header += chunk
+            # Cut at a line boundary so a `SET` line split across the edge is whole.
+            edge = header.rfind(b"\n") + 1
+            sink.stdin.write(strip_unknown_settings(header[:edge], known) + header[edge:])
+            await sink.stdin.drain()
+            while chunk := await source.stdout.read(1 << 20):
+                sink.stdin.write(chunk)
+                await sink.stdin.drain()
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # psql stopped on an error; its stderr says why
+        finally:
+            sink.stdin.close()
+
+    async def drain(stream: asyncio.StreamReader | None) -> str:
+        return (await stream.read()).decode(errors="replace") if stream else ""
+
+    try:
+        _, source_err, sink_err, source_code, sink_code = await asyncio.wait_for(
+            asyncio.gather(pump(), drain(source.stderr), drain(sink.stderr), source.wait(), sink.wait()),
+            timeout=settings.backup_timeout_seconds,
+        )
+    except TimeoutError:
+        for process in (source, sink):
+            if process.returncode is None:
+                process.kill()
+        raise PgToolError(f"restore exceeded {settings.backup_timeout_seconds}s") from None
+    for name, code, err in (("psql", sink_code, sink_err), ("pg_restore", source_code, source_err)):
+        if code != 0:
+            detail = [line for line in err.strip().splitlines() if line.strip()]
+            raise PgToolError(f"{name} failed: {detail[-1] if detail else '(no output)'}")
 
 
 async def list_dump(path: Path) -> int:
