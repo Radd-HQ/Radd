@@ -160,6 +160,13 @@ Radd is one Python process plus Postgres; the database is what you feed.
 | Team (≤150 people, ≤250k items) | 2 vCPU, 1 GB | 2 vCPU, 4 GB | 50 GB + attachments |
 | Heavy (500k+ items, semantic search on) | 2-4 vCPU, 2 GB | 4 vCPU, 8 GB | 100 GB+ + attachments |
 
+The database connection pool is `RADD_DB_POOL_SIZE` (5) plus
+`RADD_DB_MAX_OVERFLOW` (10) per process; a request waits
+`RADD_DB_POOL_TIMEOUT_SECONDS` (30) for a connection. A request's statements
+are cancelled after `RADD_DB_STATEMENT_TIMEOUT_SECONDS` (30, `0` disables) and
+answered with a 504 that says so; imports, backfills and the background loops
+are not bound by it. These defaults have not been tuned under concurrent load.
+
 Notes that matter more than the table: **attachments dominate disk** (budget
 them separately; S3-mode moves them off-box); **semantic search** adds
 pgvector index memory and — with the built-in CPU embedder — slow bulk
@@ -396,11 +403,16 @@ nothing. The message names the key it expects.
 
 ### Two prerequisites
 
-- **`pg_dump`/`pg_restore` are required** — the app refuses to start without
-  them. The image (Debian trixie) ships `postgresql-client-17`; the client major
-  must be **≥** the server's. Only a host-run dev server needs
-  `RADD_BACKUP_TOOLS_OPTIONAL=true`; `compose.dev.yaml` runs in the container
-  where the tools already exist.
+- **`pg_dump`, `pg_restore` and `psql` are required** — the app refuses to start
+  without them. The image (Debian trixie) ships `postgresql-client-17`, which
+  carries all three; the client major must be **≥** the server's. A client NEWER
+  than the server is supported in both directions: before RADD-1543 a 17 client
+  could back up a 16 server but could not restore into it (the archive carried a
+  session setting 16 does not know, and the restore aborted). **If you run
+  PostgreSQL 16 on a release older than that fix, your backups verify and do not
+  restore** — upgrade, then prove it with a restore into a scratch database.
+  Only a host-run dev server needs `RADD_BACKUP_TOOLS_OPTIONAL=true`;
+  `compose.dev.yaml` runs in the container where the tools already exist.
 - **Put `RADD_BACKUP_DIR` on a different disk from the database.** A backup that
   dies with the volume it protects is not a backup. For a bind mount, chown it to
   the container user first: `sudo chown 10001:10001 ./backups` (Kubernetes:

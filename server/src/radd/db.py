@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator
 from datetime import datetime
 
-from sqlalchemy import MetaData, func
+from sqlalchemy import MetaData, func, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -62,15 +62,37 @@ engine = create_async_engine(
     pool_size=settings.db_pool_size,
     max_overflow=settings.db_max_overflow,
     pool_pre_ping=settings.db_pool_pre_ping,
+    pool_timeout=settings.db_pool_timeout_seconds,
     connect_args=_connect_args(),
 )
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def bound_statements(session: AsyncSession) -> None:
+    """Cap this transaction's statements at `db_statement_timeout_seconds` (RADD-1532).
+
+    `SET LOCAL`, so it ends with the transaction and never follows the connection
+    back into the pool, where a background job would inherit a request's limit.
+    The value is an integer from settings, never input: SET takes no bind parameters."""
+    if settings.db_statement_timeout_seconds > 0:
+        ms = int(settings.db_statement_timeout_seconds) * 1000
+        await session.execute(text(f"SET LOCAL statement_timeout = {ms}"))
+
+
+def is_statement_timeout(error: BaseException) -> bool:
+    """Whether a database error is Postgres cancelling a statement for running too long."""
+    return getattr(getattr(error, "orig", None), "sqlstate", None) == QUERY_CANCELED
+
+
+#: SQLSTATE 57014 — query_canceled.
+QUERY_CANCELED = "57014"
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
     """Request-scoped session: commits on success, rolls back on error."""
     async with SessionLocal() as session:
         try:
+            await bound_statements(session)
             yield session
             await session.commit()
         except BaseException:

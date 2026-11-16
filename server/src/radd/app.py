@@ -6,11 +6,13 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, JSONResponse, ORJSONResponse
+from sqlalchemy.exc import DBAPIError
 
 from radd import __version__
 from radd.backup import keyguard as backup_keyguard
 from radd.backup import postgres as backup_postgres
 from radd.config import settings
+from radd.db import is_statement_timeout
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError, UnauthorizedError
 from radd.kernel import entities as kentities
 from radd.kernel import registries
@@ -96,6 +98,31 @@ def create_app() -> FastAPI:
         status = HealthStatus.DEGRADED if lapsed else HealthStatus.OK
         return {"status": status, "version": __version__, "plugin_lease": lease}
 
+    @app.get("/ready", include_in_schema=False)
+    async def ready() -> JSONResponse:
+        """Readiness (RADD-1534): can this process serve a request RIGHT NOW? Unlike
+        /health it asks the database, so an orchestrator stops routing to a pod that
+        cannot reach it. Never use it for liveness: restarting the pod does not bring
+        a database back, and a restart loop would hide which of the two is down."""
+        import asyncio
+
+        from sqlalchemy import text
+
+        from radd.db import engine
+
+        async def ask() -> None:
+            async with engine.connect() as connection:
+                await connection.execute(text("SELECT 1"))
+
+        try:
+            await asyncio.wait_for(ask(), timeout=settings.readiness_timeout_seconds)
+        except Exception as error:  # noqa: BLE001 — any failure to answer is "not ready"
+            return JSONResponse(
+                status_code=503,
+                content={"status": HealthStatus.DEGRADED, "database": type(error).__name__},
+            )
+        return JSONResponse(content={"status": HealthStatus.OK, "version": __version__})
+
     app.add_middleware(CommitBeforeSendMiddleware)
     app.add_middleware(CollectionCompressionMiddleware)
     # Resolves the client IP (trusted-proxy XFF walk) into request.state.client_ip.
@@ -108,6 +135,7 @@ def create_app() -> FastAPI:
         (NotFoundError, 404), (ConflictError, 409), (UnauthorizedError, 401), (ForbiddenError, 403)
     ):
         app.add_exception_handler(error, _detail_handler(status_code))
+    app.add_exception_handler(DBAPIError, _database_error_handler)
 
     from radd.kernel.runtime import PluginRuntime, RuntimeMiddleware
     runtime = PluginRuntime(app)
@@ -131,6 +159,23 @@ def create_app() -> FastAPI:
     _mount_plugin_assets(app)
     _mount_spa(app)
     return app
+
+
+async def _database_error_handler(request: Request, exc: DBAPIError) -> JSONResponse:
+    """A statement cancelled for running past the request limit (RADD-1532) is a 504
+    that says so, not an anonymous 500. Every other database error is re-raised."""
+    if not is_statement_timeout(exc):
+        raise exc
+    return JSONResponse(
+        status_code=504,
+        content={
+            "detail": (
+                "this request's query ran longer than "
+                f"{settings.db_statement_timeout_seconds} seconds and was stopped — "
+                "narrow the search or the date range and try again"
+            )
+        },
+    )
 
 
 def _detail_handler(status_code: int):

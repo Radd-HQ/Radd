@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -31,6 +32,15 @@ class WorkItem(Base, TimestampMixin):
         # LIMIT (measured: 1.05s / 505k buffers for 183 matches at 503k items).
         # The composite index keeps rank-ordered scans inside the project.
         Index("ix_work_items_project_rank", "project_id", "rank"),
+        # RADD-1532, measured on the 501k seed: "recently updated/created" in a
+        # 100k-item project was a parallel scan and sort (about 70 ms), and "my
+        # items by last update" a sort of 20k rows (64 ms); each is now an index
+        # scan under 0.1 ms. Two more live only in the migration (`d1532itemindexes`)
+        # because Alembic cannot express them: a trigram GIN on `title` for SLQ
+        # `title ~`, and a jsonb_path_ops GIN on `custom_fields` for `@>` filters.
+        Index("ix_work_items_project_updated", "project_id", text("updated_at DESC")),
+        Index("ix_work_items_project_created", "project_id", text("created_at DESC")),
+        Index("ix_work_items_assignee_updated", "assignee_id", text("updated_at DESC")),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -134,6 +144,9 @@ class ItemLabel(Base):
     """Item ↔ label attachment; owned by items (labels module knows nothing about items)."""
 
     __tablename__ = "item_labels"
+    # The primary key leads on item_id, so "every item with THIS label" scanned the
+    # whole table (RADD-1532: 20.9 ms → 0.72 ms on 450k rows).
+    __table_args__ = (Index("ix_item_labels_label_id", "label_id"),)
 
     item_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("work_items.id", ondelete="CASCADE"), primary_key=True

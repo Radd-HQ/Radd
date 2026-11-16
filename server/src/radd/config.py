@@ -12,6 +12,17 @@ class Settings(BaseSettings):
     db_pool_size: int = 5
     db_max_overflow: int = 10
     db_pool_pre_ping: bool = True
+    # How long /ready waits for the database before answering 503 (RADD-1534).
+    readiness_timeout_seconds: float = 3.0
+    # How long a request waits for a pooled connection before failing (RADD-1532).
+    # With every connection busy, a queue is honest for a moment and a hang after it.
+    db_pool_timeout_seconds: float = 30.0
+    # A REQUEST's statements are cancelled after this long (RADD-1532), so one
+    # pathological query cannot hold a connection — and a slot in a small pool —
+    # indefinitely. Applied per request (`get_session`), not on the engine:
+    # imports, backfills and the periodic loops run long statements on purpose.
+    # 0 disables.
+    db_statement_timeout_seconds: int = 30
     # Postgres kills an app session idle-in-transaction this long (RADD-845): a leak costs
     # one connection, not a wedged migration. 0 disables; app engine only.
     db_idle_tx_timeout_seconds: int = 600
@@ -182,6 +193,11 @@ class Settings(BaseSettings):
     # Search indexer (see radd/modules/search)
     search_poll_interval: float = 1.0
     search_batch: int = 200
+    # Full-text search ranks only the NEWEST this-many matches (RADD-1533). A common
+    # word matches a large share of the index, and ranking every match before the
+    # LIMIT took 1.9 s at 501k items; ranking a window of the most recently updated
+    # takes about 9 ms. A query with fewer matches than this is ranked in full.
+    search_rank_candidates: int = 1000
     # RADD-1327/1452: a declared entity's search (kernel/entities.py) reads candidate
     # rows in batches of max(50, limit * this) before the read gate trims them — the
     # gate runs per row, so the scan is bounded, not the result.
@@ -507,6 +523,8 @@ class Settings(BaseSettings):
     backup_scheduler_interval: float = 60.0
     backup_pg_dump_path: str = "pg_dump"
     backup_pg_restore_path: str = "pg_restore"
+    # Restore applies the archive through psql (RADD-1543); it ships with the client package.
+    backup_psql_path: str = "psql"
     # pg_dump/pg_restore are runtime REQUIREMENTS: a startup pre-flight refuses
     # to boot without them. True downgrades that to a warning (dev boxes).
     backup_tools_optional: bool = False
