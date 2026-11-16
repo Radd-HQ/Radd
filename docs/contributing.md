@@ -144,6 +144,30 @@ No `latest` tag is published — deployments pin an immutable version, so a
 rollback is a config change rather than a race over what a moving tag points
 at. Deployment itself lives in a separate private repository.
 
+### The drills
+
+`server/scripts/drills.py` runs the two operations an operator depends on, against a
+scratch database it creates and drops (`radd_drill`), and CI runs both on every pull
+request and before every tag:
+
+```bash
+cd server
+uv run python scripts/drills.py restore   # backup → empty database → restore → every table compared
+uv run python scripts/drills.py upgrade   # the previous release's data → alembic upgrade head → boot the app
+```
+
+`pg_dump` and `pg_restore` must match the database server's major version (16).
+
+**After tagging a release, refresh the upgrade fixture** so the next release's
+migrations are tested against this one's data:
+
+```bash
+uv run python scripts/drills.py fixture   # rewrites server/tests/fixtures/upgrade/
+```
+
+Commit the result. The `.key` beside the dump is a test key for that throwaway
+database, committed so the drill can show that stored credentials survive an upgrade.
+
 ## Reporting issues
 
 Issues go on the tracker at **https://project.radd-hq.com** — which is Radd,

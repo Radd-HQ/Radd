@@ -58,6 +58,52 @@ jobs:
           RADD_TEST_DATABASE_URL: postgresql+psycopg://radd:radd@localhost:5432/radd_test
         run: uv run pytest -q
 
+  # RADD-1526: the two operations an operator performs on their worst day, run
+  # for real. `docs/deploy.md` makes restore the only rollback path, and before
+  # this nothing called it; migrations had only ever run on an EMPTY database.
+  drills:
+    name: drills (backup → restore, upgrade from the previous release)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: radd
+          POSTGRES_PASSWORD: radd
+          POSTGRES_DB: radd_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U radd -d radd_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Each drill drops and re-creates its own `radd_drill` on this server.
+      RADD_DRILL_DATABASE_URL: postgresql+psycopg://radd:radd@localhost:5432/radd_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: server/uv.lock
+      - name: Install
+        working-directory: server
+        run: uv sync --locked
+      # pg_dump/pg_restore must match the SERVER's major version: a newer
+      # pg_restore emits settings an older server refuses.
+      - name: PostgreSQL 16 client tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+      - name: Restore drill (backup, empty database, restore, compare every table)
+        working-directory: server
+        run: uv run python scripts/drills.py restore
+      - name: Upgrade drill (the previous release's data, alembic upgrade head, boot the app)
+        working-directory: server
+        run: uv run python scripts/drills.py upgrade
+
   frontend:
     name: frontend (tests, host + plugin builds, Chromium smoke)
     runs-on: ubuntu-latest
