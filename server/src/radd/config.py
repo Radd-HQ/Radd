@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     # Postgres kills an app session idle-in-transaction this long (RADD-845): a leak costs
     # one connection, not a wedged migration. 0 disables; app engine only.
     db_idle_tx_timeout_seconds: int = 600
+    # Observability (radd/observability.py, RADD-1530).
+    # text = uvicorn's lines, as before; json = one object per line with the request ID.
+    log_format: str = "text"
+    # /metrics in the Prometheus text format. Off by default: it names every route
+    # and its traffic, which a public instance should not publish. With a token set,
+    # scrapers must send `Authorization: Bearer <token>`.
+    metrics_enabled: bool = False
+    metrics_token: str = ""
     api_title: str = "Radd"
     api_prefix: str = "/api/v1"
     # Built SPA to serve at / (empty or missing dir = API-only). Default: the repo's web/dist.

@@ -38,6 +38,8 @@ env:
   RADD_DATABASE_URL: "" # e.g. postgresql+psycopg://radd:…@pg:5432/radd
   RADD_APP_BASE_URL: "" # absolute URL used in emails/links
   RADD_SESSION_COOKIE_SECURE: "true"
+  RADD_LOG_FORMAT: "json" # one object per line, with the request ID (docs/deploy.md "Monitoring")
+  RADD_METRICS_ENABLED: "" # "true" serves /metrics; put RADD_METRICS_TOKEN in the Secret
 
 # Extra env sourced from an existing Secret (SMTP/OIDC/LDAP/S3/AI keys…).
 envFromSecret: ""

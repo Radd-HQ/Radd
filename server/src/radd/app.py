@@ -1,14 +1,16 @@
+import asyncio
+import secrets
 from contextlib import asynccontextmanager
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, JSONResponse, ORJSONResponse
 from sqlalchemy.exc import DBAPIError
 
-from radd import __version__
+from radd import __version__, observability
 from radd.backup import keyguard as backup_keyguard
 from radd.backup import postgres as backup_postgres
 from radd.config import settings
@@ -62,13 +64,17 @@ def create_app() -> FastAPI:
         # RADD-872: no periodic tick runs until every plugin has started (a run
         # function may touch a table a later plugin's startup ensures).
         admission.gate.hold_ticks()
+        loop_watch: asyncio.Task | None = None
         try:
             for plugin in plugins:
                 await runtime.start_plugin(plugin)
             admission.gate.release_ticks()
             await live.start()
+            loop_watch = asyncio.create_task(observability.watch_event_loop())
             yield
         finally:
+            if loop_watch is not None:
+                loop_watch.cancel()
             # RADD-1372: each step guarded so none skips the next — the reconciler stops
             # first (nothing enables a plugin mid-shutdown), then every on_shutdown (collab
             # flushes its rooms), then this process's acknowledgement is withdrawn.
@@ -99,13 +105,25 @@ def create_app() -> FastAPI:
         status = HealthStatus.DEGRADED if lapsed else HealthStatus.OK
         return {"status": status, "version": __version__, "plugin_lease": lease}
 
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics_endpoint(request: Request) -> Response:
+        """Prometheus scrape target (RADD-1530). Absent unless enabled, so a public
+        instance does not publish its routes and traffic by default."""
+        if not settings.metrics_enabled:
+            raise HTTPException(status_code=404)
+        if settings.metrics_token:
+            sent = request.headers.get("authorization", "")
+            if not secrets.compare_digest(sent, f"Bearer {settings.metrics_token}"):
+                raise HTTPException(status_code=401)
+        body = observability.render_metrics(await observability.live_metrics())
+        return Response(body, media_type="text/plain; version=0.0.4; charset=utf-8")
+
     @app.get("/ready", include_in_schema=False)
     async def ready() -> JSONResponse:
         """Readiness (RADD-1534): can this process serve a request RIGHT NOW? Unlike
         /health it asks the database, so an orchestrator stops routing to a pod that
         cannot reach it. Never use it for liveness: restarting the pod does not bring
         a database back, and a restart loop would hide which of the two is down."""
-        import asyncio
 
         from sqlalchemy import text
 
@@ -133,6 +151,10 @@ def create_app() -> FastAPI:
     # Outermost: while a restore is replacing the database, everything but the
     # backup status/run endpoints answers 503 (radd/maintenance.py).
     app.add_middleware(MaintenanceMiddleware)
+    # Outermost of all (RADD-1530): the request ID exists before anything logs, and
+    # the latency it records includes every other middleware.
+    app.add_middleware(observability.ObservabilityMiddleware)
+    observability.configure_logging()
 
     for error, status_code in (
         (NotFoundError, 404), (ConflictError, 409), (UnauthorizedError, 401), (ForbiddenError, 403)

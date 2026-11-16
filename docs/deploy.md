@@ -192,6 +192,41 @@ indexing (~20 texts/s: fine incrementally, hours for a 500k-item backfill;
 use a GPU TEI for bulk); backups need headroom for one full artifact beside
 the data.
 
+## Monitoring
+
+Radd is observable from outside the app. Set these and point a scraper at it:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `RADD_LOG_FORMAT` | `text` | `json` writes one object per line, with the request ID and any structured fields |
+| `RADD_METRICS_ENABLED` | `false` | serves `/metrics` in the Prometheus text format |
+| `RADD_METRICS_TOKEN` | empty | when set, a scraper must send `Authorization: Bearer <token>` |
+
+Every response carries `X-Request-ID` (a proxy's own ID is kept when it sends
+one). Search the logs for it: every line written while serving that request has
+it, including errors reported from the browser (`radd.client_error`).
+
+Two probes: **`/health`** for liveness (it does not ask the database, on purpose:
+restarting a pod does not bring a database back) and **`/ready`** for readiness
+(it does, and answers 503 without one).
+
+What `/metrics` exposes, and the alerts worth having:
+
+| Series | Alert when |
+|---|---|
+| `radd_http_requests_total{route,status}` | the share of `5xx` rises |
+| `radd_http_request_duration_seconds` (histogram, by route) | p95 for a route you care about passes your budget |
+| `radd_event_loop_lag_seconds` | above ~0.5 for minutes: something is blocking the one event loop |
+| `radd_db_pool_connections{state}` | `in_use` sits at pool size plus overflow |
+| `radd_consumer_lag_events{consumer}`, `radd_consumer_seconds_since_progress` | lag grows while the cursor does not move: notifications, webhooks, automations or search are behind. A long-running import holds consumers back until it commits; that shows here |
+| `radd_backup_age_seconds` | older than twice your schedule's interval |
+
+Also alert, outside Radd, on the instance answering at all and on the
+certificate's expiry at the ingress: both have taken an instance down, and both
+times a user noticed first.
+
+Metrics are per process. With the worker split on, scrape both pods.
+
 ## One replica, on purpose
 
 Run **one app replica** (plus at most the optional worker split below).
