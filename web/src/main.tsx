@@ -12,7 +12,11 @@ import { RouterProvider } from "@tanstack/react-router";
 import { createAppRouter } from "./router";
 import { applyAppearance } from "./lib/theme";
 import { bindQueryClient, syncStaticPlugins } from "./lib/plugin-loader";
+import { reloadOnStaleBuild } from "./lib/stale-build";
 import "./index.css";
+
+// A deploy replaces every hashed chunk; an open tab reloads onto the new build (RADD-1527).
+reloadOnStaleBuild();
 
 // Theme/density before first paint (spec 39) — avoids a dark→light flash.
 applyAppearance();
