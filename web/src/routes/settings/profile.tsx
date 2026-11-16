@@ -16,6 +16,7 @@ import { Select } from "../../components/Select";
 import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TotpPanel } from "../../components/settings/TotpPanel";
+import { PasswordPanel } from "../../components/settings/PasswordPanel";
 import { ProfilePicture } from "../../components/settings/ProfilePicture";
 
 /** Curated avatar palette (any hex works via the color input). */
@@ -58,6 +59,16 @@ export function ProfileSettingsPage() {
           Notification settings
         </Link>
       </section>
+
+      {/* RADD-1529: only where Radd holds the password — a directory or SSO
+          account changes it at its provider, and is not offered a form that would refuse. */}
+      {user?.has_local_password && (
+        <section className="mt-8 border-t border-subtle pt-6">
+          <h2 className="mb-1 text-sm font-semibold text-fg">Password</h2>
+          <p className="mb-4 text-xs text-fg-muted">The password you sign in to Radd with.</p>
+          <PasswordPanel />
+        </section>
+      )}
 
       <section className="mt-8 border-t border-subtle pt-6">
         <h2 className="mb-1 text-sm font-semibold text-fg">Two-factor authentication</h2>

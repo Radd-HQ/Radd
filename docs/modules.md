@@ -111,7 +111,7 @@ People, sign-in sessions, API tokens and roles.
 
 Owns `users`, `sessions`, `api_tokens`, `roles` and `global_role_grants` (subject × role × scope). The seam is `authz.require(session, user, Permission.X, project=…|space_id=…)`: 403 or the effective set (direct, team and group grants plus the Baseline floor; a key's `scopes` intersect inside it). Routes take `CurrentUser` or, anonymously, `Actor`; logins mint through `create_session`. `principals.BUILTIN_ROWS` (converged at boot) seeds the two principals and the Automation SERVICE account (`SYSTEM_ACTOR_ID`) integrations write as; `require_not_builtin` guards them; `MACHINE_SOURCES` = no person behind the credential. Trap: a new user-id column must be handled by `merge_users` (`_MERGE_REPOINT`), or `tests/test_merge_coverage.py` fails.
 
-- **Events:** `project.public_access_changed`, `user.created`, `user.updated`, `user.deleted`, `role.created`, `role.updated`, `role.deleted`, `auth.view_as_started`, `auth.view_as_ended`, `auth.mfa_reset`
+- **Events:** `project.public_access_changed`, `user.created`, `user.updated`, `user.deleted`, `role.created`, `role.updated`, `role.deleted`, `auth.view_as_started`, `auth.view_as_ended`, `auth.mfa_reset`, `auth.password_changed`, `auth.password_reset`
 - **Permissions:** `global.manage (global)`, `project.create (global)`, `project.manage (project)`, `project.delete (global)`, `user.manage (global)`
 - **Settings:** `require_mfa (instance)`
 - **Access:** CRUD resources `member (project, project.manage)`, `role (global, global.manage)`, `user (global, user.manage)`, `service_account (global, global.manage)`

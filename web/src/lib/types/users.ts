@@ -19,6 +19,8 @@ export interface Me {
   avatar_emoji?: string | null;
   avatar_url?: string | null;
   timezone?: string;
+  /** RADD-1529: Radd holds this account's password — Profile offers the change. */
+  has_local_password?: boolean;
   /** RADD-836 U1: set while an admin previews this account read-only — the
    * rest of the payload describes the TARGET, which is the point. */
   view_as?: { real_id: string; real_name: string } | null;
@@ -135,6 +137,8 @@ export interface User {
   last_login_at: string | null;
   /** RADD-1279: holds a confirmed TOTP enrolment (admin user list only). */
   mfa_enabled?: boolean;
+  /** RADD-1529: Radd holds this account's password, so it can be reset here. */
+  has_local_password?: boolean;
 }
 
 /** One person from the member-floor directory, `GET /users/directory` (RADD-769): enough to NAME

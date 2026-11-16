@@ -199,6 +199,7 @@ async def _me_read(session: AsyncSession, user: User) -> MeRead:
         avatar_emoji=user.avatar_emoji,
         avatar_url=user.avatar_url,
         timezone=user.timezone,
+        has_local_password=bool(getattr(user, "has_local_password", False)),
     )
 
 

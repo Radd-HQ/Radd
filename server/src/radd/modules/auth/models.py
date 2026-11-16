@@ -63,6 +63,13 @@ class User(Base, TimestampMixin):
     preferences: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
 
     @property
+    def has_local_password(self) -> bool:
+        """RADD-1529 — whether Radd itself holds this account's password, which is
+        what decides whether a change or an admin reset can be offered at all. A
+        directory or SSO account's password is its provider's."""
+        return self.source == UserSource.LOCAL and self.password_hash is not None
+
+    @property
     def avatar_url(self) -> str | None:
         """RADD-1295 — the ONE place a person's picture URL is decided: an
         uploaded image, else the identity provider's, else None (the SPA draws

@@ -620,6 +620,9 @@ class AuthEvent(StrEnum):
     VIEW_AS_STARTED = "auth.view_as_started"
     VIEW_AS_ENDED = "auth.view_as_ended"
     MFA_RESET = "auth.mfa_reset"  # RADD-1279: an admin removed someone's TOTP enrolment
+    # RADD-1529: neither carries the password or its hash.
+    PASSWORD_CHANGED = "auth.password_changed"  # the person changed their own
+    PASSWORD_RESET = "auth.password_reset"  # an admin set someone else's
     # Spec 123: the spec-121 switches in the project's own history (the grant
     # rows underneath emit role.updated too).
     PROJECT_PUBLIC_ACCESS_CHANGED = "project.public_access_changed"

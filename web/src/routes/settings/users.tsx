@@ -1,3 +1,4 @@
+import { ResetPasswordDialog } from "../../components/settings/PasswordPanel";
 import { Fragment, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ChevronDown, ChevronRight, Lock, UserRound } from "lucide-react";
@@ -53,6 +54,7 @@ export function UsersSettingsPage() {
   useEffect(() => setPage(1), [debouncedQ, source, active]);
   // Spec 89: the account queued for hard deletion (its dialog owns the confirm).
   const [deleting, setDeleting] = useState<User | null>(null);
+  const [resettingPassword, setResettingPassword] = useState<User | null>(null);
   const users = useQuery({
     ...usersAdminPageQuery({ q: debouncedQ, source, active, page }),
     enabled: canView,
@@ -172,6 +174,7 @@ export function UsersSettingsPage() {
               busy={patchUser.isPending || resetMfa.isPending}
               onResetMfa={(user) => void onResetMfa(user)}
               onDelete={setDeleting}
+              onResetPassword={setResettingPassword}
               onViewAs={async (user) => {
                 // RADD-836 U1: a full reload swaps every client cache to the
                 // previewed account; the server enforces read-only.
@@ -197,6 +200,12 @@ export function UsersSettingsPage() {
           {resetMfa.isError && <ErrorText className="mt-2" error={resetMfa.error} />}
           {confirmDialog}
           {isInstanceAdmin && <DuplicatesSection />}
+          {resettingPassword && (
+            <ResetPasswordDialog
+              user={resettingPassword}
+              onClose={() => setResettingPassword(null)}
+            />
+          )}
           {deleting && (
             <DeleteUserDialog
               user={deleting}
@@ -218,6 +227,7 @@ function UsersTable({
   onChangeRole,
   onDelete,
   onViewAs,
+  onResetPassword,
   onResetMfa,
   busy,
 }: {
@@ -228,6 +238,7 @@ function UsersTable({
   onChangeRole: (userId: string, role: InstanceRoleValue) => void;
   onDelete: (user: User) => void;
   onViewAs: (user: User) => Promise<void>;
+  onResetPassword: (user: User) => void;
   onResetMfa: (user: User) => void;
   busy: boolean;
 }) {
@@ -354,6 +365,19 @@ function UsersTable({
                         title="See the app exactly as this person does (read-only)"
                       >
                         View as
+                      </button>
+                    )}
+                    {/* RADD-1529: only for an account whose password Radd holds. Their own
+                        is changed in Profile, where the current one is required. */}
+                    {!self && user.has_local_password && (
+                      <button
+                        type="button"
+                        onClick={() => onResetPassword(user)}
+                        disabled={busy}
+                        className="mr-1.5 rounded border border-strong px-2 py-0.5 text-meta text-fg-secondary hover:border-accent hover:text-accent-text cursor-pointer disabled:opacity-50"
+                        title="Set a new password and sign this person out everywhere"
+                      >
+                        Set password
                       </button>
                     )}
                     {!self && (

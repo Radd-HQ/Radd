@@ -38,6 +38,7 @@ export const apiTokenPath = (tokenId: string) => `${ApiPath.tokens}/${tokenId}`;
 export const apiUserPath = (userId: string) => `${ApiPath.users}/${userId}`;
 /** RADD-1279: DELETE removes one person's TOTP enrolment (admin reset). */
 export const apiUserTotpPath = (userId: string) => `${ApiPath.users}/${userId}/totp`;
+export const apiUserPasswordPath = (userId: string) => `${ApiPath.users}/${userId}/password`;
 /** GET — every atom this person holds, and which source supplied it (RADD-779). */
 export const apiUserPermissionsPath = (userId: string) =>
   `${ApiPath.users}/${userId}/permissions`;

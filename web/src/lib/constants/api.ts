@@ -15,6 +15,7 @@ export const ApiPath = {
   viewAs: "/auth/view-as",
   // TOTP: GET status / DELETE {code}; setup + confirm below.
   totp: "/auth/totp",
+  password: "/auth/password",
   totpSetup: "/auth/totp/setup",
   totpConfirm: "/auth/totp/confirm",
   totpRecoveryCodes: "/auth/totp/recovery-codes",

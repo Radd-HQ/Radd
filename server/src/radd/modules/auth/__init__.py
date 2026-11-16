@@ -12,6 +12,7 @@ from .roles_router import (
 )
 from .router import auth_router, service_account_router, token_router, user_router
 from .mfa_router import mfa_admin_router, mfa_enrollment_router
+from .password_router import password_admin_router, password_router
 from . import mfa_policy
 
 # After the router chain on purpose: mcptools joins the loaded graph (RADD-889).
@@ -66,6 +67,15 @@ plugin = RaddPlugin(
             AuthEvent.MFA_RESET, "Two-factor reset", "Sign-in",
             trigger=False, entity_type="user",
         ),
+        # RADD-1529: a local password was changed by its owner, or set by an admin.
+        EventTypeSpec(
+            AuthEvent.PASSWORD_CHANGED, "Password changed", "Sign-in",
+            trigger=False, entity_type="user",
+        ),
+        EventTypeSpec(
+            AuthEvent.PASSWORD_RESET, "Password reset by an admin", "Sign-in",
+            trigger=False, entity_type="user",
+        ),
     ),
     # RADD-1279: the instance MFA policy. Enforced in `create_session`; the
     # guard refuses turning it on for an admin who is not enrolled themselves.
@@ -102,6 +112,8 @@ plugin = RaddPlugin(
         role_grant_router,
         permission_router,
         mfa_enrollment_router,
+        password_router,
+        password_admin_router,
         mfa_admin_router,
         ),
     mcp_tools=mcptools.MCP_TOOLS,

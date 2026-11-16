@@ -15,6 +15,27 @@ Email = Annotated[
 ]
 
 
+_NewPassword = Field(min_length=8, max_length=200)
+
+
+class PasswordChange(BaseModel):
+    """`POST /auth/password` (RADD-1529): the person proves the current one."""
+
+    current_password: str = Field(max_length=200)
+    new_password: str = _NewPassword
+
+
+class PasswordAdminSet(BaseModel):
+    """`PUT /users/{id}/password` (RADD-1529): an administrator sets it."""
+
+    new_password: str = _NewPassword
+
+
+class PasswordChangeResult(BaseModel):
+    #: Sessions signed out by the change (the caller's own is kept on a self-change).
+    sessions_ended: int
+
+
 class LoginRequest(BaseModel):
     email: Email
     password: str = Field(max_length=200)
@@ -89,6 +110,8 @@ class UserRead(BaseModel):
     # RADD-1279: holds a CONFIRMED TOTP enrolment. Filled by the router in one
     # query per page (`mfa_policy.enrolled_ids`), never per row.
     mfa_enabled: bool = False
+    # RADD-1529: Radd holds this account's password, so it can be changed here.
+    has_local_password: bool = False
 
 
 class UserDirectoryEntry(BaseModel):
@@ -302,6 +325,8 @@ class MeRead(BaseModel):
     avatar_emoji: str | None = None
     avatar_url: str | None = None  # RADD-1295: see User.avatar_url
     timezone: str = ""
+    #: RADD-1529: Radd holds this account's password — Profile offers the change.
+    has_local_password: bool = False
 
 
 class ProfileUpdate(BaseModel):
