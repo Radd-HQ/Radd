@@ -46,12 +46,16 @@ workers:
   enabled: false
   replicas: 1
 
-# Filesystem attachments need a PVC; set storage.s3=true (and the RADD_S3_*
-# env) to skip the volume entirely. /data also holds the backup ENCRYPTION KEY
-# (RADD_BACKUP_KEY_FILE), which is why it stays even on an S3 deploy.
+# The /data volume. It always exists: it holds the ENCRYPTION KEY
+# (RADD_BACKUP_KEY_FILE) for backups and stored credentials, and the scripts
+# interpreter. With filesystem attachments it holds those too and takes `size`;
+# with storage.s3=true (and the RADD_S3_* env) attachments live in the bucket
+# and the volume shrinks to `stateSize`. The server refuses to start if the key
+# this database was written with is missing (RADD_BACKUP_KEY_ADOPT overrides).
 storage:
   s3: false
   size: 10Gi
+  stateSize: 1Gi
   storageClassName: ""
 
 # Backup artifacts (spec 99). The image defaults RADD_BACKUP_DIR to

@@ -72,10 +72,11 @@ together. The migrate Job mounts neither (it only touches the database).
 volumeMounts:
   - name: plugins
     mountPath: /data/plugins
-{{- if not .Values.storage.s3 }}
+  # ALWAYS mounted (RADD-1525): /data holds the encryption key and the scripts
+  # interpreter whatever the attachment backend is. Leaving it off for S3 put the
+  # key on the pod's ephemeral layer, where a restart replaced it.
   - name: data
     mountPath: /data
-{{- end }}
 {{- if .Values.backups.enabled }}
   - name: backups
     mountPath: {{ .Values.backups.mountPath }}
@@ -87,11 +88,9 @@ volumes:
   - name: plugins
     persistentVolumeClaim:
       claimName: {{ .Release.Name }}-plugins
-{{- if not .Values.storage.s3 }}
   - name: data
     persistentVolumeClaim:
       claimName: {{ .Release.Name }}-data
-{{- end }}
 {{- if .Values.backups.enabled }}
   - name: backups
     persistentVolumeClaim:

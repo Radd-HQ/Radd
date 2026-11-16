@@ -8,6 +8,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, JSONResponse, ORJSONResponse
 
 from radd import __version__
+from radd.backup import keyguard as backup_keyguard
 from radd.backup import postgres as backup_postgres
 from radd.config import settings
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError, UnauthorizedError
@@ -49,6 +50,9 @@ def create_app() -> FastAPI:
         # a backup system that silently cannot back up is worse than one that
         # refuses to start (RADD_BACKUP_TOOLS_OPTIONAL downgrades this to a warning).
         await backup_postgres.preflight()
+        # The key that encrypts backups and stored credentials must be the one this
+        # database was written with: a missing key file is a lost volume, not a first boot.
+        await backup_keyguard.preflight()
         from radd.kernel import admission
         from radd.modules.pluginmgr import live
         live.bind(runtime)

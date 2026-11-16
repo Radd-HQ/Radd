@@ -1,4 +1,6 @@
-{{- if not .Values.storage.s3 }}
+# Created for EVERY storage mode (RADD-1525). With S3 attachments it still holds
+# the encryption key (RADD_BACKUP_KEY_FILE) and /data/scripts, so it is small
+# (storage.stateSize) rather than absent.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -13,8 +15,7 @@ spec:
   {{- end }}
   resources:
     requests:
-      storage: {{ .Values.storage.size }}
-{{- end }}
+      storage: {{ ternary .Values.storage.stateSize .Values.storage.size .Values.storage.s3 }}
 {{- if .Values.backups.enabled }}
 ---
 # Backup artifacts (spec 99). Separate from -data on purpose: the encryption

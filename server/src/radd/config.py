@@ -499,6 +499,11 @@ class Settings(BaseSettings):
     backup_dir: str = "/opt/radd/backups"
     backup_key_file: str = "/data/radd-backup.key"
     backup_encryption: bool = True
+    # The database records which key it was encrypted with, and startup refuses a
+    # missing or different key file (radd/backup/keyguard.py, RADD-1525). True is the
+    # operator saying the recorded key is gone for good: the present key is adopted,
+    # and whatever the old one encrypted stays unreadable.
+    backup_key_adopt: bool = False
     backup_scheduler_interval: float = 60.0
     backup_pg_dump_path: str = "pg_dump"
     backup_pg_restore_path: str = "pg_restore"

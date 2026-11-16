@@ -375,6 +375,25 @@ every artifact is unrecoverable — that separation is the point: one stolen
 volume yields either the ciphertext or the key, never both. Set
 `RADD_BACKUP_ENCRYPTION=false` only if the filesystem is already encrypted.
 
+The same key encrypts the credentials stored in the database (webhook secrets,
+SSO, mail, AI and connector tokens), so **the database records which key it was
+written with, and Radd refuses to start if the key file is missing or is a
+different key.** A missing file on a running instance means a lost or unmounted
+volume, not a first boot; a freshly minted key would start cleanly and decrypt
+nothing. The message names the key it expects.
+
+- **Restoring onto a new host:** put the original key file in place before the
+  first start.
+- **The key is gone for good:** start once with `RADD_BACKUP_KEY_ADOPT=true`.
+  The present key is recorded instead; every backup and stored credential from
+  before is unreadable and the credentials must be entered again. Unset it
+  afterwards.
+- **Helm:** the `-data` volume holding the key exists in every storage mode. With
+  `storage.s3=true` it is `storage.stateSize` (1Gi) instead of absent — before
+  RADD-1525 an S3 deployment kept the key on the pod's ephemeral layer. If you
+  ran one, copy the key off the pod (`kubectl cp`) BEFORE upgrading the chart,
+  and put it on the new volume.
+
 ### Two prerequisites
 
 - **`pg_dump`/`pg_restore` are required** — the app refuses to start without
