@@ -8,6 +8,11 @@ metadata:
     app.kubernetes.io/component: web
 spec:
   replicas: {{ .Values.replicas }}
+  # ONE pod at a time, on purpose (RADD-1534). The default RollingUpdate starts the
+  # new pod before stopping the old one: two processes then run every timer and
+  # consumer at once, and a ReadWriteOnce volume can deadlock across nodes.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/instance: {{ .Release.Name }}
@@ -39,17 +44,25 @@ spec:
               value: "false"
             {{- end }}
           {{- include "radd.envFrom" . | nindent 10 }}
+          # Readiness asks the DATABASE (/ready runs a query): a pod that cannot
+          # reach it must stop receiving traffic. Liveness stays on /health, which
+          # deliberately does not: restarting a pod does not bring a database back.
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: 8000
             initialDelaySeconds: 3
+            periodSeconds: 10
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /health
               port: 8000
             initialDelaySeconds: 10
             periodSeconds: 30
+          {{- with .Values.containerSecurityContext }}
+          securityContext: {{ toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.resources }}
           resources: {{ toYaml . | nindent 12 }}
           {{- end }}

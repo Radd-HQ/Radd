@@ -2,8 +2,10 @@
 # also runs the background workers. Set workers.enabled=true to split.
 
 image:
-  repository: radd # push the Containerfile image to your registry
-  tag: "0.33.0" # pin a published version — there is deliberately no `latest` tag
+  repository: ghcr.io/radd-hq/radd # or your own registry's copy of the image
+  # Pin a published version — there is deliberately no `latest` tag. Empty falls
+  # back to the chart's appVersion, which is NOT kept in step with releases: set it.
+  tag: ""
   pullPolicy: IfNotPresent
 
 # Names of existing docker-registry Secrets, for a private registry (e.g. a
@@ -17,6 +19,18 @@ replicas: 1
 # docs/deploy.md has always prescribed this; the chart now implements it.
 podSecurityContext:
   fsGroup: 10001
+
+# Applied to both containers (RADD-1534). The image already runs as a non-root
+# user; this makes the cluster hold it to that. The root filesystem is left
+# writable: the scripts interpreter and plugin builds write outside the volumes.
+containerSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
 
 # The complete RADD_* environment (see docs/deploy.md for the reference
 # table generated from config.py). databaseUrl is REQUIRED.
@@ -73,7 +87,17 @@ backups:
 migration:
   enabled: true # pre-install/pre-upgrade Job running `alembic upgrade head`
 
-resources: {}
+# Requests and a memory limit, so the scheduler places the pod on what it needs
+# and a leak is contained (RADD-1534: `{}` let a pod be sized from whatever the
+# node had at boot). These fit the "Team" row of docs/deploy.md's sizing table;
+# raise them for the "Heavy" row. No CPU limit: throttling a single event loop
+# turns a busy moment into latency for everyone.
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    memory: 2Gi
 nodeSelector: {}
 tolerations: []
 
