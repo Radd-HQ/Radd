@@ -42,6 +42,22 @@ jobs:
   image:
     needs: test
     runs-on: ubuntu-latest
+    # The built image is STARTED against this database before it is pushed
+    # (RADD-1535). Three tags were failed publishes; none of them had ever run.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: radd
+          POSTGRES_PASSWORD: radd
+          POSTGRES_DB: radd
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U radd -d radd"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,7 +89,73 @@ jobs:
       # came from other ghcr images (the plain `docker push` path fails with
       # "unknown blob" on those). Provenance attestations are off so the tag is
       # a plain image manifest that `podman pull` and the cluster read as-is.
-      - name: Build and push
+      # Build into the local daemon first: nothing is pushed until the image has
+      # been started and scanned. The push below rebuilds from the same builder
+      # cache, so it publishes exactly these layers.
+      - name: Build
+        run: |
+          set -e
+          docker buildx build --load --provenance=false -f Containerfile \
+            --build-arg RADD_VERSION="${{ steps.meta.outputs.version }}" \
+            -t "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" .
+
+      # The image's own command: `alembic upgrade head`, then serve. So this one
+      # step proves the migrations run on a real PostgreSQL, the app starts, and
+      # it can reach its database (/ready asks it) — on the interpreter and the
+      # client tools the image actually ships.
+      - name: Start the image and wait for it to be ready
+        run: |
+          set -euo pipefail
+          IMG="${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+          docker run -d --name radd-smoke --network host \
+            -e RADD_DATABASE_URL=postgresql+psycopg://radd:radd@localhost:5432/radd \
+            -e RADD_APP_BASE_URL=http://localhost:8000 \
+            "$IMG"
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:8000/ready >/dev/null 2>&1; then
+              echo "ready after ${attempt} attempt(s)"; break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' radd-smoke)" != "true" ]; then
+              echo "the container exited before becoming ready:"; docker logs radd-smoke; exit 1
+            fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8000/ready
+          curl -fsS http://localhost:8000/health | grep -q "${{ steps.meta.outputs.version }}"
+          # The SPA shell is in the image, and a missing asset is a 404, not the shell.
+          curl -fsS http://localhost:8000/ | grep -q '<div id="root">'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/assets/no-such-chunk.js)" = 404
+          # The backup tools the image carries can see the server it will back up.
+          docker exec radd-smoke python -m radd.backup status
+          # A backup taken and restored by the image's OWN client tools against this
+          # server: the image shipped client 17 and could not restore into 16 (RADD-1543).
+          docker exec radd-smoke python -m radd.backup create --no-attachments
+          ARTIFACT="$(docker exec radd-smoke python -m radd.backup list | awk '/^radd-/{print $1; exit}')"
+          docker exec radd-smoke python -m radd.backup restore "$ARTIFACT" --yes
+          curl -fsS --retry 5 --retry-delay 2 --retry-all-errors http://localhost:8000/ready
+          # It must stop when asked: the server is PID 1 and runs its shutdown (RADD-1534).
+          docker stop -t 20 radd-smoke
+          docker logs radd-smoke 2>&1 | grep -q "Application shutdown complete"
+          docker rm -f radd-smoke
+
+      # A fixable CRITICAL or HIGH stops the release HERE, before anything is
+      # published (RADD-1535; the full report still attaches further down).
+      # Unfixed findings do not: most base-image CVEs have no fix to wait for.
+      # To ship past one deliberately, list its ID in .trivyignore with the reason.
+      - name: Install trivy
+        run: |
+          set -euo pipefail
+          curl -sSfL --retry 5 --retry-delay 3 --retry-all-errors \
+            "https://raw.githubusercontent.com/aquasecurity/trivy/${TRIVY_VERSION}/contrib/install.sh" \
+            | sh -s -- -b /usr/local/bin "$TRIVY_VERSION"
+          trivy --version | head -1
+      - name: Refuse fixable critical and high vulnerabilities
+        run: |
+          trivy image --scanners vuln -q --exit-code 1 --ignore-unfixed \
+            --severity CRITICAL,HIGH \
+            "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+
+      - name: Push
         run: |
           set -e
           docker buildx build --push --provenance=false -f Containerfile \
@@ -84,16 +166,16 @@ jobs:
       # connection on the download once left the step green with no syft on
       # PATH and the SBOMs silently missing from a release. The final check
       # turns a missing binary into a red step.
-      - name: Install syft and trivy
+      # The installer comes from the SAME tag as the tool it installs, not from
+      # `main`: this job holds a token that can push packages (RADD-1535).
+      - name: Install syft
         run: |
           set -euo pipefail
-          fetch() { curl -sSfL --retry 5 --retry-delay 3 --retry-all-errors "$1"; }
-          fetch https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+          curl -sSfL --retry 5 --retry-delay 3 --retry-all-errors \
+            "https://raw.githubusercontent.com/anchore/syft/${SYFT_VERSION}/install.sh" \
             | sh -s -- -b /usr/local/bin "$SYFT_VERSION"
-          fetch https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin "$TRIVY_VERSION"
           command -v syft >/dev/null && command -v trivy >/dev/null
-          syft version | head -2; trivy --version | head -1
+          syft version | head -2
 
       # RADD-703/704: the tag publishes its changelog — a categorized GitHub
       # release and a page under Radd -> Release notes. The LOGIC lives in
@@ -153,6 +235,32 @@ jobs:
           echo "CRITICAL/HIGH summary (full detail in the release assets):"
           trivy convert -f table --severity CRITICAL,HIGH "radd-$V-image-vulns.json"
           trivy convert -f table --severity CRITICAL,HIGH "radd-$V-web-vulns.json"
+
+      # The three steps above cannot fail the job, on purpose: the image is already
+      # published and a tracker outage must not turn a good release red. But a
+      # release with no notes, no SBOM or no vulnerability report is not what was
+      # promised, and it used to pass silently. This step is the one that says so.
+      - name: The release carries its notes, SBOMs and vulnerability reports
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          V="${{ steps.meta.outputs.version }}"
+          gh release view "v$V" --repo "${{ github.repository }}" --json body,assets > release.json
+          python3 - "$V" <<'PY'
+          import json, sys
+          version = sys.argv[1]
+          release = json.load(open("release.json"))
+          have = {asset["name"] for asset in release["assets"]}
+          want = {f"radd-{version}-image.cdx.json", f"radd-{version}-web.cdx.json",
+                  f"radd-{version}-image-vulns.json", f"radd-{version}-web-vulns.json"}
+          problems = [f"missing asset {name}" for name in sorted(want - have)]
+          if not release["body"].strip():
+              problems.append("the release has no notes")
+          for problem in problems:
+              print(f"::error::{problem}")
+          sys.exit(1 if problems else 0)
+          PY
 
       - name: Deploy instructions
         run: |

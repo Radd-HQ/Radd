@@ -1,0 +1,33 @@
+# Dependency updates as a few grouped pull requests a week, not one per package
+# (RADD-1535). Seven single-package updates sat unmerged for weeks; a group is one
+# review and one CI run. Security updates are never grouped away: they open on
+# their own as soon as an advisory lands.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /server
+    schedule:
+      interval: weekly
+    groups:
+      server:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    groups:
+      web:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly

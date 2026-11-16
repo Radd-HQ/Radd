@@ -14,6 +14,12 @@ on:
 permissions:
   contents: read
 
+env:
+  # The interpreter the IMAGE ships (Containerfile: python:3.12). `server/.python-version`
+  # is 3.13 for development, and the suite used to run on that while the release ran on
+  # 3.12 (RADD-1535). tests/test_backup_tool_majors.py keeps this line and the image in step.
+  UV_PYTHON: "3.12"
+
 concurrency:
   group: checks-${{ github.ref }}
   cancel-in-progress: true

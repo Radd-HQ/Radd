@@ -138,4 +138,9 @@ VOLUME /data /opt/radd/backups
 
 # Single-node convenience: converge the schema, then serve. Helm runs the
 # migration as a pre-upgrade Job instead (see deploy/helm/radd).
-CMD ["sh", "-c", "alembic upgrade head && uvicorn --factory radd.app:create_app --host 0.0.0.0 --port 8000"]
+#
+# `exec`, so uvicorn REPLACES the shell as PID 1 (RADD-1534). Without it `sh` was
+# PID 1, never forwarded SIGTERM, and every stop waited out the grace period and
+# ended in SIGKILL — the lifespan teardown (collab rooms flushed, the plugin
+# lease withdrawn) never ran. Measured: 10 s to a kill before, a clean exit after.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn --factory radd.app:create_app --host 0.0.0.0 --port 8000"]

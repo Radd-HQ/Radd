@@ -54,3 +54,13 @@ def test_ci_drills_with_the_client_major_the_image_ships():
     assert major in [m.strip() for m in matrix.group(1).split(",")], (
         f"the image ships postgresql-client-{major}; the restore drill must run with it"
     )
+
+
+def test_ci_runs_the_suite_on_the_interpreter_the_image_ships():
+    """RADD-1535: pytest ran on 3.13 (`.python-version`) while the image shipped
+    3.12, so a release was tested on an interpreter it did not run on."""
+    shipped = re.search(r"python:(\d+\.\d+)", (REPO / "Containerfile").read_text()).group(1)
+    workflow = (REPO / ".github" / "workflows" / "checks.yaml").read_text()
+    tested = re.search(r'UV_PYTHON: "(\d+\.\d+)"', workflow)
+    assert tested, "checks.yaml no longer pins the interpreter it tests on"
+    assert tested.group(1) == shipped, f"CI tests on {tested.group(1)}, the image ships {shipped}"
