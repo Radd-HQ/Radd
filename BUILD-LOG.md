@@ -40,6 +40,12 @@ when it dominates. RADD-1559: eight wiki spaces in the sidebar until asked. RADD
 says what it filters when a page owns it. RADD-1563: one `DateInput` in the SDK replaces seven
 hand-styled date inputs, two of which pinned a dark picker onto the light theme; a test refuses a new one.
 
+**Leftovers, same day.** RADD-1564: the Inbox asks for notifications once and issue types load when the
+picker opens (My Work still sends two; fixing it means delaying the badge everywhere). RADD-1565: a list
+row keeps its element and mounts its cells only near the list's scroll container (200 rows: 10,712 →
+3,368 nodes). RADD-1566: `DateInput` is the app's own calendar popover with typed entry, replacing the
+browser's native control; `TextField type="date"` renders it too.
+
 **Found on the way.** Two review findings were partly wrong and are corrected on their issues (the
 sidebar was capped at 50, not unbounded; the rail order I saw was partly one project's saved screen).
 An aggregate "optimisation" of the board summary measured slower and was reverted. A hook placed after

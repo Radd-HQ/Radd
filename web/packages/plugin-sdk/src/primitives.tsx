@@ -1,3 +1,4 @@
+import { DateInput } from "./DateField";
 import { useProvided, type ButtonVariantValue } from "./host-registry";
 import { bridged } from "./bridge";
 import {
@@ -51,13 +52,28 @@ export function TextField({
           {label}
         </label>
       )}
-      <input
-        id={id}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={hint || error ? descId : undefined}
-        className={`radd-input ${className}`}
-        {...props}
-      />
+      {props.type === "date" ? (
+        <DateInput
+          id={id}
+          aria-label={label}
+          aria-describedby={hint || error ? descId : undefined}
+          value={typeof props.value === "string" ? props.value : ""}
+          onChange={props.onChange}
+          min={typeof props.min === "string" ? props.min : undefined}
+          max={typeof props.max === "string" ? props.max : undefined}
+          disabled={props.disabled}
+          invalid={Boolean(error)}
+          className="w-full"
+        />
+      ) : (
+        <input
+          id={id}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={hint || error ? descId : undefined}
+          className={`radd-input ${className}`}
+          {...props}
+        />
+      )}
       {error ? (
         <p id={descId} className="radd-field__error">
           {error}

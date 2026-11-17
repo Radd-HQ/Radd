@@ -29,8 +29,8 @@ const fillForm = (root, { from, fromTime, to, toTime, allDay }) => s.eval(`(()=>
   const root=document.querySelector(${JSON.stringify(root)}); const form=root.querySelector('form');
   const sw=root.querySelector('[data-testid="leave-all-day"]'); if(sw && (sw.getAttribute('aria-checked')==='true')!==${allDay}) sw.click();
   return new Promise(r=>setTimeout(r,50)).then(()=>{
-    setInput(form.querySelector('input:not([type=date]):not([type=time])'), ${JSON.stringify(MARK)});
-    const dates=form.querySelectorAll('input[type=date]'); setInput(dates[0],${JSON.stringify(from)}); setInput(dates[1],${JSON.stringify(to)});
+    setInput(form.querySelector('input:not([type=time]):not([data-date-input] input)'), ${JSON.stringify(MARK)});
+    const dates=form.querySelectorAll('[data-date-input] input'); setInput(dates[0],${JSON.stringify(from)}); setInput(dates[1],${JSON.stringify(to)});
     const times=form.querySelectorAll('input[type=time]');
     if(times.length){ setInput(times[0],${JSON.stringify(fromTime ?? "")}); setInput(times[1],${JSON.stringify(toTime ?? "")}); }
     return {times:times.length, disabled: form.querySelector('button[type=submit]').disabled};

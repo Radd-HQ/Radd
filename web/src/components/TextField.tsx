@@ -1,4 +1,5 @@
 import { useId, type InputHTMLAttributes } from "react";
+import { DateInput } from "@radd/plugin-sdk";
 
 interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
@@ -15,6 +16,22 @@ export function TextField({ label, hint, error, className = "", ...props }: Text
       <label htmlFor={id} className="text-xs font-medium text-fg-secondary">
         {label}
       </label>
+      {props.type === "date" ? (
+        // A date is THE date control (RADD-1566), whatever asked for it.
+        <DateInput
+          id={id}
+          aria-label={label}
+          aria-describedby={hint || error ? hintId : undefined}
+          value={typeof props.value === "string" ? props.value : ""}
+          onChange={props.onChange}
+          onBlur={props.onBlur}
+          min={typeof props.min === "string" ? props.min : undefined}
+          max={typeof props.max === "string" ? props.max : undefined}
+          disabled={props.disabled}
+          invalid={Boolean(error)}
+          className="w-full"
+        />
+      ) : (
       <input
         id={id}
         aria-invalid={error ? true : undefined}
@@ -27,11 +44,10 @@ export function TextField({ label, hint, error, className = "", ...props }: Text
           (error
             ? "border-status-danger/60 focus:border-status-danger focus:ring-status-danger/30 "
             : "border-subtle focus:border-accent focus:ring-accent/30 ") +
-          // A date picker follows the page's scheme, never a pinned one (RADD-1563).
-          (props.type === "date" ? "[color-scheme:inherit] " : "") +
           className
         }
       />
+      )}
       {error ? (
         <p id={hintId} className="text-xs text-status-danger-ink">
           {error}

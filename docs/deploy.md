@@ -194,6 +194,11 @@ commits and will not say them this plainly.
   Visibility moved below them. My Work widgets shrink to their content. The
   cumulative-flow chart hides Done when it is over 80% of the total; click
   the legend to show it. The sidebar lists eight wiki spaces and a "Show all".
+  Every date field is the app's own calendar: it shows the month spelled
+  ("22 Nov 2026"), accepts typed dates, and looks the same in every browser.
+  On a long list, rows far from view show only their key and title until
+  scrolled near, so the browser's find-in-page does not match their labels or
+  assignee.
 
 ### Upgrading from v0.49.3
 

@@ -26,7 +26,7 @@ test("a bare date input is the SDK's DateInput", () => {
     for (const path of sources(join(ROOT, tree))) {
       scanned += 1;
       const file = relative(ROOT, path);
-      if (file === OWNER) continue;
+      // RADD-1566: the owner is the app's own calendar now, so not even it holds a native one.
       const text = readFileSync(path, "utf8");
       // A lowercase <input …> element carrying type="date"; <TextField type="date"> is the labelled form.
       for (const match of text.matchAll(/<input\b(?:(?!\/>)[\s\S])*?\/>/g)) {
@@ -35,8 +35,8 @@ test("a bare date input is the SDK's DateInput", () => {
       if (/\[color-scheme:(dark|light)\]/.test(text)) offenders.push(`${file} (pinned color-scheme)`);
     }
   }
-  // Not vacuous: the scan saw the tree, and the owner really holds the input.
+  // Not vacuous: the scan saw the tree, and the owner really defines the control.
   assert.ok(scanned > 300, `only ${scanned} files scanned`);
-  assert.match(readFileSync(join(ROOT, OWNER), "utf8"), /type="date"/);
+  assert.match(readFileSync(join(ROOT, OWNER), "utf8"), /export function DateInput/);
   assert.deepEqual(offenders, []);
 });
