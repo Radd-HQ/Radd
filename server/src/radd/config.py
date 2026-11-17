@@ -367,6 +367,11 @@ class Settings(BaseSettings):
     # loop DRAINS full batches without sleeping), per-entity text cap.
     ai_embed_batch: int = 256
     ai_embedder_poll_interval: float = 3.0
+    # The longest the embedder waits between reconcile sweeps that find nothing
+    # (RADD-1550): each empty sweep doubles the wait from the poll interval up
+    # to this. Events are embedded at once regardless; this only bounds how
+    # long a row an event missed can wait.
+    ai_embed_idle_sweep_max_seconds: float = Field(default=300.0, gt=0)
     ai_embed_max_chars: int = 8000
     # Budget for the semantic half of a hybrid search — past it, FTS-only.
     ai_search_timeout_seconds: float = 2.0

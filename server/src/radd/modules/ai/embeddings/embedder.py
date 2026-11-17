@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 from enum import StrEnum
 import logging
+import time
 import uuid
 from dataclasses import dataclass
 
@@ -118,6 +119,41 @@ def last_error() -> str | None:
     return _last_error
 
 
+class _IdleSweep:
+    """When the reconcile sweep may run again (RADD-1550).
+
+    The sweep asks "which rows have no embedding under the active model" — an
+    anti-join over the whole index. With everything embedded it finds nothing,
+    and it took 1.5 s on 500k items to find it, every poll: half a database core
+    spent confirming there is no work. New work arrives as EVENTS, which the
+    consumer above handles; the sweep is the safety net for what an event missed
+    (a model swap, a failed batch). So an empty sweep doubles the wait before the
+    next, up to `ai_embed_idle_sweep_max_seconds`, and anything that suggests
+    there is work again — an event consumed, a sweep that found rows — resets it."""
+
+    def __init__(self) -> None:
+        self.wait = 0.0
+        self.not_before = 0.0
+
+    def due(self) -> bool:
+        return time.monotonic() >= self.not_before
+
+    def reset(self) -> None:
+        self.wait = 0.0
+        self.not_before = 0.0
+
+    def swept(self, *, found: bool) -> None:
+        if found:
+            self.reset()
+            return
+        floor = settings.ai_embedder_poll_interval
+        self.wait = min(max(floor, self.wait * 2), settings.ai_embed_idle_sweep_max_seconds)
+        self.not_before = time.monotonic() + self.wait
+
+
+_idle = _IdleSweep()
+
+
 async def run_once() -> int:
     """One tick: quick gates, one consumer batch, else one sweep batch."""
     async with SessionLocal() as session:
@@ -142,12 +178,16 @@ async def run_once() -> int:
         )
         if consumed:
             _last_error = None
+            _idle.reset()  # something changed: the next sweep is due at once
             return consumed
+        if not _idle.due():
+            return 0
         swept = await _sweep()
     except Exception as exc:
         _last_error = f"{type(exc).__name__}: {exc}"
         raise
     _last_error = None
+    _idle.swept(found=bool(swept))
     return swept
 
 
