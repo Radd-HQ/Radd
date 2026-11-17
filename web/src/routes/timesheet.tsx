@@ -152,7 +152,7 @@ export function TimesheetReport() {
           `author = me AND issue.assignee != me`, `issue IS EMPTY AND
           category = "Code Review"`. `issue.` completes and compiles through
           the ITEM dialect, so every issue field works here. */}
-      <TopBarQuery>
+      <TopBarQuery scope="This report">
         <QueryBar
           filter={slqFilter}
           dialect={QueryDialect.worklog}

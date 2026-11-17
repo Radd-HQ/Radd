@@ -779,7 +779,7 @@ export function ViewPage({ synthetic }: { synthetic?: View } = {}) {
     <div className="flex h-full flex-col">
       {/* The view's LIVE query bar rides in the global top bar (the reference
           design's central bar) — one input, SLQ ⟷ Ask via the mode toggle. */}
-      <TopBarQuery>
+      <TopBarQuery scope="This view">
         <QueryBar filter={slqFilter} projectId={view.project_id ?? undefined} />
       </TopBarQuery>
 

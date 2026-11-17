@@ -56,7 +56,7 @@ export function ReportsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <TopBarQuery>
+      <TopBarQuery scope="These reports">
         <QueryBar
           filter={slqFilter}
           projectId={project.id}

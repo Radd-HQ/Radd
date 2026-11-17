@@ -42,8 +42,12 @@ export function useTopBarSlotHost(): {
   return { setEl: slot?.setEl ?? (() => {}), occupied: slot?.occupied ?? false };
 }
 
-/** Renders `children` INTO the top bar's query slot for this page's lifetime. */
-export function TopBarQuery({ children }: { children: ReactNode }) {
+/** Renders `children` INTO the top bar's query slot for this page's lifetime.
+ *
+ *  `scope` says what the bar filters while the page owns it (RADD-1562). The
+ *  same input, in the same place, is global search on pages that claim nothing
+ *  and this page's filter on pages that do; nothing used to say which. */
+export function TopBarQuery({ children, scope = "This page" }: { children: ReactNode; scope?: string }) {
   const slot = useContext(TopBarSlotContext);
   const setOccupied = slot?.setOccupied;
   useEffect(() => {
@@ -52,5 +56,17 @@ export function TopBarQuery({ children }: { children: ReactNode }) {
     return () => setOccupied(false);
   }, [setOccupied]);
   if (!slot?.el) return null;
-  return createPortal(children, slot.el);
+  return createPortal(
+    <div className="flex min-w-0 items-center gap-2">
+      <span
+        data-topbar-scope
+        title={`This bar filters ${scope.toLowerCase()}. Search everything with the Search entry in the sidebar.`}
+        className="hidden shrink-0 rounded border border-subtle bg-elevated px-1.5 py-0.5 text-meta text-fg-secondary sm:inline"
+      >
+        Filter: {scope}
+      </span>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>,
+    slot.el,
+  );
 }

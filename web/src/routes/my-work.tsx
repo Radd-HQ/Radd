@@ -42,7 +42,7 @@ const STARRED_Q = `starred = true AND ${OPEN}`;
 export function MyWorkPage() {
   const slqFilter = useSlqQueryState();
   return <div className="w-full p-6">
-    <TopBarQuery><QueryBar filter={slqFilter} placeholder="Filter issue widgets with SLQ: project = TD" /></TopBarQuery>
+    <TopBarQuery scope="My Work"><QueryBar filter={slqFilter} placeholder="Filter issue widgets with SLQ: project = TD" /></TopBarQuery>
     <h1 className="mb-3 text-lg font-semibold text-heading">My Work</h1>
     <MyWorkCanvas render={widget => <PersonalWidget widget={widget} filter={slqFilter.committed} />} />
   </div>;

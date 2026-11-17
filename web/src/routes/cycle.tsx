@@ -66,7 +66,7 @@ export function CyclePage() {
   return (
     <div className="flex h-full w-full flex-col">
       {/* The cycle's SLQ filter rides in the global top bar, same as views. */}
-      <TopBarQuery>
+      <TopBarQuery scope="This cycle">
         <QueryBar
           filter={slqFilter}
           placeholder="Filter this cycle with SLQ: priority = blocker AND project = TD"

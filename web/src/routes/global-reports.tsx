@@ -24,7 +24,7 @@ export function GlobalReportsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <TopBarQuery>
+      <TopBarQuery scope="These reports">
         <QueryBar
           filter={slqFilter}
           placeholder="Filter these reports with SLQ: team = Pipeline AND type = Bug"
