@@ -21,19 +21,30 @@ import type { DirectoryOption } from "@radd/plugin-sdk";
  * hard-capped at the first 100 and older notifications were unreachable. */
 export const INBOX_PAGE_SIZE = 100;
 
+/** The list request under way, if any: its answer also carries the unread count
+ *  the shell's badge wants (RADD-1564). */
+let listInFlight: Promise<NotificationList> | null = null;
+
 /** Full notification list for the Inbox (spec 26), paged (RADD-884). */
 export const notificationsQuery = (unread: boolean, page = 1) =>
   queryOptions({
     queryKey: queryKeys.notifications(unread, page),
-    queryFn: ({ signal }) =>
-      api.get<NotificationList>(ApiPath.notifications, {
+    queryFn: ({ signal }) => {
+      const answer = api.get<NotificationList>(ApiPath.notifications, {
         signal,
         query: {
           unread: unread ? "true" : undefined,
           limit: String(INBOX_PAGE_SIZE),
           offset: String((page - 1) * INBOX_PAGE_SIZE),
         },
-      }),
+      });
+      listInFlight = answer;
+      const forget = () => {
+        if (listInFlight === answer) listInFlight = null;
+      };
+      answer.then(forget, forget);
+      return answer;
+    },
     meta: entityMeta(Entity.notification),
     placeholderData: keepPreviousData,
   });
@@ -45,11 +56,26 @@ export const notificationsQuery = (unread: boolean, page = 1) =>
  */
 export const notificationsBadgeQuery = queryOptions({
   queryKey: queryKeys.notificationsBadge,
-  queryFn: ({ signal }) =>
-    api.get<NotificationList>(ApiPath.notifications, {
-        signal,
+  queryFn: async ({ signal }) => {
+    // RADD-1564: on My Work and the Inbox the page asks for the list in the same
+    // tick, and that answer carries the count. One turn of the event loop lets
+    // the page's request start, whichever of the two mounted first; the badge
+    // then reads its count from that answer instead of sending its own.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const pending = listInFlight;
+    if (pending) {
+      try {
+        const list = await pending;
+        return { notifications: [], unread_count: list.unread_count };
+      } catch {
+        // The list failed or was cancelled: ask for the count the ordinary way.
+      }
+    }
+    return api.get<NotificationList>(ApiPath.notifications, {
+      signal,
       query: { unread: "true", limit: "1" },
-    }),
+    });
+  },
   meta: entityMeta(Entity.notification),
   refetchInterval: NOTIFICATIONS_POLL_MS,
 });

@@ -477,7 +477,11 @@ function TypePicker({
   locked,
   reason,
 }: PickerProps & { projectId: string; locked: boolean; reason: string }) {
-  const types = useQuery(issueTypesQuery(projectId));
+  // The project's types load when the picker is opened (RADD-1564): most visits
+  // never open it, and the item already carries its own type to show until then.
+  const [opened, setOpened] = useState(false);
+  const types = useQuery({ ...issueTypesQuery(projectId), enabled: opened });
+  const options = types.data ?? (item.type ? [item.type] : []);
   return (
     <div className="flex items-end gap-2">
       {item.type && (
@@ -491,10 +495,11 @@ function TypePicker({
           value={item.type?.id ?? ""}
           disabled={locked}
           title={locked ? reason : undefined}
+          onOpen={() => setOpened(true)}
           onChange={(event) => onPatch({ type_id: event.target.value || null })}
         >
           <option value="">None</option>
-          {(types.data ?? []).map((issueType) => (
+          {options.map((issueType) => (
             <option key={issueType.id} value={issueType.id}>
               {issueType.name}
             </option>
