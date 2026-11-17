@@ -242,7 +242,8 @@ export function IssueProperties({
         Fields
         <SidePanelCollapse className="ml-auto" />
       </div>
-      {/* Core identity — always shown, always first. */}
+      {/* Core identity — always shown, always first; the screen's own fields
+          (Assignee first by default) follow directly. */}
       <div className="flex flex-col gap-3 p-4">
         <ChipSelect
           chip={
@@ -313,6 +314,30 @@ export function IssueProperties({
 
         {/* Spec 121: who may read this issue. Labels follow the project: in a
             private one public and internal are the same audience ("Project members"). */}
+      </div>
+
+      {/* RADD-1472: the item's place in the hierarchy heads the field rows. Not a screen-arranged
+          field — an epic has none and a subtask's is required — so it sits above the layout's rows,
+          gated like them by the per-field grant signal (`parent`). */}
+      {requiredParentKind(item.kind ?? ItemKind.issue) !== null && (
+        <FieldSlot
+          render={{ node: <ParentField item={item} onPatch={patch} />, selfPadded: false }}
+          locked={lockFor("parent").locked}
+          reason={lockFor("parent").reason}
+        />
+      )}
+
+      {primary.map((row) => {
+        const lock = lockFor(row.field);
+        return (
+          <FieldSlot key={row.field} render={renderField(row)} locked={lock.locked} reason={lock.reason} />
+        );
+      })}
+
+      {/* Who may see the issue, then what plugins add (RADD-1554). Both used to
+          sit ABOVE the fields: on a default project Assignee came after
+          Visibility, five plugin sections and the parent, below the fold. */}
+      <div className="flex flex-col gap-3 p-4">
         <ChipSelect
           chip={
             <VisibilityChip visibility={item.visibility ?? ItemVisibility.public} isPublicProject={Boolean(project.public)} iconOnly />
@@ -339,24 +364,6 @@ export function IssueProperties({
       {/* Plugin-contributed issue-rail sections (spec 94): federated remotes register here, each
           from its own bundle — the host imports none of them and names none. */}
       <Slot id={SlotId.issuePanelSection} item={item} project={project} />
-
-      {/* RADD-1472: the item's place in the hierarchy heads the field rows. Not a screen-arranged
-          field — an epic has none and a subtask's is required — so it sits above the layout's rows,
-          gated like them by the per-field grant signal (`parent`). */}
-      {requiredParentKind(item.kind ?? ItemKind.issue) !== null && (
-        <FieldSlot
-          render={{ node: <ParentField item={item} onPatch={patch} />, selfPadded: false }}
-          locked={lockFor("parent").locked}
-          reason={lockFor("parent").reason}
-        />
-      )}
-
-      {primary.map((row) => {
-        const lock = lockFor(row.field);
-        return (
-          <FieldSlot key={row.field} render={renderField(row)} locked={lock.locked} reason={lock.reason} />
-        );
-      })}
 
       {secondary.length > 0 && (
         <MoreFields count={secondary.length}>

@@ -600,9 +600,6 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
             className="order-1 @3xl:order-2 @3xl:ml-3 @3xl:self-start"
             expandedClassName="flex flex-col gap-3 @3xl:w-72 @3xl:shrink-0"
           >
-            {/* Contributed cards above the fields (RADD-1395) — whatever orients
-                the reader before the metadata wall, in the page rail AND the peek. */}
-            <Slot id={SlotId.issueRailTop} item={item} project={project} />
             <IssueProperties
               project={project}
               item={item}
@@ -614,6 +611,10 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
               onCustomFieldChange={onCustomFieldChange}
               timeloggingEnabled={timeloggingOn}
             />
+            {/* Contributed cards (the AI summary) sit under the fields on the page
+                (RADD-1554): the fields are what people come to the rail to change.
+                The peek keeps them on top, where there is no description beside. */}
+            <Slot id={SlotId.issueRailTop} item={item} project={project} />
           </SidePanel>
           </div>
         </div>
