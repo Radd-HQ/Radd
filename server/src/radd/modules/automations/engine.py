@@ -28,7 +28,7 @@ from radd.db import SessionLocal
 from radd.modules.auth.models import User
 from radd.modules.items.enums import ItemEntity
 from radd.modules.comments import service as comments
-from radd.modules.events import service as events
+from radd.modules.events import consumer as event_consumer, service as events
 from radd.modules.events.service import Event
 from radd.modules.items import service as items
 from radd.modules.items.models import WorkItem
@@ -523,27 +523,33 @@ async def run_manual(
 # --- poll iteration (mirrors webhooks.service.fanout_events; one txn per event) ---
 
 
+def _consumer(session_factory) -> event_consumer.Consumer:
+    """Each triggering event is applied in a transaction of its OWN (a run's
+    writes commit or roll back as one), so the handler opens a session rather
+    than using the runner's.
+
+    At-most-once on purpose (RADD-1538): a graph that failed half-way may have
+    posted to a chat or called a URL already, and those cannot be rolled back.
+    The failure is no longer dropped — it is recorded dead, with the error, and
+    replaying it is an operator's decision."""
+
+    async def apply(_runner_session: AsyncSession, event: Event) -> None:
+        async with session_factory() as session:
+            await apply_event(session, event)
+            await session.commit()
+
+    return event_consumer.Consumer(
+        name=CONSUMER_NAME,
+        handle=apply,
+        batch_size=lambda: settings.automation_batch,
+        delivery=event_consumer.Delivery.AT_MOST_ONCE,
+        wants=should_process,
+    )
+
+
 async def run_once(session_factory=SessionLocal) -> int:
-    """Consume one batch: apply each triggering event in its own transaction, then advance
-    the cursor. Returns the number of events consumed."""
-    async with session_factory() as session:
-        offset = await events.get_offset(session, CONSUMER_NAME)
-        batch = await events.read_after(session, offset, settings.automation_batch)
-    if not batch:
-        return 0
-    for event in batch:
-        if not should_process(event):
-            continue
-        try:
-            async with session_factory() as session:
-                await apply_event(session, event)
-                await session.commit()
-        except Exception:
-            logger.exception("automations: failed processing event %s", event.id)
-    async with session_factory() as session:
-        await events.set_offset(session, CONSUMER_NAME, batch[-1])
-        await session.commit()
-    return len(batch)
+    """Consume one batch through the shared runner. Returns the events consumed."""
+    return await event_consumer.run(_consumer(session_factory), session_factory)
 
 
 # --- dry-run preview (POST /automations/{id}/test) ---

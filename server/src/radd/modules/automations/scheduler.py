@@ -44,6 +44,9 @@ async def run_once(session_factory=SessionLocal) -> int:
                 AutomationScheduleState.next_run_at <= now,
                 Automation.enabled.is_(True),
             )
+            # Claimed for this tick (RADD-1538): a second worker skips the rows
+            # this one holds instead of firing the same schedule again.
+            .with_for_update(skip_locked=True, of=AutomationScheduleState)
         )
         for state, rule, binding in result.all():
             if binding.schedule is None:  # defensive: state row without a config

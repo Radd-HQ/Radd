@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Identity, Index, SmallInteger, String, Text, false, func, text
+from sqlalchemy import BigInteger, DateTime, Identity, Index, Integer, SmallInteger, String, Text, UniqueConstraint, false, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,6 +25,32 @@ class ConsumerOffset(Base):
     #: in `(xact_id, id)` order, so the position is that pair, never the id alone.
     last_xact_id: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class ConsumerFailure(Base):
+    """An event a consumer's handler raised on (RADD-1538) — what used to be a
+    log line and a lost side effect. `pending` rows are retried by the consumer
+    itself at `next_attempt_at`; `dead` ones wait for an operator to replay or
+    discard them (Settings → Monitoring). See `consumer.py`."""
+
+    __tablename__ = "consumer_failures"
+    __table_args__ = (
+        UniqueConstraint("consumer", "event_id"),
+        # The retry read: this consumer's pending rows that have come due.
+        Index("ix_consumer_failures_due", "consumer", "status", "next_attempt_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    consumer: Mapped[str] = mapped_column(String(100))
+    #: Plain id, no FK: the ledger may be pruned under a failure row, and a
+    #: failure whose event is gone is simply dropped at the next attempt.
+    event_id: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # FailureStatus
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str] = mapped_column(Text, default="")
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    first_failed_at: Mapped[datetime] = mapped_column(DateTime)
+    last_failed_at: Mapped[datetime] = mapped_column(DateTime)
 
 
 class Event(Base):

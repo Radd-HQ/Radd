@@ -21,7 +21,7 @@ from radd.modules.auth.authz import Permission
 from radd.modules.comments.types import CommentEvent, CommentParentType, CommentVisibility
 from radd.modules.comments.visibility import internal_comment_visible
 from radd.modules.teams import service as teams
-from radd.modules.events import service as events
+from radd.modules.events import consumer as event_consumer, service as events
 from radd.modules.events.service import Event
 from radd.modules.items import service as items
 from radd.modules.items.enums import ItemEvent
@@ -82,6 +82,41 @@ def handles(event_type: str) -> bool:
     )
 
 
+def _wanted(event: Event) -> bool:
+    # An import's events are `silent`: nobody is told about old work, and the
+    # importer sets watchers from the source data itself.
+    return not event.silent and handles(event.event_type)
+
+
+async def _notify(session: AsyncSession, event: Event) -> None:
+    await _handle(session, event, watch_only=False)
+
+
+async def _follow_only(session: AsyncSession, event: Event) -> None:
+    await _handle(session, event, watch_only=True)
+
+
+def _batch() -> int:
+    return settings.notify_batch
+
+
+#: Retried (RADD-1538): a notification that failed because a lookup raised used
+#: to be skipped for good. A repeat is harmless — planning dedupes per recipient
+#: and event.
+CONSUMER = event_consumer.Consumer(
+    name=CONSUMER_NAME, handle=_notify, batch_size=_batch, wants=_wanted
+)
+#: The same cursor on its very first run: the backlog is read WATCH-ONLY, so the
+#: watcher graph backfills from real activity and notifications begin from now.
+_BOOTSTRAP = event_consumer.Consumer(
+    name=CONSUMER_NAME,
+    handle=_follow_only,
+    batch_size=_batch,
+    wants=_wanted,
+    delivery=event_consumer.Delivery.AT_MOST_ONCE,
+)
+
+
 async def run_once() -> int:
     async with SessionLocal() as session:
         if not await events.offset_exists(session, CONSUMER_NAME):
@@ -92,22 +127,7 @@ async def run_once() -> int:
 
 
 async def _consume(session: AsyncSession, *, watch_only: bool) -> int:
-    offset = await events.get_offset(session, CONSUMER_NAME)
-    batch = await events.read_after(session, offset, settings.notify_batch)
-    if not batch:
-        return 0
-    for event in batch:
-        # An import's events are `silent`: nobody is told about old work, and the
-        # importer sets watchers from the source data itself.
-        if event.silent or not handles(event.event_type):
-            continue
-        try:
-            async with session.begin_nested():
-                await _handle(session, event, watch_only=watch_only)
-        except Exception:
-            logger.exception("notify: failed handling event %s (%s)", event.id, event.event_type)
-    await events.set_offset(session, CONSUMER_NAME, batch[-1])
-    return len(batch)
+    return await event_consumer.run_in(session, _BOOTSTRAP if watch_only else CONSUMER)
 
 
 async def _bootstrap(session: AsyncSession) -> int:
@@ -119,6 +139,7 @@ async def _bootstrap(session: AsyncSession) -> int:
         # Per batch: a crash mid-way must not replay the backlog from zero.
         await session.commit()
         total += processed
+    await session.commit()  # an empty stream still leaves the cursor it seeded
     return total
 
 

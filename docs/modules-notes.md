@@ -31,7 +31,7 @@ Each package under `server/src/radd/modules/` is a plugin: it exposes `plugin: R
 
 ### events
 
-Owns `events`, the append-only outbox and audit log (never pruned), and `consumer_offsets`. The seam is `events.service.emit`, in the writer's transaction: `subjects={"item": id}` writes the owner's canonical ref; a `has_changes` type needs `changes=` or `emit` raises `ChangesRequired`. Consumers read with `read_after` and `get_offset`/`set_offset`; `runner.run_head_seeded` never replays the backlog. `events.quiet()` marks a bulk import silent. `EventSource` splits the ledger: people, automations (`automated`), system (actor-less or a `MACHINE_SOURCES` account; connectors write as Automation). Trap: skip silent rows in the loop but advance the cursor — filtering in SQL makes an all-silent batch an empty stream and wedges the consumer.
+Owns `events`, the append-only outbox and audit log (never pruned), `consumer_offsets` and `consumer_failures`. The seam is `events.service.emit`, in the writer's transaction: `subjects={"item": id}` writes the owner's canonical ref; a `has_changes` type needs `changes=` or `emit` raises `ChangesRequired`. A consumer declares a `consumer.Consumer` and calls `consumer.run`: it claims the cursor row per tick, runs the handler per event in a savepoint, and records a raising handler in `consumer_failures` (retried with backoff, then dead and replayable). `runner.run_head_seeded` is the two-phase form for deliveries outside the database. Trap: skip silent rows in `wants`, never in SQL, or an all-silent batch wedges the cursor.
 
 ### projects
 
@@ -99,7 +99,7 @@ Owns the link-type catalog `item_link_types` (outward and inward names, directed
 
 ### items
 
-Owns `work_items` (keys, the `kind` ladder, `rank`), `item_links`, `item_labels`, `item_key_aliases` and the SLQ compiler in `items/slq/`. The seam is the `items.service` barrel: `require_readable_item` gates every child surface (a hidden issue 404s), `relation_read_clause` filters lists, and `update_item` is the shared write path, then `workflow.check_transition`. An issue's epic may sit in any project; a subtask lives in its parent's. A typed full key names ITS project; a bare number means the source item's own. `create_item` dispatches `ItemHook.CREATING` before `item.created`, so a handler may refuse. Trap: `items/history.py:RELATED_EVENT_TYPES` names other modules' events by wire string; list History events there.
+Owns `work_items` (keys, the `kind` ladder, `rank`), `item_transitions`, `item_links`, `item_labels`, `item_key_aliases` and the SLQ compiler in `items/slq/`. The seam is the `items.service` barrel: `require_readable_item` gates every child surface (a hidden issue 404s), `relation_read_clause` filters lists, and `update_item` is the shared write path: it locks the row, then `workflow.check_transition`. `transitions.record` writes a state or cycle change beside each item event; reports read that table. An issue's epic may sit in any project; a subtask lives in its parent's. `create_item` dispatches `ItemHook.CREATING` first. Trap: a new writer of `state_id` or `cycle_id` must call `transitions.record`, or reports miss the move.
 
 ### comments
 
@@ -119,7 +119,7 @@ Owns `views` (a saved definition: SLQ `query`, axes and the shared shape such as
 
 ### reporting
 
-Owns no tables: every report is recomputed per request from the event log, with `reporting/timeline.py` rebuilding each item's state and cycle history from its `item.*` payloads. A plugin's own report folds the same way through the public `service.bucket_starts`, `service.matching_ids` (the reader's item universe, the optional SLQ `q` intersected on top) and `service.report_scope`; the slas report uses these. The bundled UI package exports the chart kit and `REPORT_SECTION_SLOT` for plugin report sections. Trap: SLQ evaluates an item's CURRENT state, and `matching_ids` must run even when `q` is absent, or a cross-project figure folds projects the reader cannot see.
+Owns no tables: each report is one SQL aggregate over `item_transitions`, the items module's record of every state and cycle change, bounded by the report's own window where it has one. `reporting/timeline.py` rebuilds per-item stays from the same rows for callers that need them over a bounded set (the SLA timers). A plugin's own report buckets the same way through the public `service.bucket_starts`, `service.matching_ids` and `service.report_scope`; the slas report uses these. The bundled UI package exports the chart kit and `REPORT_SECTION_SLOT`. Trap: SLQ evaluates an item's CURRENT state, and the visibility subquery must apply even when `q` is absent, or a cross-project figure counts projects the reader cannot see.
 
 ### forms
 

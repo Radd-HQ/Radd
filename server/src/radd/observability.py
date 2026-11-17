@@ -156,6 +156,8 @@ async def live_metrics() -> list[str]:
             "# TYPE radd_consumer_lag_events gauge",
             "# HELP radd_consumer_seconds_since_progress Seconds since a consumer's cursor last moved.",
             "# TYPE radd_consumer_seconds_since_progress gauge",
+            "# HELP radd_consumer_failed_events Events a consumer failed on: being retried, or dead.",
+            "# TYPE radd_consumer_failed_events gauge",
         ]
         for row in consumers:
             if not row["registered"]:
@@ -163,6 +165,11 @@ async def live_metrics() -> list[str]:
             name = _labels(consumer=row["name"])
             lines.append(f"radd_consumer_lag_events{name} {row['lag']}")
             lines.append(f"radd_consumer_seconds_since_progress{name} {row['seconds_since_update']}")
+            for status in ("pending", "dead"):
+                lines.append(
+                    "radd_consumer_failed_events"
+                    f"{_labels(consumer=row['name'], status=status)} {row[f'failed_{status}']}"
+                )
     except Exception:  # noqa: BLE001
         logging.getLogger(__name__).debug("consumer metrics unavailable", exc_info=True)
     try:

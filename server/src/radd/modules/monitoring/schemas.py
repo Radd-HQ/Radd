@@ -26,6 +26,9 @@ class WorkerStatus(BaseModel):
     #: False = no running code claims this cursor (RADD-1093): rename residue
     #: or a disabled plugin — retired chip, never "Stalled".
     registered: bool = True
+    #: RADD-1538: events the consumer failed on — retrying / given up on.
+    failed_pending: int = 0
+    failed_dead: int = 0
 
 
 class MonitoringOverview(BaseModel):

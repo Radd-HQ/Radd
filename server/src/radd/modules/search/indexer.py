@@ -19,7 +19,7 @@ from radd.modules.access.types import Access, AccessEvent
 from radd.modules.auth.types import AuthEvent
 from radd.modules.comments import service as comments
 from radd.modules.comments.types import CommentEvent
-from radd.modules.events import service as events
+from radd.modules.events import consumer as event_consumer
 from radd.modules.events.service import Event
 from radd.modules.fields.service import BUILTIN_RESOURCE
 from radd.modules.fields.types import BuiltinItemField
@@ -73,27 +73,15 @@ _TSV_UPDATE = text(
 
 async def run_once() -> int:
     global _restriction_synced
-    async with SessionLocal() as session:
-        if not _restriction_synced:
-            # A restriction written while the consumer was down (or before this
-            # release) is honored on start, not on the next grant change.
+    if not _restriction_synced:
+        # A restriction written while the consumer was down (or before this
+        # release) is honored on start, not on the next grant change.
+        async with SessionLocal() as session:
             await sync_description_restriction(session)
             await sync_relation_columns(session)
-            _restriction_synced = True
-        offset = await events.get_offset(session, CONSUMER_NAME)
-        batch = await events.read_after(session, offset, settings.search_batch)
-        if not batch:
             await session.commit()
-            return 0
-        for event in batch:
-            try:
-                async with session.begin_nested():
-                    await _handle(session, event)
-            except Exception:
-                logger.exception("search: failed indexing event %s (%s)", event.id, event.event_type)
-        await events.set_offset(session, CONSUMER_NAME, batch[-1])
-        await session.commit()
-        return len(batch)
+        _restriction_synced = True
+    return await event_consumer.run(CONSUMER)
 
 
 async def _handle(session: AsyncSession, event: Event) -> None:
@@ -250,3 +238,11 @@ async def _reindex_comments(session: AsyncSession, event: Event) -> None:
     row.comments_text = "\n".join(bodies)
     await session.flush()
     await session.execute(_TSV_UPDATE, {"item_id": item_id})
+
+
+#: Retried (RADD-1538): indexing reads the subject as it is NOW, so a repeat or
+#: a late retry converges on the same row. Starts at the beginning — the index
+#: is a projection of the whole stream.
+CONSUMER = event_consumer.Consumer(
+    name=CONSUMER_NAME, handle=_handle, batch_size=lambda: settings.search_batch
+)

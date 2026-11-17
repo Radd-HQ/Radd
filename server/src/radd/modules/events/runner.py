@@ -1,13 +1,20 @@
-"""Head-seeded outbox-consumer scaffold (`run_head_seeded`).
+"""Head-seeded two-phase consumer scaffold (`run_head_seeded`).
 
-- no offset row yet → seed the cursor AT THE STREAM HEAD and return (first start only;
+For consumers that DELIVER outside the database (a mail, a survey, a storage
+delete) and must never do it twice:
+
+- no cursor yet → it is seeded AT THE STREAM HEAD (first start only;
   `ConsumerResume.HEAD` covers re-enable, RADD-1372);
-- read one batch; `plan` each event (log-don't-crash; planning may write rows);
-- advance the cursor and COMMIT before any delivery, then `deliver` post-commit —
-  at-most-once: a dropped message beats a duplicate.
+- the cursor is claimed for the tick (`consumer.claim`, RADD-1538), so a second
+  worker process does not plan the same batch;
+- `plan` each event (planning may write rows). A plan that raises is recorded in
+  `consumer_failures` as dead — at-most-once means it is not retried, not that it
+  vanishes;
+- advance the cursor and COMMIT before any delivery, then `deliver` post-commit:
+  a dropped message beats a duplicate.
 
-`silent` (bulk-import) events are skipped. Consumers with different semantics (search
-indexer, notify, automations, webhooks) stay hand-rolled.
+`silent` (bulk-import) events are skipped. Consumers that only write to the
+database declare a `consumer.Consumer` instead.
 """
 
 import logging
@@ -17,10 +24,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import SessionLocal
 
-from . import service
+from . import consumer as consumers, service
 from .models import Event
 
 logger = logging.getLogger(__name__)
+
+#: `{consumer name: (plan, deliver)}` for every scaffold consumer that has run in
+#: this process — how an operator's replay finds them.
+head_seeded: dict[str, tuple[Callable, Callable]] = {}
 
 
 async def run_head_seeded[P](
@@ -32,18 +43,14 @@ async def run_head_seeded[P](
 ) -> int:
     """One consumer iteration (see module docstring). Returns the number of
     events consumed (0 on first-start seeding / an empty stream)."""
+    head_seeded[consumer_name] = (plan, deliver)
     async with SessionLocal() as session:
-        if not await service.offset_exists(session, consumer_name):
-            head = await service.head_cursor(session)
-            await service.set_offset(session, consumer_name, head)
-            await session.commit()
-            logger.info(
-                "%s: first start — cursor seeded at stream head %s", consumer_name, head
-            )
+        offset = await consumers.claim(session, consumer_name, consumers.FirstStart.HEAD)
+        if offset is None:
             return 0
-        offset = await service.get_offset(session, consumer_name)
         batch = await service.read_after(session, offset, batch_size)
         if not batch:
+            await session.commit()  # a cursor seeded just now must outlive the tick
             return 0
         deliveries: list[tuple[Event, list[P]]] = []
         previous_cause = None
@@ -52,10 +59,14 @@ async def run_head_seeded[P](
             if event.silent:
                 continue
             try:
-                with service.derived_from(event):
-                    planned = await plan(session, event)
-            except Exception:
+                async with session.begin_nested():
+                    with service.derived_from(event):
+                        planned = await plan(session, event)
+            except Exception as error:  # noqa: BLE001 — a plan may raise anything
                 logger.exception("%s: planning failed for event %s", consumer_name, event.id)
+                await consumers.record_failure(
+                    session, consumer_name, event.id, error, consumers.Delivery.AT_MOST_ONCE
+                )
                 continue
             if planned is not None:
                 cause = (event.automated, event.automation_rule_id, event.automation_depth, event.silent)
@@ -69,3 +80,23 @@ async def run_head_seeded[P](
         with service.derived_from(event):
             await deliver(plans)
     return len(batch)
+
+
+async def replay(session: AsyncSession, consumer_name: str, event: Event) -> bool:
+    """An operator asked for a failed event again: plan it, commit, deliver."""
+    plan, deliver = head_seeded[consumer_name]
+    try:
+        async with session.begin_nested():
+            with service.derived_from(event):
+                planned = await plan(session, event)
+    except Exception as error:  # noqa: BLE001
+        logger.exception("%s: replay failed for event %s", consumer_name, event.id)
+        await consumers.record_failure(
+            session, consumer_name, event.id, error, consumers.Delivery.AT_MOST_ONCE
+        )
+        return False
+    await session.commit()
+    if planned is not None:
+        with service.derived_from(event):
+            await deliver([planned])
+    return True

@@ -17,7 +17,7 @@ from radd.modules.fields import service as fields_service
 from radd.modules.items.redaction import redact_item_payload
 from radd.exceptions import ConflictError, NotFoundError
 from radd.kernel import changes
-from radd.modules.events import service as events
+from radd.modules.events import consumer as event_consumer, service as events
 from radd.modules.events.service import Event
 from radd.clock import utcnow
 
@@ -187,33 +187,40 @@ async def list_deliveries(
     return list(result.scalars())
 
 
-async def fanout_events(session: AsyncSession) -> int:
-    """Advance this consumer's cursor, creating pending deliveries for matching endpoints."""
-    offset = await events.get_offset(session, CONSUMER_NAME)
-    batch = await events.read_after(session, offset, settings.webhook_fanout_batch)
-    if not batch:
-        return 0
+async def _fan_out(session: AsyncSession, event: Event) -> None:
+    """Queue one pending delivery per active endpoint subscribed to this event."""
     result = await session.execute(
         select(WebhookEndpoint).where(WebhookEndpoint.active.is_(True))
     )
-    endpoints = list(result.scalars())
     now = utcnow()
-    for event in batch:
-        if event.silent:  # a bulk import must not fan 45k deliveries at subscribers
+    for endpoint in result.scalars():
+        if endpoint.event_types and event.event_type not in endpoint.event_types:
             continue
-        for endpoint in endpoints:
-            if endpoint.event_types and event.event_type not in endpoint.event_types:
-                continue
-            session.add(
-                WebhookDelivery(
-                    endpoint_id=endpoint.id,
-                    event_id=event.id,
-                    status=DeliveryStatus.PENDING.value,
-                    next_attempt_at=now,
-                )
+        session.add(
+            WebhookDelivery(
+                endpoint_id=endpoint.id,
+                event_id=event.id,
+                status=DeliveryStatus.PENDING.value,
+                next_attempt_at=now,
             )
-    await events.set_offset(session, CONSUMER_NAME, batch[-1])
-    return len(batch)
+        )
+
+
+#: The fan-out only writes rows, in the transaction that advances the cursor, so
+#: an event is queued exactly once; the HTTP attempts have their own retry
+#: schedule (`attempt_due`). A bulk import's `silent` events are skipped: it must
+#: not fan 45k deliveries at subscribers.
+CONSUMER = event_consumer.Consumer(
+    name=CONSUMER_NAME,
+    handle=_fan_out,
+    batch_size=lambda: settings.webhook_fanout_batch,
+    wants=lambda event: not event.silent,
+)
+
+
+async def fanout_events(session: AsyncSession) -> int:
+    """Advance this consumer's cursor, creating pending deliveries for matching endpoints."""
+    return await event_consumer.run_in(session, CONSUMER)
 
 
 async def attempt_due(session: AsyncSession, client: httpx.AsyncClient) -> int:

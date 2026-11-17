@@ -89,6 +89,15 @@ class Settings(BaseSettings):
     # replica converges within this window instead of "until restart".
     snapshot_ttl_seconds: float = 30.0
 
+    # Event consumers (radd/modules/events/consumer.py, RADD-1538): a handler
+    # that raises is retried after base, 2×base, 4×base … seconds (capped), and
+    # the event is marked dead — kept, shown to an operator, replayable — after
+    # this many attempts. Five attempts at a 30 s base span about 7.5 minutes:
+    # longer than a mail server restart, shorter than anyone waits for a fix.
+    event_consumer_max_attempts: int = Field(default=5, gt=0)
+    event_consumer_retry_base_seconds: float = Field(default=30.0, gt=0)
+    event_consumer_retry_max_seconds: float = Field(default=900.0, gt=0)
+
     # Worker split (spec 48): false = this process serves web only; the
     # background loops (webhooks/automations/notify/search/sla/mail)
     # stay dormant. Realtime + storage init always run (they serve the web tier).

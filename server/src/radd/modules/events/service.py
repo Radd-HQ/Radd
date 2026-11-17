@@ -472,6 +472,9 @@ async def consumer_status(session: AsyncSession) -> list[dict[str, Any]]:
     return [
         {
             "name": name,
+    from . import consumer as consumers  # consumer.py imports this module
+
+    failures = await consumers.failure_counts(session)
             "description": descriptions.get(name, ""),
             "last_event_id": last_event_id,
             "stream_head": head,
@@ -481,3 +484,7 @@ async def consumer_status(session: AsyncSession) -> list[dict[str, Any]]:
         }
         for name, last_event_id, seconds in result.all()
     ]
+            # RADD-1538: events this consumer's handler raised on — waiting for
+            # their next attempt, or out of attempts and waiting for an operator.
+            "failed_pending": failures.get((name, consumers.FailureStatus.PENDING.value), 0),
+            "failed_dead": failures.get((name, consumers.FailureStatus.DEAD.value), 0),

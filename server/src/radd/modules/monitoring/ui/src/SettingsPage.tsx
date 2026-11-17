@@ -3,6 +3,7 @@ import { Activity, Database } from "lucide-react";
 import { api, QueryError, SettingsPage, Spinner, Slot, SlotId } from "@radd/plugin-sdk";
 import type { MonitoringOverview, WorkerStatus } from "./types";
 import { Card, StatRow } from "./cards";
+import { FailedEvents } from "./FailedEvents";
 
 const OVERVIEW_POLL_MS = 5_000;
 /** A consumer with backlog whose cursor hasn't moved in this long is stalled. */
@@ -114,12 +115,16 @@ export function MonitoringSettingsPage() {
                 <th className="py-1 pr-3 font-medium">Worker</th>
                 <th className="py-1 pr-3 font-medium">Backlog</th>
                 <th className="py-1 pr-3 font-medium">Last movement</th>
+                <th className="py-1 pr-3 font-medium">Failed</th>
                 <th className="py-1 font-medium">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-subtle/60">
               {data.workers.map((worker) => {
                 const state = WORKER_STATE_STYLES[workerState(worker)];
+                // Absent on a server from before the failure table: read as none.
+                const failedPending = worker.failed_pending ?? 0;
+                const failedDead = worker.failed_dead ?? 0;
                 return (
                   <tr key={worker.name}>
                     <td className="py-1.5 pr-3">
@@ -137,6 +142,17 @@ export function MonitoringSettingsPage() {
                     >
                       {formatAgo(worker.seconds_since_update)}
                     </td>
+                    <td className="py-1.5 pr-3 tabular-nums text-fg-secondary">
+                      {failedDead + failedPending === 0 ? (
+                        "—"
+                      ) : (
+                        <span className={failedDead ? "text-status-danger" : undefined}>
+                          {failedDead
+                            ? `${failedDead.toLocaleString()} gave up`
+                            : `${failedPending.toLocaleString()} retrying`}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-1.5">
                       <span
                         className={`rounded-full px-2 py-0.5 text-meta font-medium ring-1 ${state.className}`}
@@ -150,6 +166,13 @@ export function MonitoringSettingsPage() {
             </tbody>
           </table>
         </Card>
+
+        <FailedEvents
+          expected={data.workers.reduce(
+            (sum, worker) => sum + (worker.failed_pending ?? 0) + (worker.failed_dead ?? 0),
+            0,
+          )}
+        />
       </div>
     </SettingsPage>
   );
