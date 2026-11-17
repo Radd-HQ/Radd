@@ -11,7 +11,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMobileNavigation } from "../components/shell/mobile-navigation";
 import {
-  RoutePath, SLQ_PROBE_DEBOUNCE_MS, ITEMS_PAGE_LIMIT, ITEMS_PAGE_LIMIT_PHONE, ITEMS_PAGE_SIZES,
+  RoutePath, SLQ_PROBE_DEBOUNCE_MS, ITEMS_PAGE_DEFAULT, ITEMS_PAGE_LIMIT_PHONE, ITEMS_PAGE_SIZES,
   ITEMS_PAGE_SIZE_STORAGE_KEY,
 } from "./constants";
 import { allowedTransitionsQuery, authStateQuery, fieldWritabilityQuery, effectiveScreenQuery, statesQuery, instanceConfigQuery, itemByKeyQuery, resolvedSettingQuery, slqValidateQuery } from "./queries";
@@ -56,7 +56,7 @@ export function useItemsPageLimit(): [number, (size: number) => void] {
       // Best-effort persistence — the choice still holds for the session.
     }
   }, []);
-  return [stored ?? (mobile ? ITEMS_PAGE_LIMIT_PHONE : ITEMS_PAGE_LIMIT), set];
+  return [stored ?? (mobile ? ITEMS_PAGE_LIMIT_PHONE : ITEMS_PAGE_DEFAULT), set];
 }
 
 /** A localStorage-backed on/off flag ("1"/"0"), re-read when the key changes —

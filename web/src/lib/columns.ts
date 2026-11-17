@@ -65,7 +65,7 @@ export function columnWidth(column: ColumnDef, widths: Record<string, number>): 
 const BUILTIN_COLUMNS: ColumnDef[] = [
   { id: "type", label: "Issue type", width: 128, minWidth: COLUMN_MIN_WIDTH },
   { id: "parent", label: "Parent", width: 128, minWidth: COLUMN_MIN_WIDTH },
-  { id: "labels", label: "Labels", width: 224, minWidth: 96 },
+  { id: "labels", label: "Labels", width: 160, minWidth: 96 },
   { id: "cycle", label: "Cycle", width: 112, minWidth: COLUMN_MIN_WIDTH },
   { id: "release", label: "Release", width: 104, minWidth: COLUMN_MIN_WIDTH },
   { id: "start_date", label: "Start date", width: 96, minWidth: COLUMN_MIN_WIDTH },
@@ -76,7 +76,7 @@ const BUILTIN_COLUMNS: ColumnDef[] = [
   { id: "assignee", label: "Assignee", width: 72, minWidth: COLUMN_MIN_WIDTH },
   { id: "reporter", label: "Reporter", width: 128, minWidth: COLUMN_MIN_WIDTH },
   { id: "points", label: "Points", width: 64, minWidth: COLUMN_MIN_WIDTH },
-  { id: "progress", label: "Progress", width: 128, minWidth: 80 },
+  { id: "progress", label: "Progress", width: 104, minWidth: 80 },
   { id: "logged_time", label: "Logged time", width: 88, minWidth: COLUMN_MIN_WIDTH },
   { id: "created", label: "Created", width: 96, minWidth: COLUMN_MIN_WIDTH },
   { id: "updated", label: "Updated", width: 96, minWidth: COLUMN_MIN_WIDTH },

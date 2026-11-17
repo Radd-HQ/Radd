@@ -57,7 +57,12 @@ function cellStyle(column: ColumnDef, width: number): React.CSSProperties {
 
 /** The Item zone's style for a row or the header, from the same widths map. */
 export function itemZoneStyle(widths: Record<string, number>): React.CSSProperties {
-  return cellStyle(TITLE_COLUMN, columnWidth(TITLE_COLUMN, widths));
+  // The title is what the row is FOR (RADD-1553). It never gives up its width —
+  // when the row is tight the other columns go to their minimums first — and it
+  // takes most of any room left over. It used to shrink in proportion with the
+  // rest, and since this zone also holds the checkbox, star, icons and key, a
+  // laptop left the title text about 130 px beside columns of dashes.
+  return { ...cellStyle(TITLE_COLUMN, columnWidth(TITLE_COLUMN, widths)), flexShrink: 0, flexGrow: 4, maxWidth: columnMaxWidth(TITLE_COLUMN_ID) };
 }
 
 /** The slack absorber every row and the header end with. */
