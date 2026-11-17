@@ -52,9 +52,10 @@ const PERIODS: { value: TimesheetPeriodValue; label: string }[] = [
   { value: TimesheetPeriod.month, label: "Month" },
 ];
 
-/** Global timesheet (spec 22): day/week/month time reports, filterable by
- * team or person, drilling into a day / employee / issue. */
-export function TimesheetPage() {
+/** The timesheet REPORT (spec 22): day/week/month time reports, filterable by
+ * team or person, drilling into a day / employee / issue. Entering time is the
+ * calendar beside it (`routes/timesheet-page.tsx`, RADD-1541). */
+export function TimesheetReport() {
   const perms = usePermissions();
   const durationConfig = useDurationConfig();
   const canViewOthers = perms.global(Permission.timesheetView);

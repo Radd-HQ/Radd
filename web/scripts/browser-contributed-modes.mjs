@@ -113,7 +113,7 @@ try {
   };
 
   // 3. The timesheet's bar: empty, so it opens on the first available mode — Ask, ai's.
-  await s.navigate(`${base}/timesheet`);
+  await s.navigate(`${base}/timesheet?m=report`);
   assert(await s.eval(`matchMedia("(hover: hover)").matches`), "the browser must report a hover-capable pointer");
   await wait(`!!document.querySelector('input[aria-label="Ask AI for a query"]')`, "the bar opens on Ask");
   assert(requests.some(r => r.route === "/plugins/ai/remoteEntry.js"), "the ai remote bundle was loaded");
@@ -189,7 +189,7 @@ try {
   checks.push("a mode that answers in text streams it into the palette before it settles; Esc leaves the mode, then closes");
 
   // 4. Withdrawal, on an open timesheet with a query bar.
-  await s.navigate(`${base}/timesheet`);
+  await s.navigate(`${base}/timesheet?m=report`);
   await s.eval("window.__sameDocument = true");
   await wait(`!!document.querySelector('input[aria-label="Ask AI for a query"]')`, "Ask before withdrawal");
   const before = aiRequests();

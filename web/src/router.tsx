@@ -29,7 +29,7 @@ const PublicPage = lazyRouteComponent(() => import("./components/shell/PublicPag
 const RoadmapPage = lazyRouteComponent(() => import("./routes/roadmap"), "RoadmapPage");
 const ReportsPage = lazyRouteComponent(() => import("./routes/reports"), "ReportsPage");
 const GlobalReportsPage = lazyRouteComponent(() => import("./routes/global-reports"), "GlobalReportsPage");
-const TimesheetPage = lazyRouteComponent(() => import("./routes/timesheet"), "TimesheetPage");
+const TimesheetPage = lazyRouteComponent(() => import("./routes/timesheet-page"), "TimesheetPage");
 const InboxPage = lazyRouteComponent(() => import("./routes/inbox"), "InboxPage");
 const PortalPage = lazyRouteComponent(() => import("./routes/portal"), "PortalPage");
 const PortalFormPage = lazyRouteComponent(() => import("./routes/portal-form"), "PortalFormPage");

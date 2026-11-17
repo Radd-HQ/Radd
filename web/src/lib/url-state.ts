@@ -16,8 +16,9 @@ const MAX_INLINE = 180;
  *  Keys are short because they ride in the URL, and shared across pages —
  *  `q`/`f` are the SLQ bar + quick-filter chips, `pf` the user's PERSONAL
  *  saved-filter chips, the rest are the timesheet's period/date/grouping and
- *  its project/team/person filters. */
-const OWNED = ["q", "f", "pf", "p", "d", "g", "pr", "tm", "u", "pg"] as const;
+ *  its project/team/person filters, and `m` which of its two surfaces is open
+ *  (RADD-1541: the entry calendar or the report). */
+const OWNED = ["q", "f", "pf", "p", "d", "g", "pr", "tm", "u", "pg", "m"] as const;
 
 type UrlState = Partial<Record<(typeof OWNED)[number], string>>;
 

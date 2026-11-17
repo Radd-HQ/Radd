@@ -16,6 +16,72 @@ Moved here from the CLAUDE.md preamble on 2026-09-27 (RADD-1441): one entry per 
 preamble narrated it at the time, so the working agreement stays rules-only. The tracker's RADD project
 and `docs/specs/` are the primary record; these entries are the per-wave summary.
 
+### Production readiness — epic RADD-1523 (2026-11-16/17), on main, unreleased
+
+Hussein asked for a full review of quality, gaps and production readiness, including the pilot's
+evaluation channel, then: "fix everything and complete the plan before pushing". The review found nine
+blockers; the plan was four phases under one epic. Decisions he took: Cinesite adoption first and a public
+1.0 later, no Jira bridge, no localisation yet. Two security findings (an outbound-fetch guard, an Origin
+check) are deliberately unfiled until he says where to track them: the RADD project is public.
+
+**Phase 1, correctness (2026-11-16).** RADD-1524: consumers read the outbox in `(xact_id, id)` order
+below the snapshot's xmin, so a transaction that commits late no longer loses its event. RADD-1525: the
+database records which encryption key it was written with and startup refuses another. RADD-1526: restore
+and upgrade drills in CI. **RADD-1543, found by the drill**: the shipped image's PostgreSQL 17 client could
+not restore into a 16 server at all — backups verified and did not restore. RADD-1527/1528/1529: stale
+tabs after a deploy, error screens with browser error reporting, password change and admin reset.
+
+**Phase 2, operability (2026-11-16).** RADD-1532/1533: six indexes and a bounded search rank (1.9 s to
+9 ms). RADD-1534: chart hardening. RADD-1531: response headers and a CSP every browser proof enforces.
+RADD-1530: request IDs, JSON logs, `/metrics`. RADD-1535: the release starts, backs up, restores, stops and
+scans the image before pushing it.
+
+**Phase 3, concurrency (2026-11-17), sized by a load test instead of by reading code.**
+- **RADD-1536**: `server/scripts/loadtest/` — an event-history seed (5.0M events over the 501k-item perf
+  seed), 200 Member accounts, and an httpx/websockets load generator; results and budgets in
+  `docs/performance.md`. The build as it stood COLLAPSED under 200 users (5.7 requests/s, 72% errors, 34 s
+  medians, memory at its limit), and still saturated at 16 requests/s with reports left out.
+- **RADD-1537**: `item_transitions` — one row per item creation, state change and cycle change, written by
+  `items.transitions.record` beside every item event; the five reports are SQL aggregates over it (23 s
+  to 15–375 ms on a 100k-item project). A test runs the migration's backfill over events the writer just
+  produced and requires the same rows. The backfill took 11 min 20 s on 5.0M events.
+- **RADD-1538**: `events/consumer.py` — one runner: the cursor row is claimed `FOR UPDATE SKIP LOCKED`
+  per tick, a handler runs per event in a savepoint, and one that raises is recorded in
+  `consumer_failures`, retried with backoff, then dead and replayable from Settings → Monitoring. notify,
+  search, webhooks and automations moved onto it; the two-phase scaffold shares the claim and the table.
+  Automations are at-most-once on purpose (a half-run graph may have posted somewhere). NOT done: moving
+  the ~18 `PeriodicLoop`s onto `TaskSpec`.
+- **RADD-1539**: item writes lock the row, so two edits run one after the other (two keys of
+  `custom_fields` used to lose one); a description save carries the version it started from and a stale
+  one is a 409 with a keep-mine / use-theirs prompt; a collapsed rank gap respaces the neighbourhood
+  instead of renumbering every item. Seven two-writer tests with real transactions.
+- **RADD-1540**: the wiki tree no longer reads page bodies; a timesheet is bounded (366 days, 50,000
+  logs: a year for everyone was 5.4 s and 453 MB); S3 proxy downloads stream; and the History tab's
+  related-event lookup got an index (1,531 ms to 32 ms), a fifth surface the load test found. A change to
+  the board summary was measured, found slower, and reverted.
+- **RADD-1544**, filed from the test: one process serves about 20 requests/s because a request costs
+  25–50 ms of Python. Permission expansion is cached and field-read checks are per project, not per row;
+  the chart gains `web.processes`. Four web processes beside one worker served the 200 users: 44
+  requests/s, 2 errors in 13,261, medians 0.13–0.35 s. Starting five processes at once deadlocked on a
+  startup `ALTER TABLE` (now behind an advisory lock). Co-editing rooms live in one process, so the
+  Ingress routes `/api/v1/collab` to the worker: rendered, NOT yet run on a cluster.
+- **RADD-1545**, filed and not built: board and issue page miss their p95 budgets (the database used 4.4
+  cores at 44 requests/s).
+
+**Phase 4, the pilot's time-logging feedback (2026-11-17).** RADD-1541: `/timesheet` opens on **My week**
+— one person's week as a calendar of worklog cards under daily totals, with trays of assigned and recently
+logged issues and general-time categories. Drag a ticket onto a day to log an hour, drag a card to move
+it, Ctrl-drag to copy, pull its edge or type to change the duration, with a key for each. The grid the
+page used to be is the **Report** tab. It stores nothing new. Modelled on the mock the evaluator built
+in their own tool; not yet shown to them.
+
+Traps met: `CREATE DATABASE … TEMPLATE` on the working database crashed Postgres twice — load tests get
+their own container. A copy of a real database polls real mailboxes and calls real webhooks: run it on a
+network with no way out. `podman stats` prints a lifetime CPU average, which read as "80% busy at idle"
+until differenced. `tsc -b` in `web/` does not type-check the plugin UIs; `node scripts/build-all.mjs`
+does. The dev database's port forward dies silently; the suite ran against a throwaway Postgres
+(`RADD_TEST_DATABASE_URL`).
+
 ### UI legibility round — epic RADD-1516 (2026-10-21), on main, unreleased
 
 Aurelien's second post, after the roadmap round: the UI is "hard to read and distinguish all the

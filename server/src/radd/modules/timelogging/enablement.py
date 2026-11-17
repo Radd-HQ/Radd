@@ -2,6 +2,7 @@
 
 import uuid
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError
@@ -61,3 +62,13 @@ async def require_enabled(session: AsyncSession, project_id: uuid.UUID) -> None:
         raise ConflictError(
             TimelogEntity.PROJECT_CONFIG, reason="time logging is not enabled for this project"
         )
+
+
+async def enabled_project_ids(session: AsyncSession) -> set[uuid.UUID]:
+    """Every project with time logging on — what a surface listing issues from
+    several projects asks ONCE, so it can show which of them take time before
+    someone tries (RADD-1541) rather than answering each attempt with a 409."""
+    rows = await session.execute(
+        select(ProjectTimeLogging.project_id).where(ProjectTimeLogging.enabled.is_(True))
+    )
+    return set(rows.scalars())
