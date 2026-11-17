@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { api, Button, ErrorText, shiftIsoDay, Entity } from "@radd/plugin-sdk";
+import { api, Button, ErrorText, shiftIsoDay, Entity, DateInput } from "@radd/plugin-sdk";
 import { ProjectSelect } from "./controls";
 import { MY_WORK_PATH, dashboardKeys } from "./queries";
 import type { ActivityPage } from "./types";
@@ -16,7 +16,7 @@ export function ActivityWidget({ config = {} }: { config?: { project_id?: string
   let day = "";
   return <div className="space-y-2">
     <ProjectSelect label="Project" value={project} onChange={setProject} emptyLabel="All projects" emptyValue="" />
-    <div className="flex flex-wrap gap-2 text-xs"><label>From <input aria-label="Activity from" type="date" value={start} onChange={e => setStart(e.target.value)} className="bg-base" /></label><label>To <input aria-label="Activity to" type="date" value={end} min={start} onChange={e => setEnd(e.target.value)} className="bg-base" /></label></div>
+    <div className="flex flex-wrap gap-2 text-xs"><label>From <DateInput aria-label="Activity from" value={start} onChange={e => setStart(e.target.value)} /></label><label>To <DateInput aria-label="Activity to" value={end} min={start} onChange={e => setEnd(e.target.value)} /></label></div>
     {query.isPending && <p className="text-sm text-fg-muted">Loading activity…</p>}
     {query.isError && <ErrorText error={query.error} />}
     {query.data?.pages.flatMap(page => page.entries).map(entry => {

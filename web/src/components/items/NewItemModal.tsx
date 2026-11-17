@@ -436,7 +436,6 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             {...lock("start_date")}
             error={errorFor("start_date")}
             onChange={(event) => setStartDate(event.target.value)}
-            className="[color-scheme:dark]"
           />)}
 
           {place("target_date", <TextField
@@ -446,7 +445,6 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             {...lock("target_date")}
             error={errorFor("target_date")}
             onChange={(event) => setTargetDate(event.target.value)}
-            className="[color-scheme:dark]"
           />)}
 
           {pointsEnabled && place("points",

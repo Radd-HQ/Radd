@@ -139,7 +139,7 @@ export { ChangeList, ChangeLine, changeLabel, humanize, formatChangeValue } from
 export type { HistoryChange } from "./changes";
 export { CollapsibleCard } from "./CollapsibleCard";
 export { Pager } from "./Pager";
-export { DateField } from "./DateField";
+export { DateField, DateInput } from "./DateField";
 export { Table, THead, TBody, Th, Td } from "./Table";
 export { useKeyedRows } from "./keyed-rows";
 export { TableSkeleton } from "./TableSkeleton";

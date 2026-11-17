@@ -27,6 +27,8 @@ export function TextField({ label, hint, error, className = "", ...props }: Text
           (error
             ? "border-status-danger/60 focus:border-status-danger focus:ring-status-danger/30 "
             : "border-subtle focus:border-accent focus:ring-accent/30 ") +
+          // A date picker follows the page's scheme, never a pinned one (RADD-1563).
+          (props.type === "date" ? "[color-scheme:inherit] " : "") +
           className
         }
       />

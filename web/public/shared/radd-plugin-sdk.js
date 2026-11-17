@@ -130,6 +130,7 @@ export const formatChangeValue = M["formatChangeValue"];
 export const CollapsibleCard = M["CollapsibleCard"];
 export const Pager = M["Pager"];
 export const DateField = M["DateField"];
+export const DateInput = M["DateInput"];
 export const Table = M["Table"];
 export const THead = M["THead"];
 export const TBody = M["TBody"];

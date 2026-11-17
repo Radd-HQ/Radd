@@ -11,7 +11,7 @@ import {
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath, RoutePath, apiCyclePath } from "../../lib/constants";
 import { WEEKDAY_LABELS, parseCycleName } from "../../lib/cycle-series";
-import { formatDate, EmptyState, TableSkeleton, IconButton, ErrorText } from "@radd/plugin-sdk";
+import { formatDate, EmptyState, TableSkeleton, IconButton, ErrorText, DateInput } from "@radd/plugin-sdk";
 import { usePermissions } from "../../lib/hooks";
 import { useCycleDirectory } from "../../lib/useCycleDirectory";
 import { DirectoryPager } from "../../components/DirectoryPager";
@@ -239,24 +239,20 @@ export function CycleModal({ cycle, onClose, defaultProjectId }: {
             <label htmlFor="cycle-start" className="text-xs font-medium text-fg-secondary">
               Start date
             </label>
-            <input
+            <DateInput
               id="cycle-start"
-              type="date"
               value={startDate}
               onChange={(event) => setStartDate(event.target.value)}
-              className="h-8 rounded-md border border-strong bg-surface px-2 text-row text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:dark]"
             />
           </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="cycle-end" className="text-xs font-medium text-fg-secondary">
               End date
             </label>
-            <input
+            <DateInput
               id="cycle-end"
-              type="date"
               value={endDate}
               onChange={(event) => setEndDate(event.target.value)}
-              className="h-8 rounded-md border border-strong bg-surface px-2 text-row text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:dark]"
             />
           </div>
         </div>

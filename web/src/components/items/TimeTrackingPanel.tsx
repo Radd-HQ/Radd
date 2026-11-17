@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock, Pencil, Plus, Trash2, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
-import { Entity, invalidateEntities } from "@radd/plugin-sdk";
+import { Entity, invalidateEntities, DateInput } from "@radd/plugin-sdk";
 import {
   apiItemEstimatePath,
   apiItemWorklogsPath,
@@ -246,11 +246,9 @@ function LogWorkForm({ itemId }: { itemId: string }) {
         </label>
         <label className="flex flex-col gap-1 text-meta text-fg-muted">
           Date
-          <input
-            type="date"
+          <DateInput
             value={workedOn}
             onChange={(event) => setWorkedOn(event.target.value)}
-            className="rounded border border-strong bg-surface px-2 py-1 text-row text-heading focus:outline-2 focus:outline-offset-1 focus:outline-focus"
           />
         </label>
         <label className="flex flex-col gap-1 text-meta text-fg-muted">

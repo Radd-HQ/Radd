@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { CalendarRange } from "lucide-react";
 import { REPORT_DEFAULT_RANGE_DAYS } from "../lib/constants";
-import { isoDaysAgo, Slot } from "@radd/plugin-sdk";
+import { isoDaysAgo, Slot, DateInput } from "@radd/plugin-sdk";
 import { REPORT_SECTION_SLOT } from "@radd-plugin-ui/reporting/report-contract";
 import { useProjectByKey, usePointsEnabled } from "../lib/hooks";
 import { REPORT_INTERVAL_LABELS, REPORT_INTERVAL_ORDER } from "../lib/meta";
@@ -22,10 +22,6 @@ const INTERVAL_OPTIONS = REPORT_INTERVAL_ORDER.map((interval) => ({
   value: interval,
   label: REPORT_INTERVAL_LABELS[interval],
 }));
-
-const dateInputClasses =
-  "h-7 rounded-md border border-subtle bg-surface px-1.5 text-xs text-fg " +
-  "cursor-pointer focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:dark]";
 
 /**
  * Project reporting dashboard (spec 19): throughput, cumulative flow, time in
@@ -78,23 +74,19 @@ export function ReportsPage() {
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <label className="flex items-center gap-1.5 text-xs text-fg-muted">
                 From
-                <input
-                  type="date"
+                <DateInput
                   value={start}
                   max={end}
                   onChange={(event) => setStart(event.target.value)}
-                  className={dateInputClasses}
                   aria-label="Range start"
                 />
               </label>
               <label className="flex items-center gap-1.5 text-xs text-fg-muted">
                 To
-                <input
-                  type="date"
+                <DateInput
                   value={end}
                   min={start}
                   onChange={(event) => setEnd(event.target.value)}
-                  className={dateInputClasses}
                   aria-label="Range end"
                 />
               </label>
