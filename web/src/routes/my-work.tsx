@@ -7,6 +7,7 @@ import { api, type CursorPage } from "../lib/api";
 import { Entity, entityMeta } from "@radd/plugin-sdk";
 import { Link } from "@tanstack/react-router";
 import { MyForms } from "../components/forms/MyForms";
+import { LogTimeWidget } from "../components/timelog/LogTimeWidget";
 import { ListSection } from "../components/requests/ListSection";
 import { MyRequests } from "../components/requests/RequestSection";
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
@@ -61,6 +62,7 @@ function PersonalWidget({ widget, filter }: { widget: DashboardWidget; filter: s
     case Kind.requests: return <MyRequests compact />;
     case Kind.forms: return <MyForms />;
     case Kind.recent: return <RecentlyViewedSection />;
+    case Kind.logTime: return <LogTimeWidget />;
     // "My activity", the builtin widgets, and a plugin's (approvals') through the dashboard.widget slot.
     default: return <WidgetBody widget={widget} filterQuery={filter} />;
   }

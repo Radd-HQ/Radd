@@ -11,6 +11,7 @@ export const CARD_LABELS: Record<string, string> = {
   [PersonalWidgetType.requests]: "My requests",
   [PersonalWidgetType.forms]: "Request forms",
   [PersonalWidgetType.recent]: "Recently viewed",
+  [PersonalWidgetType.logTime]: "Log time",
   [WidgetType.slqCount]: "Issue count",
   [WidgetType.slqList]: "Issue list",
   [WidgetType.viewCount]: "Saved-view count",

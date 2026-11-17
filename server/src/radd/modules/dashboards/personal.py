@@ -25,6 +25,8 @@ TITLES = {
     "requests": "My requests",
     "forms": "Request forms",
     "recent": "Recently viewed",
+    # RADD-1575: the tickets a person is likely to log on, with a duration field.
+    "logtime": "Log time",
 }
 
 
@@ -125,6 +127,12 @@ async def suggested_defaults(session, user):
         for key, spec in sorted(contributed().items())
         if spec.suggest is not None and await spec.suggest(session, user)
     ]
+    if "timelogging" in registries.plugins:
+        from radd.modules.timelogging import service as timelogging
+
+        # Offered to whoever the Timesheet is offered to (RADD-1575).
+        if await timelogging.nav_timesheet_visible(session, user):
+            extras.append("logtime")
     if "forms" in registries.plugins:
         from radd.modules.forms.portal import list_portal_forms
         from radd.modules.forms.requests import list_my_requests

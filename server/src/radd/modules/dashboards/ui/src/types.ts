@@ -25,6 +25,7 @@ export const PersonalWidgetType = {
   requests: "requests",
   forms: "forms",
   recent: "recent",
+  logTime: "logtime",
 } as const;
 
 export const ReportInterval = { day: "day", week: "week" } as const;

@@ -16,6 +16,29 @@ Moved here from the CLAUDE.md preamble on 2026-09-27 (RADD-1441): one entry per 
 preamble narrated it at the time, so the working agreement stays rules-only. The tracker's RADD project
 and `docs/specs/` are the primary record; these entries are the per-wave summary.
 
+### Logging time: my tickets, type-to-log, a Team view — epic RADD-1571 (2026-11-18), on main, unreleased
+
+Hussein pointed at the in-house time logger the pilot team uses and asked for a Radd approach to
+three things it does: a list of the tickets that matter to a person with a quick way to log on them,
+logging from a calendar, and a manager's view of how people log. Nothing was copied; the calendar
+already existed (RADD-1541). Four issues, one commit each.
+
+RADD-1572: `GET /timesheet/my-tickets`, one server-ranked list of what the caller is assigned, booked
+on lately or acted on lately. "Acted on" is read from the event log through the registry's item-scoped
+event types, so it names no other module's events. `ix_events_actor_id` became
+`ix_events_actor_created` (396 ms to 10 ms for an account with 189k events). RADD-1573: a duration
+field on every tray row logs on a highlighted day; the tray's box also searches every issue.
+RADD-1574: a Team tab on /timesheet for `timesheet.view` holders: logged against expected per person
+(leave taken out), and a flag with its reason in words on logging that is not believable. Hussein's
+correction to the first proposal: a week booked on one day is a FLAG, because the point is to draw a
+manager's attention so they follow up; it had been proposed as a plain column. The roster rides on
+the timesheet payload (`people`) so a member with no time has a row. RADD-1575: a "Log time" widget
+on My Work.
+
+Left out on purpose: recording issue views as a relevance signal, a hard daily cap (over-logging is
+flagged, not refused), and a read-only calendar of another person's week (a row opens to its days
+and entries instead, which works for a month as well as a week).
+
 ### Performance and usability, second pass — epic RADD-1548 (2026-11-17), on main, unreleased
 
 After the readiness wave Hussein asked for another pass, for a plan he could skim, then: "do all of
