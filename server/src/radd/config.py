@@ -567,6 +567,13 @@ class Settings(BaseSettings):
     # bounds is highlighted on the per-person timesheet view.
     timesheet_day_min_hours: int = 6
     timesheet_day_max_hours: int = 10
+    # The Team view's attention flags (RADD-1574), as percentages. A person is
+    # flagged when what they logged over a period is under `low` or over `high`
+    # percent of what the working days expect, or when they logged on fewer
+    # than `days` percent of those days (a week booked in one go).
+    timesheet_attention_low_percent: int = 75
+    timesheet_attention_high_percent: int = 125
+    timesheet_attention_days_percent: int = 75
     # What one timesheet request may ask for (RADD-1540). The sheet returns one
     # entry per time log, so an open-ended window is the whole table: a year for
     # everyone was 340k rows built as objects on the request path. A request past

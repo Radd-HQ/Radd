@@ -122,6 +122,13 @@ export interface Timesheet {
   day_max_hours: number;
   /** Working days ("mon".."sun") — under-logging only flags these. */
   work_days: string[];
+  /** RADD-1574: who the sheet covers when a team was asked for — its members,
+   *  with or without entries — and the Team view's thresholds. */
+  people: UserRef[];
+  hours_per_day: number;
+  attention_low_percent: number;
+  attention_high_percent: number;
+  attention_days_percent: number;
 }
 
 /** Why an issue is on a person's "my tickets" list (RADD-1572) — the server's `TicketReason`. */

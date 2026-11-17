@@ -131,6 +131,43 @@ plugin = RaddPlugin(
             section="timelogging",
             page_scopes=("instance", "project"),
         ),
+        SettingSpec(
+            key="timesheet_attention_low_percent",
+            type="int",
+            scopes=("instance",),
+            label="Team timesheet: flag under this percent of expected",
+            description=(
+                "On the timesheet's Team view, a person who logged less than this percent of "
+                "what their working days expect over the period is flagged for follow-up."
+            ),
+            section="timelogging",
+            page_scopes=("instance", "project"),
+        ),
+        SettingSpec(
+            key="timesheet_attention_high_percent",
+            type="int",
+            scopes=("instance",),
+            label="Team timesheet: flag over this percent of expected",
+            description=(
+                "On the timesheet's Team view, a person who logged more than this percent of "
+                "what their working days expect over the period is flagged for follow-up."
+            ),
+            section="timelogging",
+            page_scopes=("instance", "project"),
+        ),
+        SettingSpec(
+            key="timesheet_attention_days_percent",
+            type="int",
+            scopes=("instance",),
+            label="Team timesheet: flag time on fewer than this percent of working days",
+            description=(
+                "On the timesheet's Team view, a person whose time sits on fewer than this "
+                "percent of the period's working days is flagged: a week booked in one go "
+                "is not a record of the week."
+            ),
+            section="timelogging",
+            page_scopes=("instance", "project"),
+        ),
     ),
     description=(
         "Time logging: worklogs, estimates and the timesheet."

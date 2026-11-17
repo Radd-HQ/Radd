@@ -41,6 +41,10 @@ class SettingKey(StrEnum):
     # Timesheet outlier flags: a workday logged outside these bounds is highlighted.
     TIMESHEET_DAY_MIN_HOURS = "timesheet_day_min_hours"
     TIMESHEET_DAY_MAX_HOURS = "timesheet_day_max_hours"
+    # The timesheet's Team view (RADD-1574): when a person's period draws attention.
+    TIMESHEET_ATTENTION_LOW_PERCENT = "timesheet_attention_low_percent"
+    TIMESHEET_ATTENTION_HIGH_PERCENT = "timesheet_attention_high_percent"
+    TIMESHEET_ATTENTION_DAYS_PERCENT = "timesheet_attention_days_percent"
     WORKFLOW_TRANSITION_MODE = "workflow_transition_mode"
     CSAT_ENABLED = "csat_enabled"
     ESTIMATION_POINTS = "estimation_points"

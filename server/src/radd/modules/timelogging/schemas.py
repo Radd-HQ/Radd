@@ -204,3 +204,11 @@ class Timesheet(BaseModel):
     day_min_hours: int = 6
     day_max_hours: int = 10
     work_days: list[str] = []
+    # The Team view (RADD-1574). `people` is who the sheet COVERS when a team
+    # was asked for — its members, whether or not they logged anything: the
+    # person with no entries is the one a manager most needs to see.
+    people: list[UserRef] = []
+    hours_per_day: int = 8
+    attention_low_percent: int = 75
+    attention_high_percent: int = 125
+    attention_days_percent: int = 75

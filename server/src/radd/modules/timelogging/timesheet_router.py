@@ -16,7 +16,7 @@ from radd.modules.teams import service as teams_service
 
 from . import enablement, mytickets, service, timesheet
 from .slq.suggest import suggest_worklog
-from .schemas import MyTicket, Timesheet
+from .schemas import MyTicket, Timesheet, UserRef
 
 router = APIRouter(prefix="/timesheet", tags=["timelogging"])
 
@@ -38,6 +38,7 @@ async def get_timesheet(
         raise HTTPException(status_code=422, detail="start must be on or before end")
     await authz.require_member(session, user)  # the member floor (RADD-788)
     requested: set[uuid.UUID] | None = set(user_id) if user_id else None
+    members = []
     if team_id is not None:
         members = await teams_service.list_team_members(session, team_id)
         member_ids = {m.id for m in members}
@@ -57,6 +58,22 @@ async def get_timesheet(
     )
     week = str(await settings_service.resolve(session, SettingKey.WORK_WEEK_DAYS))
     sheet.work_days = [day.strip().lower() for day in week.split(",") if day.strip()]
+    sheet.people = sorted(
+        (UserRef(id=m.id, name=m.name) for m in members if requested is None or m.id in requested),
+        key=lambda person: person.name.lower(),
+    )
+    sheet.hours_per_day = int(
+        await settings_service.resolve(session, SettingKey.TIMELOG_HOURS_PER_DAY)
+    )
+    sheet.attention_low_percent = int(
+        await settings_service.resolve(session, SettingKey.TIMESHEET_ATTENTION_LOW_PERCENT)
+    )
+    sheet.attention_high_percent = int(
+        await settings_service.resolve(session, SettingKey.TIMESHEET_ATTENTION_HIGH_PERCENT)
+    )
+    sheet.attention_days_percent = int(
+        await settings_service.resolve(session, SettingKey.TIMESHEET_ATTENTION_DAYS_PERCENT)
+    )
     return sheet
 
 
