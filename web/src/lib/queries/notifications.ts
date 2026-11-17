@@ -21,8 +21,13 @@ import type { DirectoryOption } from "@radd/plugin-sdk";
  * hard-capped at the first 100 and older notifications were unreachable. */
 export const INBOX_PAGE_SIZE = 100;
 
-/** The list request under way, if any: its answer also carries the unread count
- *  the shell's badge wants (RADD-1564). */
+/** How many unread rows the badge's request carries: enough for My Work's
+ *  inbox widget, which shows five groups, to read it instead of asking again. */
+export const BADGE_ROWS = 20;
+const BADGE_FRESH_MS = 10_000;
+
+/** The first-page list request under way, if any: its answer carries the unread
+ *  count the shell's badge wants (RADD-1564). */
 let listInFlight: Promise<NotificationList> | null = null;
 
 /** Full notification list for the Inbox (spec 26), paged (RADD-884). */
@@ -38,11 +43,14 @@ export const notificationsQuery = (unread: boolean, page = 1) =>
           offset: String((page - 1) * INBOX_PAGE_SIZE),
         },
       });
-      listInFlight = answer;
-      const forget = () => {
-        if (listInFlight === answer) listInFlight = null;
-      };
-      answer.then(forget, forget);
+      // Only page 1 holds the newest rows, which is what the badge would get.
+      if (page === 1) {
+        listInFlight = answer;
+        const forget = () => {
+          if (listInFlight === answer) listInFlight = null;
+        };
+        answer.then(forget, forget);
+      }
       return answer;
     },
     meta: entityMeta(Entity.notification),
@@ -50,34 +58,45 @@ export const notificationsQuery = (unread: boolean, page = 1) =>
   });
 
 /**
- * Lightweight unread-count poll behind the sidebar Inbox badge. Kept separate
- * from the list query so the whole inbox isn't refetched every 30s; realtime
- * invalidation (spec 27) makes both instant.
+ * The unread count behind the Inbox badge, with the newest few unread rows
+ * (RADD-1567): My Work's inbox widget reads this answer instead of sending a
+ * request of its own after the shell already has. Kept separate from the list
+ * query so the whole inbox isn't refetched every 30s; realtime invalidation
+ * (spec 27) makes both instant.
  */
 export const notificationsBadgeQuery = queryOptions({
   queryKey: queryKeys.notificationsBadge,
   queryFn: async ({ signal }) => {
-    // RADD-1564: on My Work and the Inbox the page asks for the list in the same
-    // tick, and that answer carries the count. One turn of the event loop lets
-    // the page's request start, whichever of the two mounted first; the badge
-    // then reads its count from that answer instead of sending its own.
+    // RADD-1564: on the Inbox the page asks for the list in the same tick, and
+    // that answer carries the count. One turn of the event loop lets the page's
+    // request start, whichever of the two mounted first.
     await new Promise((resolve) => setTimeout(resolve, 0));
     const pending = listInFlight;
     if (pending) {
       try {
         const list = await pending;
-        return { notifications: [], unread_count: list.unread_count };
+        // RADD-1567: this answer is also what My Work's widget lists, so it is
+        // taken from the list only when the list provably holds the newest
+        // unread rows; a page of mostly read rows may not.
+        const unread = list.notifications.filter((row) => !row.read).slice(0, BADGE_ROWS);
+        if (unread.length >= Math.min(list.unread_count, BADGE_ROWS)) {
+          return { notifications: unread, unread_count: list.unread_count };
+        }
       } catch {
-        // The list failed or was cancelled: ask for the count the ordinary way.
+        // The list failed or was cancelled: ask the ordinary way.
       }
     }
     return api.get<NotificationList>(ApiPath.notifications, {
       signal,
-      query: { unread: "true", limit: "1" },
+      query: { unread: "true", limit: String(BADGE_ROWS) },
     });
   },
   meta: entityMeta(Entity.notification),
   refetchInterval: NOTIFICATIONS_POLL_MS,
+  // Fresh for a few seconds, so a reader that mounts after the shell (My Work's
+  // widget) takes the answer already here instead of refetching it. A new
+  // notification still arrives at once: realtime invalidates, which ignores this.
+  staleTime: BADGE_FRESH_MS,
 });
 
 /** The caller's whole notification policy (spec 118): the kind vocabulary, the columns, what an

@@ -14,7 +14,7 @@ import { CalendarClock, History, Inbox, Star, UserRound } from "lucide-react";
 import { listRecentItems } from "../lib/recent";
 import { RoutePath } from "../lib/constants";
 import { usePeek } from "../lib/hooks";
-import { notificationsQuery, itemsCountQuery } from "../lib/queries";
+import { notificationsBadgeQuery, itemsCountQuery } from "../lib/queries";
 import { combineQueryWithFilters, splitQueryOrder } from "../lib/slq";
 import { useSlqQueryState } from "../lib/slq-filter";
 import type { Item } from "../lib/types";
@@ -67,7 +67,9 @@ function PersonalWidget({ widget, filter }: { widget: DashboardWidget; filter: s
 }
 
 function InboxWidget() {
-  const notifications = useQuery(notificationsQuery(true));
+  // The shell's badge already asked for the newest unread rows; this reads that
+  // answer rather than sending a second request a moment later (RADD-1567).
+  const notifications = useQuery(notificationsBadgeQuery);
   if (notifications.isError) return <ErrorText error={notifications.error} />;
   return (        <section>
           <header className="mb-2 flex items-center gap-2">
