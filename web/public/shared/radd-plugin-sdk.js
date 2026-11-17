@@ -68,6 +68,7 @@ export const useItemsQuery = M["useItemsQuery"];
 export const useItemQuery = M["useItemQuery"];
 export const useProjectsQuery = M["useProjectsQuery"];
 export const useApiQueryClient = M["useApiQueryClient"];
+export const SDK_CURRENT_USER_KEY = M["SDK_CURRENT_USER_KEY"];
 export const InstanceRole = M["InstanceRole"];
 export const registerDataSource = M["registerDataSource"];
 export const unregisterDataSources = M["unregisterDataSources"];

@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { TokenMultiSelect, type TokenOption } from "@radd/plugin-sdk";
 import { labelsQuery } from "@radd-plugin-ui/labels/catalog";
@@ -17,7 +17,11 @@ interface LabelsEditorProps {
  */
 export function LabelsEditor({ value, onChange, disabled, lockedReason }: LabelsEditorProps) {
   const id = useId();
-  const labels = useQuery(labelsQuery());
+  // The catalog is the PICKER's data: the chips draw from the issue's own label
+  // names. It used to load with the page — every label on the instance, 279 KB
+  // on the perf seed — for a dropdown most visits never open (RADD-1551).
+  const [opened, setOpened] = useState(false);
+  const labels = useQuery({ ...labelsQuery(), enabled: opened });
   const options: TokenOption[] = (labels.data ?? []).map((label) => ({
     value: label.name,
     label: label.name,
@@ -37,6 +41,7 @@ export function LabelsEditor({ value, onChange, disabled, lockedReason }: Labels
         disabled={disabled}
         placeholder="Add label…"
         ariaLabel="Labels"
+        onOpen={() => setOpened(true)}
       />
     </div>
   );

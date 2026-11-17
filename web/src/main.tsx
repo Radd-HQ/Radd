@@ -1,6 +1,9 @@
 // Publish the shared federation singletons BEFORE anything else, so plugin remotes loaded later
 // resolve react / query / the SDK to the host's instances (spec 94).
 import "./shared-runtime";
+import { SDK_CURRENT_USER_KEY } from "@radd/plugin-sdk";
+import { authStateQuery } from "./lib/queries/core";
+import type { AuthState } from "./lib/auth";
 import "./host-components";
 import "./host-surfaces";
 import "./host-kit";
@@ -36,6 +39,16 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
     },
   },
+});
+
+// The plugin SDK reads the signed-in person under its own cache key, so every
+// page asked /auth/me twice: once for the host, once for the first plugin that
+// wanted a permission (RADD-1551). The host's answer is the SDK's answer: copy
+// it across whenever it arrives, and no second request is made.
+queryClient.getQueryCache().subscribe((event) => {
+  if (event.type !== "updated" || event.action.type !== "success") return;
+  if (JSON.stringify(event.query.queryKey) !== JSON.stringify(authStateQuery.queryKey)) return;
+  queryClient.setQueryData(SDK_CURRENT_USER_KEY, (event.query.state.data as AuthState | undefined)?.user ?? null);
 });
 
 // Expose the query client for debugging + the federation live-toggle harness (invalidating the

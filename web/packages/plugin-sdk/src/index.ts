@@ -90,6 +90,7 @@ export {
   useItemQuery,
   useProjectsQuery,
   useApiQueryClient,
+  SDK_CURRENT_USER_KEY,
 } from "./hooks";
 
 export type {

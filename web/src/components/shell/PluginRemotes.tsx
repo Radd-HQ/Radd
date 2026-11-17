@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { syncContributionPrefs } from "@radd/plugin-sdk";
 import { useIsAuthenticated } from "../../lib/hooks";
-import { capabilitiesQuery } from "../../lib/queries";
+import { capabilitiesQuery, mePreferencesQuery } from "../../lib/queries";
 import { syncPluginRemotes, syncStaticPlugins } from "../../lib/plugin-loader";
 
 /** How often the shell re-reads the manifest, so a plugin toggled elsewhere shows up without a reload. */
@@ -27,8 +27,10 @@ export function PluginRemotes() {
   }, [plugins]);
   // Once a real account is signed in, pull the server-side prefs (spec 121:
   // the shell also renders for an anonymous visitor, who has none).
+  // The same query the sidebar and the pins bar read: one request, shared.
+  const preferences = useQuery({ ...mePreferencesQuery(), enabled: authenticated }).data;
   useEffect(() => {
-    if (authenticated) void syncContributionPrefs();
-  }, [authenticated]);
+    if (authenticated && preferences) void syncContributionPrefs(preferences);
+  }, [authenticated, preferences]);
   return null;
 }

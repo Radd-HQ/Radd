@@ -55,7 +55,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   // page and the peek panel render through here.
   useEffect(() => recordRecentItem(item.key, item.title), [item.key, item.title]);
   const states = useQuery(statesQuery(project.id));
-  const fields = useQuery(fieldsQuery());
+  const fields = useQuery(fieldsQuery(item.project_id));
   const timelogging = useQuery(projectTimeloggingQuery(project.id));
   // Counts for the collapsed Related-links card (web links + linked docs) —
   // the same cache entries the sections read, so this costs nothing extra.

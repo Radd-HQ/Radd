@@ -427,7 +427,7 @@ export function useItemByKey(itemKey: string): ItemByKey {
   // the project read, and mount the detail with a coherent set of controls.
   // Shared query keys mean the body consumes these results without refetching.
   const states = useQuery({ ...statesQuery(item?.project_id ?? ""), enabled: Boolean(item) });
-  const fields = useQuery({ ...fieldsQuery(), enabled: Boolean(item) });
+  const fields = useQuery({ ...fieldsQuery(item?.project_id), enabled: Boolean(item) });
   const screen = useQuery({
     ...effectiveScreenQuery(item?.project_id ?? "", item?.type?.id ?? null), enabled: Boolean(item),
   });

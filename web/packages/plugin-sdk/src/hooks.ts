@@ -19,9 +19,13 @@ import type {
 
 const ANONYMOUS_ROLE = "";
 
+/** Where the signed-in person is cached. Exported so the host can file its own
+ *  `/auth/me` answer here instead of the SDK asking again (RADD-1551). */
+export const SDK_CURRENT_USER_KEY = ["radd-sdk", "me"] as const;
+
 export function useCurrentUser(): Me | null {
   const { data } = useQuery({
-    queryKey: ["radd-sdk", "me"],
+    queryKey: SDK_CURRENT_USER_KEY,
     queryFn: () => api.get<Me>("/auth/me", { throwOn401: true }).catch(() => null),
     staleTime: 60_000,
   });

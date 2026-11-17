@@ -300,10 +300,12 @@ class SlotRegistry {
 
   /** Load BOTH disabled sets from the server (source of truth) and reconcile. Called by the host
    *  once the user is authenticated, so global availability + per-user toggles are correct. */
-  async syncFromServer(): Promise<void> {
+  async syncFromServer(loaded?: Record<string, unknown>): Promise<void> {
     let changed = false;
     try {
-      const prefs = await api.get<Record<string, unknown>>("/auth/me/preferences", {
+      // The host has usually loaded the preferences already; a second GET of
+      // the same dict on every page is what this parameter removes (RADD-1551).
+      const prefs = loaded ?? await api.get<Record<string, unknown>>("/auth/me/preferences", {
         throwOn401: true,
       });
       const keys = prefs[PREF_KEY];
@@ -510,8 +512,8 @@ export function useDisabledMatches(slot: SlotIdValue | string): Set<string> {
 /** Load BOTH contribution-scope prefs from the server (source of truth). The host calls this once
  *  the user is authenticated, so instance-wide availability + per-user toggles are correct and
  *  follow the user across browsers. */
-export function syncContributionPrefs(): Promise<void> {
-  return registry.syncFromServer();
+export function syncContributionPrefs(loaded?: Record<string, unknown>): Promise<void> {
+  return registry.syncFromServer(loaded);
 }
 
 /** Turn a contribution on/off for THIS account (Profile scope; persisted, live). */

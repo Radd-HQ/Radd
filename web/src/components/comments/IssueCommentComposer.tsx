@@ -45,8 +45,9 @@ export function IssueCommentComposer({
   onUploadImage: (file: File) => Promise<string>;
 }) {
   const queryClient = useQueryClient();
-  const { data: canned } = useQuery(cannedResponsesQuery());
   const [mode, setMode] = useState<CommentComposerModeValue | null>(null);
+  // Canned responses are offered inside the composer: load them when it opens.
+  const { data: canned } = useQuery({ ...cannedResponsesQuery(), enabled: mode !== null });
   const [body, setBody] = useState("");
   // The rich editor is uncontrolled: remount it to show text put in from outside (a canned response).
   const [editorKey, setEditorKey] = useState(0);

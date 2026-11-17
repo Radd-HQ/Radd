@@ -158,6 +158,7 @@ async def list_fields(
     q: str | None = None,
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
+    project_id: uuid.UUID | None = None,
 ) -> list[FieldDefinitionRead]:
     # Global field managers need the definitions they manage even when they
     # cannot read issues. Other readers retain the existing issue-member floor.
@@ -169,6 +170,16 @@ async def list_fields(
             response.headers[TOTAL_COUNT_HEADER] = "0"
         return []
     restricted_ids = await service.restricted_field_ids(session)
+    if project_id is not None:
+        # The fields in scope for ONE project (RADD-1551): an issue page drew its
+        # rail from the whole catalog, 150 KB on an instance with 319 fields, to
+        # show the 61 its project uses.
+        from radd.modules.projects import service as projects_service
+
+        project = await projects_service.get_project(session, project_id)
+        await authz.require(session, user, authz.Permission.ITEM_READ, project=project)
+        scoped = await service.definitions_for_project(session, project)
+        return [_to_read(f, restricted_ids) for f in scoped]
     fields = await service.list_fields(session, q=q, limit=limit, offset=offset)
     if limit is not None:
         response.headers[TOTAL_COUNT_HEADER] = str(await service.count_fields(session, q=q))

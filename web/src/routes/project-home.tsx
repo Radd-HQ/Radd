@@ -16,7 +16,7 @@ export function ProjectHomePage() {
   const { projectKey = "" } = useParams({ strict: false });
   const { project } = useProjectByKey(projectKey);
   // A view type with a sidebar section of its own (the slas queues) is not a landing (RADD-1396).
-  const views = useQuery({ ...viewsPageQuery({ projectId: project?.id, includeGlobal: false, sectioned: false }, "", 0, 1), enabled: Boolean(project) });
+  const views = useQuery({ ...viewsPageQuery({ projectId: project?.id, includeGlobal: false, sectioned: false }), enabled: Boolean(project) });
 
   if (project === undefined || (Boolean(project) && views.isPending)) {
     return <Spinner label="Loading project…" />;

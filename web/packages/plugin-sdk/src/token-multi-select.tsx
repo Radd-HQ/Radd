@@ -28,6 +28,8 @@ export interface TokenMultiSelectProps {
   autoFocus?: boolean;
   ariaLabel?: string;
   id?: string;
+  /** Called the first time the dropdown opens: load `options` then, not on mount. */
+  onOpen?: () => void;
 }
 
 /** Dropdown render cap (RADD-881) — matches Select's filtering behavior: the
@@ -74,10 +76,16 @@ export function TokenMultiSelect({
   autoFocus = false,
   ariaLabel,
   id,
+  onOpen,
 }: TokenMultiSelectProps) {
   const genId = useId();
   const inputId = id ?? genId;
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (open) onOpen?.();
+    // `onOpen` is the caller's, usually an inline arrow: opening is the trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const [term, setTerm] = useState("");
   const [highlight, setHighlight] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);

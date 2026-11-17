@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, Avatar, tokens, type Item } from "@radd/plugin-sdk";
+import { api, Avatar, tokens, useCurrentUser, usePluginData, type Item } from "@radd/plugin-sdk";
 import { ParticipantChoices } from "./ParticipantChoices";
 import { Users, X } from "lucide-react";
 
@@ -31,12 +31,11 @@ export function ParticipantsSection({ item }: { item: Item }) {
     queryFn: ({ signal }) => api.get<ParticipantsData>(`/items/${item.id}/participants`, { signal }),
   });
   const canManage = Boolean(data?.can_manage);
-  const leave = useQuery({
-    queryKey: ["radd-remote", "leave-current"],
-    queryFn: ({ signal }) => api.get<{ user_id: string }[]>("/leave/current", { signal }),
-    staleTime: 5 * 60_000,
-  });
-  const onLeaveIds = new Set((leave.data ?? []).map((entry) => entry.user_id));
+  // Who is away comes from the person indicators every avatar already loaded
+  // (the leave plugin contributes them); this section used to fetch
+  // /leave/current a second time for the same answer (RADD-1551).
+  const indicators = usePluginData("personIndicators", {}, useCurrentUser()?.id);
+  const onLeaveIds = new Set(indicators.filter((entry) => entry.id === "leave").map((entry) => entry.personId));
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

@@ -39,7 +39,8 @@ export const aiEditorActionsQuery = queryOptions({
 
 /** The account's preferences dict (spec 94) — the editor-AI opt-out lives in it. */
 export const aiPreferencesQuery = queryOptions({
-  queryKey: ["ai", "preferences"],
+  // The host's own key for this dict: one cache entry, one request (RADD-1551).
+  queryKey: ["auth", "me", "preferences"],
   queryFn: ({ signal }) => api.get<Record<string, unknown>>(AiEndpoint.mePreferences, { signal }),
   staleTime: 60_000,
 });
