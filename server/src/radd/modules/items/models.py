@@ -45,6 +45,17 @@ class WorkItem(Base, TimestampMixin):
         Index("ix_work_items_project_updated", "project_id", text("updated_at DESC")),
         Index("ix_work_items_project_created", "project_id", text("created_at DESC")),
         Index("ix_work_items_assignee_updated", "assignee_id", text("updated_at DESC")),
+        # RADD-1552: counting a project's items scanned the whole TABLE (the row
+        # is wide: it carries the description), 95 ms for one project of 100k in
+        # 501k. Everything a count or a per-state total reads is in this index,
+        # so both are index-only: 10 ms and 14 ms.
+        Index(
+            "ix_work_items_project_state_cover",
+            "project_id",
+            "state_id",
+            postgresql_include=["id", "visibility", "reporter_id", "assignee_id", "estimate_points"],
+            postgresql_where=text("archived_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
