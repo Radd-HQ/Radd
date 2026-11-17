@@ -18,6 +18,7 @@ from .enums import ItemEntity, ItemKind, Priority
 from .filters import NONE_LITERAL, ItemFilterParam, ItemListFilters
 from .history import item_history
 from .schemas import (
+    ProjectStats,
     BulkMoveResult,
     BulkUpdateResult,
     ItemBatchUpdate,
@@ -227,6 +228,28 @@ async def count_items(
     """The visible-match count alone (spec 75): same filter surface + visibility
     as GET /items/ids, `{total}` only — powers the dashboard slq_count widgets."""
     return ItemCount(total=await bulk.count_items(session, actor=user, filters=filters, q=q))
+
+
+@router.get("/project-stats", response_model=dict[uuid.UUID, ProjectStats])
+async def project_stats(
+    session: Session,
+    user: Actor,
+    project_id: Annotated[list[uuid.UUID], Query(max_length=200)],
+) -> dict[uuid.UUID, ProjectStats]:
+    """Open issues and last activity for a page of projects — what the projects
+    list shows beside each name (RADD-1558). Asked for by the page that draws
+    it, never by the sidebar's list. Projects the actor cannot read are left
+    out of the answer rather than refused."""
+    from radd.modules.auth import authz
+
+    from .service import queries
+
+    readable = set(await authz.readable_projects(session, user))
+    stats = await queries.project_stats(session, [p for p in project_id if p in readable])
+    return {
+        pid: ProjectStats(open_items=opened, last_activity_at=last)
+        for pid, (opened, last) in stats.items()
+    }
 
 
 @router.post("/bulk-update", response_model=BulkUpdateResult)

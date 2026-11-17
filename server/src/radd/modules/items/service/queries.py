@@ -14,7 +14,7 @@ from radd.modules.projects.models import Project
 from radd.modules.workflow.models import State
 from radd.modules.workflow.types import StateCategory
 
-from ..enums import ItemEntity
+from ..enums import FINISHED_CATEGORIES, ItemEntity, ItemVisibility
 from ..hierarchy import nearest_epic_case
 from ..models import ItemKeyAlias, WorkItem
 
@@ -420,3 +420,39 @@ async def _resolve_number(session: AsyncSession, project_id: uuid.UUID, number: 
         raise ConflictError(ItemEntity.ITEM, f"number {number}")
     await projects_service.reserve_item_number(session, project_id, number)
     return number
+
+
+async def project_stats(
+    session: AsyncSession, project_ids: Iterable[uuid.UUID]
+) -> dict[uuid.UUID, tuple[int, object]]:
+    """`{project: (open issues, last activity)}` for a page of projects (RADD-1558).
+
+    Two reads, each riding an index: the open count is an index-only pass over
+    `ix_work_items_project_state_cover`, and the last activity is the top of
+    `ix_work_items_project_updated` per project — never a scan of the rows.
+    The CALLER decides which projects the actor may ask about."""
+    ids = list(dict.fromkeys(project_ids))
+    if not ids:
+        return {}
+    open_rows = await session.execute(
+        select(WorkItem.project_id, func.count())
+        .join(State, State.id == WorkItem.state_id)
+        .where(
+            WorkItem.project_id.in_(ids),
+            WorkItem.archived_at.is_(None),
+            WorkItem.visibility != ItemVisibility.RESTRICTED.value,
+            State.category.not_in([c.value for c in FINISHED_CATEGORIES]),
+        )
+        .group_by(WorkItem.project_id)
+    )
+    opened = dict(open_rows.all())
+    stats: dict[uuid.UUID, tuple[int, object]] = {}
+    for project_id in ids:
+        last = await session.scalar(
+            select(WorkItem.updated_at)
+            .where(WorkItem.project_id == project_id)
+            .order_by(WorkItem.updated_at.desc())
+            .limit(1)
+        )
+        stats[project_id] = (opened.get(project_id, 0), last)
+    return stats

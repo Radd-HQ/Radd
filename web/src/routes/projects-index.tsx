@@ -12,7 +12,11 @@ import { ListSearchInput } from "../components/ListSearchInput";
 import { Spinner } from "../components/Spinner";
 import { NewProjectModal } from "../components/projects/NewProjectModal";
 import { QueryError } from "../components/QueryError";
-import { formatDate } from "@radd/plugin-sdk";
+import { api, formatDate, relativeTime } from "@radd/plugin-sdk";
+import { useQuery } from "@tanstack/react-query";
+
+/** What the row says about a project's work (RADD-1558), keyed by project id. */
+type ProjectStats = Record<string, { open_items: number; last_activity_at: string | null }>;
 
 export function ProjectsIndexPage() {
   // Global-scope project.create gates the affordance (spec 06 permission union).
@@ -20,6 +24,16 @@ export function ProjectsIndexPage() {
   const projects = useProjectDirectory();
   const [creating, setCreating] = useState(false);
   const list = projects.rows;
+  // Open issues and last activity for the rows on this page: asked for here,
+  // by the page that shows them, not carried on the sidebar's project list.
+  const ids = list.map((project) => project.id);
+  const stats = useQuery({
+    queryKey: ["projectStats", ids],
+    queryFn: ({ signal }) =>
+      api.get<ProjectStats>(`/items/project-stats?${ids.map((id) => `project_id=${id}`).join("&")}`, { signal }),
+    enabled: ids.length > 0,
+    staleTime: 60_000,
+  });
 
   return (
     <div className="px-8 py-8">
@@ -81,9 +95,10 @@ export function ProjectsIndexPage() {
                       )}
                     </span>
                     {project.public && <PublicProjectChip />}
-                    <span className="ml-auto text-xs text-fg-faint">
-                      {formatDate(project.created_at)}
-                    </span>
+                    <ProjectRowStats
+                      stats={stats.data?.[project.id]}
+                      createdAt={project.created_at}
+                    />
                   </Link>
                 </li>
               ))}
@@ -95,5 +110,32 @@ export function ProjectsIndexPage() {
 
       {creating && <NewProjectModal onClose={() => setCreating(false)} />}
     </div>
+  );
+}
+
+
+/** Right-hand side of a project row: how much is open, and when it last moved.
+ *  A project nobody has touched says when it was created instead — labelled,
+ *  where the row used to show that date alone with nothing saying what it was. */
+function ProjectRowStats({
+  stats,
+  createdAt,
+}: {
+  stats: { open_items: number; last_activity_at: string | null } | undefined;
+  createdAt: string;
+}) {
+  return (
+    <span className="ml-auto flex shrink-0 items-baseline gap-4 text-xs text-fg-muted" data-project-stats>
+      {stats && (
+        <span className="tabular-nums">
+          <span className="font-medium text-fg">{stats.open_items.toLocaleString()}</span> open
+        </span>
+      )}
+      <span className="w-36 text-right text-fg-faint">
+        {stats?.last_activity_at
+          ? `Active ${relativeTime(stats.last_activity_at)}`
+          : `Created ${formatDate(createdAt)}`}
+      </span>
+    </span>
   );
 }

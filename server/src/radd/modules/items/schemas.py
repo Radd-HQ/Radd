@@ -290,6 +290,15 @@ class ItemIds(BaseModel):
     total: int = 0
 
 
+class ProjectStats(BaseModel):
+    """What a list of projects shows about each one's work (RADD-1558)."""
+
+    #: Live issues not in a done or canceled state. Restricted issues are left
+    #: out for everyone: a count must not say how many a reader cannot see.
+    open_items: int = 0
+    last_activity_at: UtcDatetime | None = None
+
+
 class ItemCount(BaseModel):
     """GET /items/count (spec 75) — the visible-match count alone; powers the
     dashboard slq_count widgets."""
