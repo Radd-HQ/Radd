@@ -50,6 +50,10 @@ RADD-1567: My Work's inbox widget reads the badge's answer (the badge now carrie
 rows), so My Work sends one notifications request too. RADD-1568: `DELETE /notifications/read` and a
 **Clear read** button on the Inbox delete a person's read notifications after a confirm.
 
+RADD-1569: `POST /notifications/clear` and a clear button beside each Inbox row (a folded burst goes
+whole). RADD-1570: a worker loop deletes inbox notifications 90 days after they were read
+(`RADD_NOTIFY_READ_RETENTION_DAYS`, 0 = off); unread ones are never deleted by age.
+
 **Found on the way.** Two review findings were partly wrong and are corrected on their issues (the
 sidebar was capped at 50, not unbounded; the rail order I saw was partly one project's saved screen).
 An aggregate "optimisation" of the board summary measured slower and was reverted. A hook placed after

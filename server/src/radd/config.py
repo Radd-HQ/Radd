@@ -189,6 +189,14 @@ class Settings(BaseSettings):
     # next batch once a transport is registered, while it is younger than this; older rows
     # stay undeliverable, so a mail plugin re-enabled after a week flushes no backlog.
     notify_undeliverable_retry_hours: int = 24
+    # Inbox notifications are deleted this many days after they were READ
+    # (radd/modules/notify/retention.py, RADD-1570). Unread ones are never
+    # deleted by age. 0 keeps everything.
+    notify_read_retention_days: int = Field(default=90, ge=0)
+    # How often the sweep runs, and the most it deletes in one statement: a
+    # first run over years of history must not hold one long lock.
+    notify_retention_interval: float = Field(default=3600.0, gt=0)
+    notify_retention_batch: int = Field(default=5000, gt=0)
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""

@@ -180,6 +180,11 @@ commits and will not say them this plainly.
   API tokens are not affected.
 - **`PATCH /items/{id}` may answer 409** when it sends `description_version` and
   the description changed since. Callers that do not send it are unaffected.
+- **Read notifications are deleted 90 days after they were read.** The first
+  worker start after the upgrade removes every inbox notification that was
+  read more than 90 days ago, and an hourly sweep keeps doing so. Unread ones
+  are never deleted by age. Set `RADD_NOTIFY_READ_RETENTION_DAYS` to another
+  period BEFORE upgrading if 90 is wrong for you; `0` keeps everything.
 - **Responses are compressed by the app** (gzip, text responses of 1 KB or
   more; attachments, backups and sign-in routes are left alone). A proxy that
   already compresses passes them through. Nothing to set.
@@ -197,7 +202,8 @@ commits and will not say them this plainly.
   Every date field is the app's own calendar: it shows the month spelled
   ("22 Nov 2026"), accepts typed dates, and looks the same in every browser.
   The Inbox has a **Clear read** button: it deletes the notifications a person
-  has read (after asking), and unread ones stay.
+  has read (after asking), and unread ones stay. Each row also has its own
+  clear button, which removes that notification, read or not, without asking.
   On a long list, rows far from view show only their key and title until
   scrolled near, so the browser's find-in-page does not match their labels or
   assignee.
@@ -663,6 +669,7 @@ named Settings page owns it and editing the variable changes nothing. Highlights
 | `RADD_GITLAB_*` / `RADD_FORGEJO_*` / `RADD_GITHUB_*` | disabled | **seed-only** → Settings → Version control: each seeds one connection (and repository) once; `_API_TOKEN`, `_BASE_URL`, `_REPO` optional |
 | `RADD_ALERTMANAGER_*` / `RADD_MAIL_*` | disabled | seed ONE Alertmanager receiver / mail source row, once (RADD-1317, RADD-958) — both are configured in Settings after. `RADD_GOOGLECHAT_*` is gone (RADD-1319): posting to chat is an automation |
 | `RADD_WORK_WEEK_DAYS` | mon–fri | business-day SLAs + timesheet |
+| `RADD_NOTIFY_READ_RETENTION_DAYS` | `90` | inbox notifications are deleted this long after they were read (RADD-1570); `0` keeps everything. `RADD_NOTIFY_RETENTION_INTERVAL` (3600 s) and `RADD_NOTIFY_RETENTION_BATCH` (5000) pace the sweep |
 | `RADD_AUTH_CACHE` | `true` | per-process cache of role/grant/membership lookups, invalidated by database triggers (RADD-1560); `false` reads them every request |
 | `RADD_DB_FORCE_CUSTOM_PLANS` | `true` | plans each statement for its actual values; without it the board's reads degraded from 15 ms to 400 ms after five runs (RADD-1545) |
 | `RADD_BATCH_MAX_REQUESTS` | `30` | how many GETs one `POST /api/v1/batch` may carry (RADD-1561) |

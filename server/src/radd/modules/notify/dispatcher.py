@@ -1,9 +1,9 @@
-"""In-process loops: consumer, per-event mailer, digest (all gated on `run_workers`)."""
+"""In-process loops: consumer, per-event mailer, digest, retention (all gated on `run_workers`)."""
 
 from radd.config import settings
 from radd.worker import PeriodicLoop
 
-from . import consumer, emailer, mailer
+from . import consumer, emailer, mailer, retention
 
 _consumer_loop = PeriodicLoop(
     consumer.run_once,
@@ -27,15 +27,25 @@ _email_loop = PeriodicLoop(
     enabled=lambda: settings.run_workers,
     sleep_first=True,  # no digest burst on startup; batching gets a full window
 )
+# RADD-1570: read notifications past their retention period, in drained batches.
+_retention_loop = PeriodicLoop(
+    retention.run_once,
+    interval=lambda: settings.notify_retention_interval,
+    name="notify-retention",
+    enabled=lambda: settings.run_workers,
+    drain=True,
+)
 
 
 async def start() -> None:
     await _consumer_loop.start()
     await _mail_loop.start()
     await _email_loop.start()
+    await _retention_loop.start()
 
 
 async def stop() -> None:
     await _consumer_loop.stop()
     await _mail_loop.stop()
     await _email_loop.stop()
+    await _retention_loop.stop()
