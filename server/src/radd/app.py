@@ -23,7 +23,7 @@ from radd.kernel import import_models, load_plugins
 from radd.clientip import ClientIpMiddleware
 from radd.maintenance import MaintenanceMiddleware
 from radd.middleware import CommitBeforeSendMiddleware
-from radd.collection_compression import CollectionCompressionMiddleware
+from radd.compression import CompressionMiddleware
 from radd.origin_check import OriginCheckMiddleware
 from radd.security_headers import SecurityHeadersMiddleware
 
@@ -145,7 +145,7 @@ def create_app() -> FastAPI:
         return JSONResponse(content={"status": HealthStatus.OK, "version": __version__})
 
     app.add_middleware(CommitBeforeSendMiddleware)
-    app.add_middleware(CollectionCompressionMiddleware)
+    app.add_middleware(CompressionMiddleware)
     # nosniff, frame protection, referrer policy, HSTS over https, and the CSP (RADD-1531).
     app.add_middleware(SecurityHeadersMiddleware)
     # A cookie-authenticated write or socket must come from this instance (RADD-1547).
