@@ -515,8 +515,21 @@ html.compact body {
 
 
 .widget-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; align-items: start; }
-.dashboard-widget { grid-column: span var(--widget-width); height: var(--widget-height); }
+/* A widget is as tall as its content, up to the height it was given (RADD-1556):
+   an empty "Assigned to me" used to hold its full 360 px to say one line. While
+   the layout is being edited every widget shows its set height, so the resize
+   handles move what they appear to move. */
+.dashboard-widget { grid-column: span var(--widget-width); height: auto; max-height: var(--widget-height); }
+.dashboard-widget[data-editing] { height: var(--widget-height); }
 .dashboard-widget[data-collapsed] { height: auto; }
+/* The frame already names the widget; the section inside repeated it in capitals
+   one line below. The heading stays for assistive technology, its count, badge
+   and actions stay visible. */
+.dashboard-widget section > header > h2 {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.dashboard-widget section > header > svg:first-child { display: none; }
+.dashboard-widget section > header:not(:has(> :not(h2, svg:first-child))) { display: none; }
 @media (max-width: 767px) {
   .widget-grid { grid-template-columns: minmax(0, 1fr); }
   .dashboard-widget { grid-column: 1; }

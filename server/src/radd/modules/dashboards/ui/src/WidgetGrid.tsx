@@ -58,7 +58,7 @@ export function WidgetGrid({ widgets, editing, onChange, onConfigure, onCollapse
     window.addEventListener("pointermove", motion); window.addEventListener("pointerup", finish); window.addEventListener("pointercancel", cancel);
   };
   return <div ref={root} className="widget-grid">
-    {widgets.map((widget, index) => <section key={widget.id} data-widget-id={widget.id} data-widget-type={widget.widget_type} data-collapsed={widget.collapsed || undefined}
+    {widgets.map((widget, index) => <section key={widget.id} data-widget-id={widget.id} data-widget-type={widget.widget_type} data-collapsed={widget.collapsed || undefined} data-editing={editing || undefined}
       style={{ "--widget-width": widget.width, "--widget-height": `${widget.height}px` } as CSSProperties}
       className="dashboard-widget relative flex min-w-0 flex-col rounded-lg border border-subtle bg-surface">
       <header className="flex min-h-10 items-center gap-1 border-b border-subtle px-2">
