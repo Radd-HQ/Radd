@@ -3,17 +3,20 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Date,
     DateTime,
     Float,
     ForeignKey,
+    Identity,
     Integer,
     Index,
     Numeric,
     String,
     Text,
     UniqueConstraint,
+    event,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -154,3 +157,62 @@ class ItemLabel(Base):
     label_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("labels.id", ondelete="CASCADE"), primary_key=True
     )
+
+
+class ItemTransition(Base):
+    """One row each time an item's STATE or CYCLE changed, and one for its
+    creation — the history every report folds (RADD-1537).
+
+    Reports used to rebuild this per request from the event ledger: every
+    `item.created`/`item.updated` a project ever had, loaded as ORM objects with
+    their full item snapshot (about 1.5 KB each) and folded in Python on the
+    event loop. This is the same fold, done once at write time by
+    `items.transitions.record`, in the transaction that made the change.
+
+    A row carries both sides of the change, so a report is one aggregate with
+    no self-join: `from_*` is what the item left, `from_at` when it had entered
+    that state — the stay's duration is `at - from_at`.
+
+    Rows die with their item (CASCADE), which is what the reports want: an item
+    that no longer exists is in no report. `cycle_id` is a plain uuid, as the
+    ledger's own columns are — a deleted cycle's history is still history.
+    """
+
+    __tablename__ = "item_transitions"
+    __table_args__ = (
+        # The report window: "what happened in this project between two dates".
+        Index("ix_item_transitions_project_at", "project_id", "at"),
+        # One item's history in order (SLA timers, the previous-row lookup on write).
+        Index("ix_item_transitions_item", "item_id", "id"),
+        # Velocity and burnup: everything that happened in, or left, one cycle.
+        Index(
+            "ix_item_transitions_cycle", "cycle_id",
+            postgresql_where=text("cycle_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_item_transitions_from_cycle", "from_cycle_id",
+            postgresql_where=text("from_cycle_id IS NOT NULL"),
+        ),
+    )
+
+    #: Insertion order IS the order of an item's history, as the event id was:
+    #: an import restating old timestamps writes `at` out of order on purpose.
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("work_items.id", ondelete="CASCADE"))
+    #: The item's CURRENT project, restated on every row when it moves, so a
+    #: report's window is one index range and a moved item reports where it is.
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    at: Mapped[datetime] = mapped_column(DateTime)
+    state_id: Mapped[uuid.UUID]
+    category: Mapped[str] = mapped_column(String(20))  # StateCategory, as of `at`
+    cycle_id: Mapped[uuid.UUID | None]
+    #: False = only the cycle changed; the state columns restate the current stay.
+    state_changed: Mapped[bool] = mapped_column(Boolean)
+    #: The item ENTERED a done-category state from outside one (throughput, velocity).
+    entered_done: Mapped[bool] = mapped_column(Boolean)
+    #: When the item entered `state_id` — `at` itself on a state change.
+    stay_at: Mapped[datetime] = mapped_column(DateTime)
+    from_state_id: Mapped[uuid.UUID | None]
+    from_category: Mapped[str | None] = mapped_column(String(20))
+    from_at: Mapped[datetime | None] = mapped_column(DateTime)
+    from_cycle_id: Mapped[uuid.UUID | None]

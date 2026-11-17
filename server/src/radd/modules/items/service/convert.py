@@ -25,6 +25,7 @@ from ..changes import diff_item_reads, field_name_map
 from ..enums import ItemEntity, ItemEvent, ItemKind
 from ..models import WorkItem
 from ..schemas import ItemRead
+from ..transitions import record as record_transition
 from .queries import require_item, require_item_permission
 from .read import _hydrate_one, event_item
 from .relations import _resolve_parent
@@ -100,6 +101,7 @@ async def convert_item_kind(
     # diff_item_reads deliberately doesn't know `kind` (it never changes
     # elsewhere) — the conversion IS the event, so it leads the list.
     changes.insert(0, {"field": "kind", "from": old_kind.value, "to": kind.value})
+    await record_transition(session, item)  # RADD-1537: a no-op unless state/cycle moved
     await events.emit(
         session,
         event_type=ItemEvent.UPDATED,

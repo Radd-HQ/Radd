@@ -23,6 +23,7 @@ from .origin import current_origin
 from ..hydration import hydrate
 from ..models import WorkItem
 from ..schemas import ItemRead
+from ..transitions import record as record_transition
 from .queries import _alias_item, _parse_key, require_readable_item
 from .visibility import (
     attach_capabilities,
@@ -102,6 +103,9 @@ async def _finish(
         )
     else:
         changes = [] if event_type == ItemEvent.UPDATED else None
+    # The state/cycle history the reports read (RADD-1537), written with the
+    # event that says so, in this transaction; a no-op when neither moved.
+    await record_transition(session, item, at=occurred_at)
     await events.emit(
         session,
         event_type=event_type,

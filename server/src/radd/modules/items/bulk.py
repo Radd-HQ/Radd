@@ -45,6 +45,7 @@ from .schemas import (
 )
 from .service import set_archived, update_item
 from .service.scope import visible_ids_query
+from .transitions import record as record_transition
 
 # Package-private helpers — reached through their concern module, not the service
 # barrel, which exports only the items module's public surface.
@@ -246,6 +247,9 @@ async def _move_one(
     changes = diff_item_reads(before, after, field_names=field_name_map(definitions))
     changes.insert(0, {"field": "project", "from": source.key, "to": target.key})
     changes.insert(1, {"field": "key", "from": old_key, "to": after.key})
+    # The arrival is a state change in the TARGET project, and the item's
+    # history follows it there (RADD-1537).
+    await record_transition(session, item)
     # A cross-project move is still an item.updated, in `read._finish`'s shape.
     await events.emit(
         session,
@@ -440,6 +444,22 @@ async def visible_matching_ids(
             out.update(await session.scalars(query.order_by(None).where(WorkItem.id.in_(batch))))
         return out
     return set((await session.execute(query.order_by(None))).scalars())
+
+
+async def visible_matching_select(
+    session: AsyncSession,
+    *,
+    actor: User,
+    q: str | None,
+    project_id: uuid.UUID | None = None,
+):
+    """`visible_matching_ids` as a SELECT, for a caller that wants the database
+    to do the intersecting (RADD-1537): a report joins its rows to this instead
+    of pulling every visible id of a project into a Python set per request.
+    Raises SlqError for a query that doesn't compile, like every item read."""
+    filters = ItemListFilters(project_id=project_id)
+    query, _ = await visible_ids_query(session, actor=actor, filters=filters, q=q)
+    return query.order_by(None)
 
 
 async def count_items(

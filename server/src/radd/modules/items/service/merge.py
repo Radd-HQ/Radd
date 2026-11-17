@@ -76,6 +76,9 @@ _KEEP: frozenset[tuple[str, str]] = frozenset(
         ("search_index", "item_id"),  # the tombstone remains findable
         ("item_embeddings", "item_id"),
         # item_links is handled specially below (both ends + self-link removal).
+        # Each item's state history is its own: the source's ends at the
+        # tombstone, the survivor's is not rewritten with someone else's past.
+        ("item_transitions", "item_id"),
     }
 )
 #: Polymorphic parents (no FK): entity_type='item' + entity_id.
@@ -210,6 +213,9 @@ async def _merge_items(
     await session.flush()
 
     for item_id, changes in (
+    # The tombstone is a state change the merge events do not carry (they hold a
+    # ref, not a snapshot), so the ledger fold never saw it; the history does.
+    await record_transition(session, source)
         (source.id, [{"field": "merged_into", "from": None, "to": target_key}]),
         (target.id, [{"field": "merged_from", "from": None, "to": source_key}]),
     ):

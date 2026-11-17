@@ -1,8 +1,13 @@
-"""Reconstruct each item's state history from its `item.created/updated` events
-(the payload carries the full item; the event's `created_at` is the moment): per
-item the state `segments` (an open final one has `exited_at is None`), the
-`done_entries` (tagged with the cycle at that moment) and the `cycle_history`.
-Recomputed per request — no projection table.
+"""One item's state history as the SLA timers want it: per item the state
+`segments` (an open final one has `exited_at is None`), the `done_entries`
+(tagged with the cycle at that moment) and the `cycle_history`.
+
+Read from `item_transitions` (RADD-1537) — a handful of narrow rows per item,
+written when the change happened. It used to be rebuilt per request from the
+event ledger, every `item.created`/`item.updated` with its full item snapshot.
+The project-wide REPORTS no longer build timelines at all: they aggregate the
+same table in SQL (`service.py`). This per-item view remains for callers that
+need the stays themselves, over a bounded set of items.
 """
 
 import uuid
@@ -14,8 +19,7 @@ from itertools import batched
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.modules.events.service import Event
-from radd.modules.items.enums import ItemEntity, ItemEvent
+from radd.modules.items.models import ItemTransition
 from radd.modules.workflow.types import StateCategory
 
 
@@ -40,8 +44,6 @@ class DoneEntry:
 @dataclass
 class ItemTimeline:
     item_id: uuid.UUID
-    project_id: uuid.UUID | None
-    kind: str | None
     segments: list[StateSegment] = field(default_factory=list)
     done_entries: list[DoneEntry] = field(default_factory=list)
     cycle_history: list[tuple[datetime, uuid.UUID | None]] = field(default_factory=list)
@@ -67,105 +69,38 @@ class ItemTimeline:
         return result
 
 
-def _build(item_id: uuid.UUID, events: list[Event]) -> ItemTimeline:
-    """Fold an item's ordered event payloads into a timeline (pure over the rows)."""
-    timeline = ItemTimeline(item_id=item_id, project_id=None, kind=None)
-    prev_category: StateCategory | None = None
-    for event in events:
-        # One nested ref (RADD-922): state, cycle, project and kind are all
-        # properties of the ITEM, and reading them off the payload root only
-        # worked because item events used to dump the read flat.
-        item = event.payload.get("item") or {}
-        state = item.get("state") or {}
-        if not state:
-            continue  # an item event with no state snapshot cannot place a segment
-        state_id = uuid.UUID(state["id"])
-        category = StateCategory(state["category"])
-        cycle = item.get("cycle")
-        cycle_id = uuid.UUID(cycle["id"]) if cycle else None
-        at = event.created_at
-
-        if timeline.project_id is None and item.get("project"):
-            timeline.project_id = uuid.UUID(item["project"]["id"])
-        if timeline.kind is None:
-            timeline.kind = item.get("kind")
-        timeline.cycle_history.append((at, cycle_id))
-
-        state_changed = not timeline.segments or timeline.segments[-1].state_id != state_id
-        if state_changed:
+async def build_item_timelines(
+    session: AsyncSession, item_ids: Iterable[uuid.UUID]
+) -> dict[uuid.UUID, ItemTimeline]:
+    """Per item, its timeline. Items with no recorded history are absent."""
+    out: dict[uuid.UUID, ItemTimeline] = {}
+    for batch in batched(dict.fromkeys(item_ids), 1000):
+        rows = await session.execute(
+            select(
+                ItemTransition.item_id,
+                ItemTransition.at,
+                ItemTransition.state_id,
+                ItemTransition.category,
+                ItemTransition.cycle_id,
+                ItemTransition.state_changed,
+                ItemTransition.entered_done,
+            )
+            .where(ItemTransition.item_id.in_(batch))
+            .order_by(ItemTransition.item_id, ItemTransition.id)
+        )
+        for item_id, at, state_id, category, cycle_id, state_changed, entered_done in rows:
+            timeline = out.get(item_id)
+            if timeline is None:
+                timeline = out[item_id] = ItemTimeline(item_id=item_id)
+            timeline.cycle_history.append((at, cycle_id))
+            if not state_changed:
+                continue
             if timeline.segments:
                 last = timeline.segments[-1]
                 timeline.segments[-1] = StateSegment(
                     last.entered_at, at, last.state_id, last.category
                 )
-            timeline.segments.append(StateSegment(at, None, state_id, category))
-            if category is StateCategory.DONE and prev_category is not StateCategory.DONE:
+            timeline.segments.append(StateSegment(at, None, state_id, StateCategory(category)))
+            if entered_done:
                 timeline.done_entries.append(DoneEntry(at=at, cycle_id=cycle_id))
-        prev_category = category
-    return timeline
-
-
-async def _item_events(
-    session: AsyncSession, item_ids: Iterable[uuid.UUID]
-) -> dict[uuid.UUID, list[Event]]:
-    ids = {str(item_id) for item_id in item_ids}
-    if not ids:
-        return {}
-    grouped: dict[uuid.UUID, list[Event]] = {}
-    for batch in batched(ids, 1000):
-        rows = await session.scalars(
-            select(Event).where(
-                Event.entity_type == str(ItemEntity.ITEM),
-                Event.entity_id.in_(batch),
-                Event.event_type.in_((str(ItemEvent.CREATED), str(ItemEvent.UPDATED))),
-            )
-            .order_by(Event.id)
-        )
-        for event in rows:
-            grouped.setdefault(uuid.UUID(event.entity_id), []).append(event)
-    return grouped
-
-
-async def build_item_timelines(
-    session: AsyncSession, item_ids: Iterable[uuid.UUID]
-) -> dict[uuid.UUID, ItemTimeline]:
-    """The workhorse: per item, the full reconstructed timeline from its event history."""
-    # Release full event snapshots after each batch; retain only the compact
-    # timelines that report calculations actually need.
-    out = {}
-    for batch in batched(dict.fromkeys(item_ids), 1000):
-        grouped = await _item_events(session, batch)
-        out.update((item_id, _build(item_id, events)) for item_id, events in grouped.items())
     return out
-
-
-# --- scope resolution (which items a report ranges over) — also read from the outbox ---
-
-
-async def item_ids_for_project(session: AsyncSession, project_id: uuid.UUID) -> list[uuid.UUID]:
-    """Ids of items created in the project (from `item.created` payloads — project is immutable)."""
-    rows = (
-        await session.execute(
-            select(Event.entity_id).where(
-                Event.entity_type == str(ItemEntity.ITEM),
-                Event.event_type == str(ItemEvent.CREATED),
-                Event.payload["item"]["project"]["id"].astext == str(project_id),
-            )
-        )
-    ).scalars()
-    return [uuid.UUID(entity_id) for entity_id in rows]
-
-
-async def item_ids_for_cycle(session: AsyncSession, cycle_id: uuid.UUID) -> list[uuid.UUID]:
-    """Ids of items ever assigned to the cycle (any event whose payload cycle matches)."""
-    rows = (
-        await session.execute(
-            select(Event.entity_id)
-            .where(
-                Event.entity_type == str(ItemEntity.ITEM),
-                Event.payload["item"]["cycle"]["id"].astext == str(cycle_id),
-            )
-            .distinct()
-        )
-    ).scalars()
-    return [uuid.UUID(entity_id) for entity_id in rows]
