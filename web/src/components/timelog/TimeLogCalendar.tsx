@@ -4,9 +4,9 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ErrorText, errorMessage, formatIso, todayIso } from "@radd/plugin-sdk";
 import { api } from "../../lib/api";
 import { useCurrentUser, usePeek } from "../../lib/hooks";
-import { timesheetQuery, workCategoriesQuery } from "../../lib/queries";
+import { myTicketsQuery, timesheetQuery, workCategoriesQuery } from "../../lib/queries";
 import { pushToast } from "../../lib/toast";
-import type { Item, Timesheet, TimesheetEntry } from "../../lib/types";
+import type { Timesheet, TimesheetEntry } from "../../lib/types";
 import { Button } from "../Button";
 import { QueryError } from "../QueryError";
 import { Spinner } from "../Spinner";
@@ -14,12 +14,6 @@ import { DayColumn } from "./DayColumn";
 import { byDay, dayLoad, durationText, isWorkingDay, shiftWeek, weekDays, weekStart } from "./model";
 import { CategoryTray, TicketTray } from "./TicketTray";
 import type { Dragged, Ticket, WeekActions } from "./types";
-
-/** How far back "Recently logged" looks, and how many it offers. */
-const RECENT_WEEKS = 4;
-const RECENT_MAX = 16;
-const ASSIGNED_SLQ =
-  "assignee = me AND category != done AND category != canceled ORDER BY updated DESC";
 
 /**
  * A person's week of time, entered where it is read (RADD-1541).
@@ -42,56 +36,27 @@ export function TimeLogCalendar({ anchor, onAnchor }: { anchor: string; onAnchor
   const days = useMemo(() => weekDays(start), [start]);
   const weekParams = { start, end: days[6]!, userId: me?.id };
   const week = useQuery({ ...timesheetQuery(weekParams), enabled: Boolean(me) });
-  const recent = useQuery({
-    ...timesheetQuery({ start: shiftWeek(start, -RECENT_WEEKS), end: days[6]!, userId: me?.id }),
-    enabled: Boolean(me),
-    staleTime: 60_000,
-  });
-  const assigned = useQuery({
-    queryKey: ["timelogAssigned"],
-    queryFn: ({ signal }) =>
-      api.get<Item[]>("/items", { signal, query: { q: ASSIGNED_SLQ, limit: "60" } }),
-    staleTime: 60_000,
-  });
+  /** One server-ranked list: assigned, booked on lately, acted on lately (RADD-1572). */
+  const mine = useQuery(myTicketsQuery());
   const categories = useQuery(workCategoriesQuery());
-  /** Projects that take time at all: asked once, so a ticket that cannot be
-   *  logged against says so in the tray instead of refusing the drop. */
-  const loggable = useQuery({
-    queryKey: ["timelogLoggableProjects"],
-    queryFn: ({ signal }) => api.get<string[]>("/timesheet/loggable-projects", { signal }),
-    staleTime: 60_000,
-  });
 
+  const tickets = useMemo<Ticket[]>(
+    () =>
+      (mine.data ?? []).map((ticket) => ({
+        id: ticket.id,
+        key: ticket.key,
+        title: ticket.title,
+        loggable: ticket.loggable,
+        reasons: ticket.reasons,
+        activity: ticket.activity,
+        mySeconds: ticket.my_seconds,
+      })),
+    [mine.data],
+  );
   const matches = (ticket: Ticket) => {
     const needle = filter.trim().toLowerCase();
     return !needle || `${ticket.key} ${ticket.title}`.toLowerCase().includes(needle);
   };
-  const assignedTickets = useMemo(
-    () =>
-      (assigned.data ?? []).map((item) => ({
-        id: item.id,
-        key: item.key,
-        title: item.title,
-        // Unknown until the list answers: assume it can, and let the server say otherwise.
-        loggable: loggable.data ? loggable.data.includes(item.project_id) : true,
-      })),
-    [assigned.data, loggable.data],
-  );
-  /** Issues this person booked lately that are NOT assigned to them: the
-   *  meeting, support and training tickets a team logs to every week. */
-  const recentTickets = useMemo(() => {
-    const mine = new Set(assignedTickets.map((ticket) => ticket.id));
-    const seen = new Map<string, Ticket>();
-    const entries = [...(recent.data?.entries ?? [])].sort((a, b) =>
-      b.worked_on.localeCompare(a.worked_on),
-    );
-    for (const entry of entries) {
-      if (!entry.item || mine.has(entry.item.id) || seen.has(entry.item.id)) continue;
-      seen.set(entry.item.id, { id: entry.item.id, key: entry.item.key, title: entry.item.title });
-      if (seen.size === RECENT_MAX) break;
-    }
-    return [...seen.values()];
-  }, [recent.data, assignedTickets]);
 
   const settle = () => client.invalidateQueries({ queryKey: ["timesheet"] });
   /** The week on screen changes at once; the request confirms or undoes it. */
@@ -164,28 +129,19 @@ export function TimeLogCalendar({ anchor, onAnchor }: { anchor: string; onAnchor
   return (
     <div className="flex flex-col gap-3" data-timelog-calendar>
       <div className="flex flex-col gap-3 lg:flex-row">
-        <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row">
-          <TicketTray
-            title="Assigned to me"
-            hint="Nothing open is assigned to you"
-            tickets={assignedTickets.filter(matches)}
-            onDrag={setDragged}
-            onPeek={openPeek}
-          />
-          <TicketTray
-            title="Recently logged"
-            hint="Issues you log time on show up here"
-            tickets={recentTickets.filter(matches)}
-            onDrag={setDragged}
-            onPeek={openPeek}
-          />
-        </div>
+        <TicketTray
+          title="My tickets"
+          hint={mine.isPending ? "Loading…" : "Issues assigned to you, or that you logged time on or worked on lately, show up here"}
+          tickets={tickets.filter(matches)}
+          onDrag={setDragged}
+          onPeek={openPeek}
+        />
         <CategoryTray
           categories={(categories.data ?? []).filter((category) => !category.archived)}
           onDrag={setDragged}
         />
       </div>
-      {assigned.isError && <ErrorText error={assigned.error} />}
+      {mine.isError && <ErrorText error={mine.error} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="secondary" aria-label="Previous week" onClick={() => onAnchor(shiftWeek(start, -1))}>

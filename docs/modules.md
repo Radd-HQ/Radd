@@ -45,7 +45,7 @@ In load order (`Settings.modules`), then the installable plugins. **Depends on**
 | [reporting](#reporting) | core | bundled | events, projects, auth, workflow, cycles, items | — |
 | [forms](#forms) | core | bundled | projects, auth, teams, fields, workflow, labels, cycles, releases, items, events, comments, itemtypes | attachments, automations |
 | [automations](#automations) | core | bundled | projects, auth, workflow, labels, cycles, releases, items, comments, teams, events, fields, itemtypes | notify, forms |
-| [timelogging](#timelogging) | core | bundled | events, projects, auth, teams, items, settings | — |
+| [timelogging](#timelogging) | core | bundled | events, projects, auth, teams, items, workflow, settings | — |
 | [vcs](#vcs) | core | bundled | projects, auth, events, items, timelogging, workflow, releases, automations | — |
 | [audit](#audit) | core | bundled | events, auth, projects, items | — |
 | [backup](#backup) | core | bundled | auth, events | — |

@@ -574,6 +574,13 @@ class Settings(BaseSettings):
     # timesheet that quietly drops hours is worse than one that says "narrow it".
     timesheet_max_range_days: int = Field(default=366, gt=0)
     timesheet_max_entries: int = Field(default=50_000, gt=0)
+    # "My tickets" (RADD-1572): the issues a person is likely to log time on.
+    # How far back their own time logs and actions count, how many of their
+    # newest events are read to find the issues they touched, and how many
+    # tickets the list returns. Open assigned issues count whatever their age.
+    timelog_my_tickets_days: int = Field(default=14, gt=0)
+    timelog_my_tickets_events: int = Field(default=300, gt=0)
+    timelog_my_tickets_limit: int = Field(default=40, gt=0)
 
     # The instance's working week (spec 35): comma-separated day names. Drives
     # work-week-only SLA timers and timesheet display (GET /instance exposes it).

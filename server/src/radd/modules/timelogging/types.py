@@ -34,3 +34,12 @@ DEFAULT_WORK_CATEGORIES: tuple[str, ...] = (
     "Documentation",
     "Testing",
 )
+
+
+class TicketReason(StrEnum):
+    """Why an issue is on a person's "my tickets" list (RADD-1572). One issue
+    can be there for several; the list shows the most recent."""
+
+    ASSIGNED = "assigned"
+    LOGGED = "logged"  # they booked time on it in the window
+    ACTED = "acted"  # they caused an item-scoped event on it: a comment, an edit…

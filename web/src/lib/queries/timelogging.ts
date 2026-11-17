@@ -11,6 +11,7 @@ import {
 import { queryKeys } from "./shared";
 import type {
   ItemTimeSummary,
+  MyTicket,
   ProjectTimeLogging,
   Timesheet,
   WorkCategory,
@@ -86,4 +87,14 @@ export const timesheetQuery = (params: TimesheetParams) =>
           q: params.q || undefined,
         },
       }),
+  });
+
+/** The issues the caller is likely to log time on, most recent first (RADD-1572):
+ *  one server-ranked list for every surface that offers a quick log. */
+export const myTicketsQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.myTickets(),
+    meta: entityMeta(Entity.worklog, Entity.item),
+    queryFn: ({ signal }) => api.get<MyTicket[]>(ApiPath.timesheetMyTickets, { signal }),
+    staleTime: 60_000,
   });

@@ -1,5 +1,16 @@
-import type { WorkCategory } from "../../lib/types";
+import { TicketReason, type WorkCategory } from "../../lib/types";
+import { durationText } from "./model";
 import type { Dragged, Ticket } from "./types";
+
+/** Why a ticket is offered, in a word or two: what they last did on it when
+ *  that is the newest reason, else the standing one (RADD-1572). */
+export function reasonText(ticket: Ticket): string {
+  const newest = ticket.reasons?.[0];
+  if (newest === TicketReason.acted && ticket.activity) return ticket.activity;
+  if (newest === TicketReason.logged) return "Logged on";
+  if (newest === TicketReason.assigned) return "Assigned";
+  return "";
+}
 
 interface TrayProps {
   title: string;
@@ -56,7 +67,12 @@ export function TicketTray({ title, hint, tickets, onDrag, onPeek }: TrayProps) 
               >
                 {ticket.key}
               </button>
-              <span className="truncate text-fg-secondary">{ticket.title}</span>
+              <span className="min-w-0 flex-1 truncate text-fg-secondary">{ticket.title}</span>
+              <span className="shrink-0 text-meta text-fg-muted" data-ticket-why>
+                {[reasonText(ticket), ticket.mySeconds ? durationText(ticket.mySeconds) : ""]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
             </li>
           ))}
         </ul>

@@ -135,7 +135,7 @@ plugin = RaddPlugin(
     description=(
         "Time logging: worklogs, estimates and the timesheet."
     ),
-    depends_on=("events", "projects", "auth", "teams", "items", "settings"),
+    depends_on=("events", "projects", "auth", "teams", "items", "workflow", "settings"),
     # `logged_by = me` on the ITEM dialect — see slq.py. Registered here rather
     # than hardcoded in items, so items keeps no knowledge of worklogs.
     slq_fields=(

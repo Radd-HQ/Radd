@@ -1,4 +1,4 @@
-import type { TimesheetEntry, WorkCategory } from "../../lib/types";
+import type { TicketReasonValue, TimesheetEntry, WorkCategory } from "../../lib/types";
 
 /** Something a person can log time against from the tray. */
 export interface Ticket {
@@ -7,6 +7,12 @@ export interface Ticket {
   title: string;
   /** False = its project has time logging switched off: shown, not draggable. */
   loggable?: boolean;
+  /** Why it is offered, newest first, and what they last did on it (RADD-1572).
+   *  Absent on a ticket found by search. */
+  reasons?: TicketReasonValue[];
+  activity?: string;
+  /** What this person has logged on it so far. */
+  mySeconds?: number;
 }
 
 /** What is being dragged over the week (RADD-1541). Held in state, not in the

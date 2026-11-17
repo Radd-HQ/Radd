@@ -4,6 +4,8 @@ from datetime import date
 from pydantic import BaseModel, Field
 from radd.apitypes import UtcDatetime
 
+from .types import TicketReason
+
 
 # --- small embedded refs (hydrated names, so the UI needs no extra lookups) ---
 
@@ -23,6 +25,25 @@ class ItemRef(BaseModel):
     key: str  # TD-1234
     title: str
     project_key: str
+
+
+class MyTicket(BaseModel):
+    """One row of a person's "my tickets" list (RADD-1572)."""
+
+    id: uuid.UUID
+    key: str
+    title: str
+    project_id: uuid.UUID
+    #: Why it is listed, newest reason first (`TicketReason`).
+    reasons: list[TicketReason]
+    #: When the newest reason is an action of theirs: what it was, as the event
+    #: type's registered label ("Comment added"). Empty otherwise.
+    activity: str = ""
+    last_at: UtcDatetime
+    #: Everything the caller has logged on it, ever.
+    my_seconds: int = 0
+    #: False = time logging is switched off for its project.
+    loggable: bool = True
 
 
 # --- per-project enablement ---

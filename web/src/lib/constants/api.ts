@@ -59,6 +59,7 @@ export const ApiPath = {
   portalRequests: "/portal/requests",
   workCategories: "/work-categories",
   timesheet: "/timesheet",
+  timesheetMyTickets: "/timesheet/my-tickets",
   backups: "/backups",
   notifications: "/notifications",
   notificationPrefs: "/notifications/preferences",

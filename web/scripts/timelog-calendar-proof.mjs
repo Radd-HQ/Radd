@@ -71,10 +71,13 @@ async function main() {
       const a = await item("render farm upgrade");
       const b = await item("review dailies");
       const c = await item("pipeline support");
+      // RADD-1572: not assigned to anyone, only commented on by me. The old trays could not show it.
+      const touched = (await api("POST", "/items", { project_id: project.id, title: "only commented on" })).body;
+      const said = await api("POST", "/items/" + touched.id + "/comments", { body: "looking at this" });
       const categories = (await api("GET", "/work-categories")).body;
-      return { me, project, off, unloggable, a, b, c, categories };
+      return { me, project, off, unloggable, a, b, c, touched, said: said.status, categories };
     })()`);
-    const { project, off, unloggable, a, b, c, categories } = setup;
+    const { project, off, unloggable, a, b, c, touched, categories } = setup;
     projectId = project?.id ?? null;
     offProjectId = off?.id ?? null;
     check("setup created a project and three assigned issues", Boolean(a?.key && b?.key && c?.key), JSON.stringify({ a: a?.key, b: b?.key, c: c?.key }));
@@ -108,6 +111,10 @@ async function main() {
     const tray = await session.eval(`[...document.querySelectorAll("[data-tray-ticket]")].map((n) => n.dataset.trayTicket)`);
     check("My week is the default surface, with seven day columns for this week", JSON.stringify(Object.keys(now.days)) === JSON.stringify(week), JSON.stringify(Object.keys(now.days)));
     check("the tray offers the issues assigned to me", [a, b, c].every((item) => tray.includes(item.key)), JSON.stringify(tray));
+
+    const why = await session.eval(`Object.fromEntries([...document.querySelectorAll("[data-tray-ticket]")].map((n) => [n.dataset.trayTicket, n.querySelector("[data-ticket-why]")?.textContent ?? ""]))`);
+    check("an issue I only commented on is offered, and says that is why (RADD-1572)", /comment/i.test(why[touched.key] ?? ""), JSON.stringify({ said: setup.said, why: why[touched.key] }));
+    check("an assigned issue says it is assigned", why[a.key] === "Assigned", JSON.stringify(why[a.key]));
 
     const blocked = await session.eval(`(() => { const n = document.querySelector("[data-tray-ticket='${unloggable.key}']"); return n ? { draggable: n.draggable, disabled: n.getAttribute("aria-disabled"), title: n.title } : null; })()`);
     check("an issue whose project has time logging off is shown but cannot be dragged, and says why", blocked && blocked.draggable === false && blocked.disabled === "true" && /switched off/.test(blocked.title), JSON.stringify(blocked));

@@ -63,8 +63,10 @@ class Event(Base):
     __table_args__ = (
         # Per-entity history feed (item History tab) + audit entity filter.
         Index("ix_events_entity", "entity_type", "entity_id"),
-        # "everything user X did" — the actor-scoped audit view.
-        Index("ix_events_actor_id", "actor_id"),
+        # "everything user X did" — the actor-scoped audit view — and "what X
+        # did lately" (RADD-1572), which the leading column alone answered by
+        # reading all of X's events.
+        Index("ix_events_actor_created", "actor_id", "created_at"),
         # Spec 123: "everything that happened in project X".
         Index("ix_events_project_id", "project_id"),
         # The consumer walk: `(xact_id, id) > cursor` in that order (RADD-1524).

@@ -123,3 +123,24 @@ export interface Timesheet {
   /** Working days ("mon".."sun") — under-logging only flags these. */
   work_days: string[];
 }
+
+/** Why an issue is on a person's "my tickets" list (RADD-1572) — the server's `TicketReason`. */
+export const TicketReason = { assigned: "assigned", logged: "logged", acted: "acted" } as const;
+export type TicketReasonValue = (typeof TicketReason)[keyof typeof TicketReason];
+
+/** One issue the caller is likely to log time on (`GET /timesheet/my-tickets`). */
+export interface MyTicket {
+  id: string;
+  key: string;
+  title: string;
+  project_id: string;
+  /** Newest reason first. */
+  reasons: TicketReasonValue[];
+  /** What they last did on it ("Comment added") when that is the newest reason. */
+  activity: string;
+  last_at: string;
+  /** Everything the caller has logged on it. */
+  my_seconds: number;
+  /** False = its project has time logging switched off. */
+  loggable: boolean;
+}

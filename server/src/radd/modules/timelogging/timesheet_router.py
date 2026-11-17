@@ -14,9 +14,9 @@ from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey
 from radd.modules.teams import service as teams_service
 
-from . import enablement, service, timesheet
+from . import enablement, mytickets, service, timesheet
 from .slq.suggest import suggest_worklog
-from .schemas import Timesheet
+from .schemas import MyTicket, Timesheet
 
 router = APIRouter(prefix="/timesheet", tags=["timelogging"])
 
@@ -70,6 +70,15 @@ async def loggable_projects(session: Session, user: CurrentUser) -> list[uuid.UU
     await authz.require_member(session, user)
     readable = await authz.readable_projects(session, user)
     return sorted(await enablement.enabled_project_ids(session) & set(readable))
+
+
+@router.get("/my-tickets", response_model=list[MyTicket])
+async def my_tickets(session: Session, user: CurrentUser) -> list[MyTicket]:
+    """The issues the caller is likely to log time on, most recent first: open
+    and assigned to them, booked on lately, or acted on lately — each with why
+    (RADD-1572). Bounded by what they can read."""
+    await authz.require_member(session, user)
+    return await mytickets.my_tickets(session, user)
 
 
 _WORKLOG_SLQ_DOC = (
