@@ -8,6 +8,8 @@ from datetime import date
 from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.config import settings
+from radd.exceptions import RaddError
 from radd.modules.auth import authz, service as auth_service
 from radd.modules.auth.models import User
 from radd.modules.items import service as items_service
@@ -17,6 +19,19 @@ from radd.modules.projects import service as projects_service
 from . import categories
 from .models import ItemEstimate, Worklog
 from .schemas import CategoryRef, ItemRef, Timesheet, TimesheetEntry, UserRef
+
+
+class TimesheetTooLarge(RaddError):
+    """The window, or what it holds, is more than one request may ask for (-> 422)."""
+
+
+def check_window(start: date, end: date) -> None:
+    days = (end - start).days + 1
+    if days > settings.timesheet_max_range_days:
+        raise TimesheetTooLarge(
+            f"a timesheet covers at most {settings.timesheet_max_range_days} days; "
+            f"{start.isoformat()} to {end.isoformat()} is {days}"
+        )
 
 
 async def visible_user_ids(
@@ -44,6 +59,7 @@ async def build(
     # the ACTOR's readable projects — even for a timesheet.view holder, whose
     # authority is "everyone's hours", not "projects I can't read". Required
     # parameter on purpose: a caller that forgets fails to compile, not open.
+    check_window(start, end)
     readable = frozenset(await authz.readable_projects(session, actor))
     projects = await projects_service.list_projects(session)
     project_key = {p.id: p.key for p in projects if p.id in readable}
@@ -62,7 +78,14 @@ async def build(
         else or_(Worklog.project_id.is_(None), Worklog.project_id.in_(project_key.keys())),
     )
     stmt = (
-        select(Worklog, WorkItem.number, WorkItem.title, WorkItem.project_id)
+        # Columns, not `Worklog` entities: nothing here is written back, and an
+        # ORM object per row was most of the cost of a wide sheet.
+        select(
+            Worklog.id, Worklog.item_id, Worklog.project_id, Worklog.author_id,
+            Worklog.category_id, Worklog.worked_on, Worklog.time_spent_seconds,
+            Worklog.note, Worklog.external_source,
+            WorkItem.number, WorkItem.title, WorkItem.project_id.label("item_project_id"),
+        )
         .join(WorkItem, Worklog.item_id == WorkItem.id, isouter=True)
         .where(or_(WorkItem.project_id.in_(project_key.keys()), itemless))
         .where(Worklog.worked_on >= start, Worklog.worked_on <= end)
@@ -75,8 +98,14 @@ async def build(
     if where is not None:
         stmt = stmt.where(where)
 
-    rows = (await session.execute(stmt)).all()
-    worklogs = [row[0] for row in rows]
+    # One past the bound is enough to know the sheet is over it.
+    rows = (await session.execute(stmt.limit(settings.timesheet_max_entries + 1))).all()
+    if len(rows) > settings.timesheet_max_entries:
+        raise TimesheetTooLarge(
+            f"this timesheet holds more than {settings.timesheet_max_entries:,} time logs; "
+            "narrow the dates, pick a team or a project, or add a filter"
+        )
+    worklogs = rows
     authors = await auth_service.users_by_ids(session, {w.author_id for w in worklogs})
     cats = await categories.categories_by_ids(
         session, {w.category_id for w in worklogs if w.category_id}
@@ -98,7 +127,8 @@ async def build(
 
     entries: list[TimesheetEntry] = []
     total = 0
-    for worklog, number, title, proj_id in rows:
+    for worklog in rows:
+        number, title, proj_id = worklog.number, worklog.title, worklog.item_project_id
         total += worklog.time_spent_seconds
         author = authors.get(worklog.author_id)
         category = cats.get(worklog.category_id) if worklog.category_id else None

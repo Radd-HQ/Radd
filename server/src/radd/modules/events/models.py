@@ -69,6 +69,8 @@ class Event(Base):
         Index("ix_events_project_id", "project_id"),
         # The consumer walk: `(xact_id, id) > cursor` in that order (RADD-1524).
         Index("ix_events_xact_id_id", "xact_id", "id"),
+        # `ix_events_related_item` (RADD-1540, `d1540relateditem`) is a partial
+        # expression index for the History tab's related-event branch.
         # Two more live in the migration (`d123ledger`) because Alembic cannot
         # express them: a trigram GIN over `search_text` (guarded on pg_trgm)
         # and a GIN over `payload -> 'changes'` for the changed-field filter.

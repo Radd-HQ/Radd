@@ -83,6 +83,23 @@ async def _space_rows(session: AsyncSession, space_id: uuid.UUID) -> list[Page]:
     return list(result.scalars())
 
 
+async def _tree_rows(session: AsyncSession, space_id: uuid.UUID):
+    """The columns a tree is drawn from, and nothing else (RADD-1540).
+
+    The sidebar asks for this on every wiki visit, and `select(Page)` answered
+    with every document's BODY: opening the tree of a 2,000-page space read
+    megabytes of text to show titles. The rows are plain tuples with the same
+    attribute names, so the path, visibility and read-access helpers take them
+    as they took the ORM rows."""
+    result = await session.execute(
+        select(
+            Page.id, Page.space_id, Page.number, Page.parent_id, Page.title, Page.slug,
+            Page.position, Page.updated_at, Page.archived_at,
+        ).where(Page.space_id == space_id)
+    )
+    return result.all()
+
+
 async def list_pages(
     session: AsyncSession,
     space_id: uuid.UUID,
@@ -94,7 +111,7 @@ async def list_pages(
     unless `include_archived`. `actor` drops the pages they may not read
     (RADD-792) — every actor-facing caller passes one, since a listed title
     leaks what a restriction hides."""
-    rows = await _space_rows(session, space_id)
+    rows = await _tree_rows(session, space_id)
     if actor is not None:
         readable = await page_access.readable_page_ids(session, actor, list(rows))
         rows = [row for row in rows if row.id in readable]
@@ -570,7 +587,7 @@ async def hard_delete_page(
 
 async def _depths(session: AsyncSession, space_id: uuid.UUID) -> dict[uuid.UUID, int]:
     """Page id -> depth in the space's tree (root = 0)."""
-    parent_of = {row.id: row.parent_id for row in await _space_rows(session, space_id)}
+    parent_of = {row.id: row.parent_id for row in await _tree_rows(session, space_id)}
     return {page_id: len(core.ancestor_ids(parent_of, page_id)) for page_id in parent_of}
 
 

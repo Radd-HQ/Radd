@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import BinaryIO, Protocol, runtime_checkable
 
 from fastapi import UploadFile
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 
 from radd import secretbox
 from radd.config import settings
@@ -192,19 +192,33 @@ class S3Client:
                 },
             )
             return RedirectResponse(url, status_code=307)
-        # Proxy: bounded by the upload cap, so a full read is fine — and it keeps
-        # the S3 endpoint invisible to browsers (headers match the fs path).
-        data = await self.read(attachment.storage_name)
+        # Proxy: keeps the S3 endpoint invisible to browsers (headers match the fs
+        # path). STREAMED (RADD-1540): this used to read the whole object first,
+        # "bounded by the upload cap" — a cap of 5 GiB, so a handful of people
+        # downloading recordings at once was the pod's memory limit.
         disposition = "inline" if inline else "attachment"
         filename = "" if inline else f'; filename="{attachment.filename.replace(chr(34), "")}"'
-        return Response(
-            content=data,
+        return StreamingResponse(
+            self._chunks(attachment.storage_name),
             media_type=attachment.content_type,
             headers={
                 "X-Content-Type-Options": "nosniff",
                 "Content-Disposition": f"{disposition}{filename}",
+                "Content-Length": str(attachment.size_bytes),
             },
         )
+
+    async def _chunks(self, storage_name: str):
+        """The object, one chunk in memory at a time. The SDK is synchronous, so
+        each read runs in a thread; the connection is released whether the
+        download completes or the client goes away."""
+        response = await asyncio.to_thread(self._client.get_object, self._bucket, storage_name)
+        try:
+            while chunk := await asyncio.to_thread(response.read, _CHUNK_BYTES):
+                yield chunk
+        finally:
+            response.close()
+            response.release_conn()
 
     async def ensure_ready(self) -> None:
         def _ensure() -> None:

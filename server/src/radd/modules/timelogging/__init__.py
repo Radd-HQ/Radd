@@ -18,6 +18,7 @@ from . import service
 from .category_router import router as category_router
 from .duration import DurationError
 from .enablement_router import router as enablement_router
+from .timesheet import TimesheetTooLarge
 from .timesheet_router import router as timesheet_router
 from .types import WorklogEvent
 from .worklog_router import router as worklog_router
@@ -28,6 +29,10 @@ from . import mcptools
 
 
 async def _duration_error_handler(request: Request, exc: DurationError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+async def _timesheet_too_large_handler(request: Request, exc: TimesheetTooLarge) -> JSONResponse:
     return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
@@ -139,7 +144,10 @@ plugin = RaddPlugin(
     routers=(worklog_router, category_router, enablement_router, timesheet_router),
     # RADD-889: the worklog tools of the spec-114 MCP catalog live with their owner.
     mcp_tools=mcptools.MCP_TOOLS,
-    exception_handlers=((DurationError, _duration_error_handler),),
+    exception_handlers=(
+        (DurationError, _duration_error_handler),
+        (TimesheetTooLarge, _timesheet_too_large_handler),
+    ),
     on_startup=(categories.ensure_seeded,),
     event_types=(
         EventTypeSpec(WorklogEvent.CREATED, "Work logged", "Time logging", item_scoped=True),

@@ -10,6 +10,7 @@ from collections.abc import Collection
 from typing import Any
 
 from pydantic import BaseModel, Field
+from radd.config import settings
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import client, features
@@ -43,6 +44,11 @@ class LlmRule:
         if not _covers(config, ctx.content_type) or ctx.content is None:
             return None
         if not await features.feature_enabled(session, AiFeature.STORAGE_ROUTING):
+            return None
+        # `ctx.content()` reads the whole upload into memory, against a 5 GiB
+        # upload cap (RADD-1540). Past what the vision model is ever shown, the
+        # rule abstains and the next one decides.
+        if ctx.size_bytes > settings.ai_vision_max_image_bytes:
             return None
         mapping = {entry.answer: entry.host_id for entry in config.answers}
         try:

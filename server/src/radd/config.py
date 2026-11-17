@@ -526,6 +526,13 @@ class Settings(BaseSettings):
     # bounds is highlighted on the per-person timesheet view.
     timesheet_day_min_hours: int = 6
     timesheet_day_max_hours: int = 10
+    # What one timesheet request may ask for (RADD-1540). The sheet returns one
+    # entry per time log, so an open-ended window is the whole table: a year for
+    # everyone was 340k rows built as objects on the request path. A request past
+    # either bound is refused with the reason, never silently truncated — a
+    # timesheet that quietly drops hours is worse than one that says "narrow it".
+    timesheet_max_range_days: int = Field(default=366, gt=0)
+    timesheet_max_entries: int = Field(default=50_000, gt=0)
 
     # The instance's working week (spec 35): comma-separated day names. Drives
     # work-week-only SLA timers and timesheet display (GET /instance exposes it).
