@@ -337,6 +337,9 @@ class Settings(BaseSettings):
     # right behind a proxy. See radd/clientip.py.
     trusted_proxies: str = ""
 
+    # How many GETs one `POST /batch` may carry (radd/batch.py, RADD-1561).
+    batch_max_requests: int = Field(default=30, gt=0)
+
     # Reuse authorization answers across requests while nothing has changed
     # (radd/authcache.py, RADD-1560): memberships, grants and role permissions
     # are cached per process and dropped the moment a database trigger moves the

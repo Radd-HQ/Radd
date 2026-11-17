@@ -62,6 +62,11 @@ async function rawRequest(path: string, options: RequestOptions = {}): Promise<R
     body: body instanceof Blob ? body : body !== undefined ? JSON.stringify(body) : undefined,
   });
 
+  return settle(response, on401);
+}
+
+/** A response's refusal handling, shared by a plain request and a batched one. */
+async function settle(response: Response, on401: On401Value): Promise<Response> {
   if (!response.ok) {
     if (
       response.status === 401 &&
@@ -84,9 +89,101 @@ async function rawRequest(path: string, options: RequestOptions = {}): Promise<R
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (batchable(path, options)) return batched<T>(path, options);
   const response = await rawRequest(path, options);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
+}
+
+// --- one request for an issue's many small reads (RADD-1561) -----------------
+//
+// An issue page asks about fifteen questions about one item, each a section's
+// own endpoint (watchers, participants, SLA, approvals, links, time …). They
+// are issued in the same tick, so they are sent as ONE `POST /batch`; the
+// server answers each by running the same GET. No section knows: it awaits
+// `api.get` and gets what it always got, error or not.
+
+/** `/items/<uuid>/<anything>`: the per-item sections. */
+const BATCHABLE = /^\/items\/[0-9a-f]{8}-[0-9a-f-]{27}\//;
+const BATCH_MAX = 30;
+/** Cleared for good when the server has no batch route (an older server, a test fixture). */
+let batchingAvailable = true;
+
+interface Pending {
+  path: string;
+  options: RequestOptions;
+  resolve: (value: unknown) => void;
+  reject: (error: unknown) => void;
+}
+let queue: Pending[] = [];
+
+function batchable(path: string, options: RequestOptions): boolean {
+  return (
+    batchingAvailable &&
+    (options.method ?? "GET") === "GET" &&
+    options.body === undefined &&
+    !options.keepalive &&
+    BATCHABLE.test(path)
+  );
+}
+
+function withQuery(path: string, query: RequestOptions["query"]): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query ?? {})) if (value !== undefined) params.set(key, value);
+  const text = params.toString();
+  return text ? `${path}?${text}` : path;
+}
+
+function batched<T>(path: string, options: RequestOptions): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    queue.push({ path, options, resolve: resolve as (value: unknown) => void, reject });
+    if (queue.length === 1) setTimeout(flushBatch, 0);
+  });
+}
+
+/** Answer one entry the ordinary way: on its own, with every side effect of a plain GET. */
+function alone(entry: Pending): void {
+  rawRequest(entry.path, entry.options)
+    .then((response) => (response.status === 204 ? undefined : response.json()))
+    .then(entry.resolve, entry.reject);
+}
+
+async function flushBatch(): Promise<void> {
+  const entries = queue.filter((entry) => !entry.options.signal?.aborted);
+  for (const entry of queue) {
+    if (entry.options.signal?.aborted) entry.reject(new DOMException("Aborted", "AbortError"));
+  }
+  queue = [];
+  if (entries.length < 2 || !batchingAvailable) return entries.forEach(alone);
+  const now = entries.slice(0, BATCH_MAX);
+  entries.slice(BATCH_MAX).forEach(alone);
+  let answers: { status: number; body: unknown }[];
+  try {
+    const response = await fetch(new URL(`${API_BASE}/batch`, window.location.origin), {
+      method: "POST",
+      credentials: "include",
+      signal: accountRequests.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requests: now.map((entry) => withQuery(entry.path, entry.options.query)) }),
+    });
+    if (!response.ok) throw new Error(`batch ${response.status}`);
+    answers = await response.json();
+    if (!Array.isArray(answers) || answers.length !== now.length) throw new Error("batch shape");
+  } catch {
+    // No batch route here, or it failed: every read goes out on its own, now
+    // and for the rest of this page's life.
+    batchingAvailable = false;
+    return now.forEach(alone);
+  }
+  now.forEach((entry, index) => {
+    const { status, body } = answers[index]!;
+    if (status >= 200 && status < 300) return entry.resolve(status === 204 ? undefined : body);
+    // A refusal takes the same path a plain GET's does: the redirect on a lost
+    // session, the toast on a 403, the ApiError with its detail.
+    settle(new Response(body === null ? null : JSON.stringify(body), {
+      status, headers: { "Content-Type": "application/json" },
+    }), entry.options.on401 ?? On401.redirect).then(() => entry.resolve(body), entry.reject);
+  });
 }
 
 export interface CursorPage<T> { rows: T[]; next: string | null }

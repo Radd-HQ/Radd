@@ -24,6 +24,7 @@ from radd.clientip import ClientIpMiddleware
 from radd.maintenance import MaintenanceMiddleware
 from radd.middleware import CommitBeforeSendMiddleware
 from radd.compression import CompressionMiddleware
+from radd import batch
 from radd.origin_check import OriginCheckMiddleware
 from radd.security_headers import SecurityHeadersMiddleware
 
@@ -94,6 +95,12 @@ def create_app() -> FastAPI:
         version=__version__,
         lifespan=lifespan,
         default_response_class=ORJSONResponse,
+    )
+
+    # Several reads in one request (RADD-1561); see radd/batch.py.
+    app.add_route(
+        settings.api_prefix.rstrip("/") + batch.BATCH_PATH, batch.batch, methods=["POST"],
+        include_in_schema=False,
     )
 
     @app.get("/health", include_in_schema=False)
