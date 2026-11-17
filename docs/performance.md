@@ -133,6 +133,27 @@ One user, the largest project, in process (no network), this release:
 | Timesheet, one month for everyone (10,408 logs) | 295 ms | 252 ms |
 | Timesheet, one year for everyone (91,814 logs) | refused with the reason (was 5.4 s and 453 MB) | — |
 
+## The second pass (epic RADD-1548)
+
+A browser on the same database, one user, after the first results above were
+written. These are page measurements, not the 200-user test, which has not
+been re-run with these changes.
+
+| What | Before | After |
+|---|---|---|
+| JavaScript on a cold load, over the wire | about 2,000 KB | about 700 KB (gzip, RADD-1549) |
+| Issue page: API calls / bytes | 43 / 534 KB | 29 / 30 KB |
+| Board: requests for the first screen | one per column | one (RADD-1545), about 235 ms steady |
+| Unfiltered item count on 100k issues | 82 ms | 18 ms (covering index, RADD-1552) |
+| `/auth/me`: SQL statements | 19 | 10 (RADD-1560) |
+| List page: DOM nodes | 10,961 | 3,519 (50 rows, RADD-1553) |
+| Idle embedder | a sweep every few seconds | backs off to 5 minutes (RADD-1550) |
+
+The board's 860 ms above was the window-function read; it is now a bounded
+read per cell, and the session asks PostgreSQL for a custom plan each time,
+because the generic plan it switched to after five executions was 25 times
+slower on this data.
+
 ## Upgrading a large instance
 
 `d1537transitions` folds the existing ledger into `item_transitions` once. On

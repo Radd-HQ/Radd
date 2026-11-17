@@ -16,6 +16,35 @@ Moved here from the CLAUDE.md preamble on 2026-09-27 (RADD-1441): one entry per 
 preamble narrated it at the time, so the working agreement stays rules-only. The tracker's RADD project
 and `docs/specs/` are the primary record; these entries are the per-wave summary.
 
+### Performance and usability, second pass — epic RADD-1548 (2026-11-17), on main, unreleased
+
+After the readiness wave Hussein asked for another pass, for a plan he could skim, then: "do all of
+them". Sixteen issues, one commit each.
+
+**Server.** RADD-1549: the app gzips its own text responses and caches the compressed immutable
+assets (the live site was serving 2 MB of JavaScript uncompressed behind Caddy). RADD-1550: the idle
+embedder backs off instead of sweeping every few seconds. RADD-1552: a covering index for the item
+count (82 → 18 ms). RADD-1560: role, grant and membership lookups are cached per process and dropped
+by an epoch that database triggers bump, so a change made anywhere, SQL console included, is seen.
+RADD-1545: the board's first screen is one request of bounded per-cell reads, and sessions force custom
+plans (the generic plan was 25x slower). RADD-1558: project stats in one query. RADD-1561: `POST /batch`
+runs a list of GETs through the app itself, and the client coalesces an issue's per-item reads into it.
+The plan called that item a "panels" endpoint that plugins contribute sections to; the batch saves the
+same round trips with no plugin change and no core route that knows which plugins exist.
+
+**Client.** RADD-1551: requests that fired on load for things nobody had opened now wait. RADD-1553:
+lists show 50 rows and the title keeps its width. RADD-1554: the issue rail leads with the screen's
+fields. RADD-1555: board cards are as tall as their content. RADD-1556: My Work widgets fit their
+content and are named once. RADD-1557: the cumulative-flow legend toggles series; Done starts hidden
+when it dominates. RADD-1559: eight wiki spaces in the sidebar until asked. RADD-1562: the top bar
+says what it filters when a page owns it. RADD-1563: one `DateInput` in the SDK replaces seven
+hand-styled date inputs, two of which pinned a dark picker onto the light theme; a test refuses a new one.
+
+**Found on the way.** Two review findings were partly wrong and are corrected on their issues (the
+sidebar was capped at 50, not unbounded; the rail order I saw was partly one project's saved screen).
+An aggregate "optimisation" of the board summary measured slower and was reverted. A hook placed after
+an early return crashed the sidebar section and was caught only by loading the page.
+
 ### Production readiness — epic RADD-1523 (2026-11-16/17), on main, unreleased
 
 Hussein asked for a full review of quality, gaps and production readiness, including the pilot's

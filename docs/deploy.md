@@ -180,6 +180,20 @@ commits and will not say them this plainly.
   API tokens are not affected.
 - **`PATCH /items/{id}` may answer 409** when it sends `description_version` and
   the description changed since. Callers that do not send it are unaffected.
+- **Responses are compressed by the app** (gzip, text responses of 1 KB or
+  more; attachments, backups and sign-in routes are left alone). A proxy that
+  already compresses passes them through. Nothing to set.
+- **Permission lookups are cached per process** and dropped the moment a role,
+  grant, membership, team or group changes (database triggers bump a counter
+  every process reads). Access changes made by writing to the database directly
+  are seen too. `RADD_AUTH_CACHE=false` turns it off if you ever suspect it.
+- **Things people will notice on screen.** Lists show 50 rows a page (was 200;
+  a chosen size is kept) and give the title more room. Board cards are as tall
+  as their content, so they no longer line up in rows across columns. On an
+  issue, the screen's fields sit directly under State, Type and Priority, and
+  Visibility moved below them. My Work widgets shrink to their content. The
+  cumulative-flow chart hides Done when it is over 80% of the total; click
+  the legend to show it. The sidebar lists eight wiki spaces and a "Show all".
 
 ### Upgrading from v0.49.3
 
@@ -642,6 +656,10 @@ named Settings page owns it and editing the variable changes nothing. Highlights
 | `RADD_GITLAB_*` / `RADD_FORGEJO_*` / `RADD_GITHUB_*` | disabled | **seed-only** → Settings → Version control: each seeds one connection (and repository) once; `_API_TOKEN`, `_BASE_URL`, `_REPO` optional |
 | `RADD_ALERTMANAGER_*` / `RADD_MAIL_*` | disabled | seed ONE Alertmanager receiver / mail source row, once (RADD-1317, RADD-958) — both are configured in Settings after. `RADD_GOOGLECHAT_*` is gone (RADD-1319): posting to chat is an automation |
 | `RADD_WORK_WEEK_DAYS` | mon–fri | business-day SLAs + timesheet |
+| `RADD_AUTH_CACHE` | `true` | per-process cache of role/grant/membership lookups, invalidated by database triggers (RADD-1560); `false` reads them every request |
+| `RADD_DB_FORCE_CUSTOM_PLANS` | `true` | plans each statement for its actual values; without it the board's reads degraded from 15 ms to 400 ms after five runs (RADD-1545) |
+| `RADD_BATCH_MAX_REQUESTS` | `30` | how many GETs one `POST /api/v1/batch` may carry (RADD-1561) |
+| `RADD_AI_EMBED_IDLE_SWEEP_MAX_SECONDS` | `300` | the embedder's longest wait between sweeps when there is nothing to embed (RADD-1550) |
 
 ## Reviewing imported Jira comment audiences
 
