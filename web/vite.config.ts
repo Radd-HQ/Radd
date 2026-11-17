@@ -15,6 +15,10 @@ export default defineConfig({
       [API_PROXY_PREFIX]: {
         target: DEV_API_TARGET,
         changeOrigin: true,
+        // The API refuses a cookie-authenticated write whose Origin is not its
+        // own (RADD-1547). `changeOrigin` already presents the API's Host; the
+        // browser's Origin still says :5173, so present the API's there too.
+        headers: { origin: DEV_API_TARGET },
         // Realtime WebSocket (spec 27) rides the same /api prefix.
         ws: true,
       },
