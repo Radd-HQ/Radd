@@ -12,6 +12,7 @@ import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import type { BucketRef } from "../../lib/axis-dnd";
 import { useBucketDrop } from "../../lib/bucket-drop";
 import { usePeek } from "../../lib/hooks";
+import { useWindowedRow } from "../../lib/useWindowedRow";
 import {
   DEFAULT_LIST_SLOTS,
   defaultCardDisplay,
@@ -109,6 +110,11 @@ function isTopHalf(event: ReactDragEvent): boolean {
  * of compact rows with a personal-star toggle. Cross-section drag sets the axis
  * field; within-section drag reorders (manual rank) when `onReorder` is set.
  */
+/** Rows mounted from the first render: more than a tall screen shows. */
+const EAGER_ROWS = 40;
+/** A row's height before it has ever been measured (py-2 + one line + border). */
+const ROW_ESTIMATE_PX = 41;
+
 export function ViewList({
   loading,
   groups,
@@ -182,6 +188,8 @@ export function ViewList({
 
   const root = useRef<HTMLDivElement>(null);
 
+  // Rows are counted across groups: the first screenful mounts at once, the rest when near (RADD-1565).
+  let rowsSoFar = 0;
   return (
     // Card layout: the scroll area IS the page ground, and each group is a card
     // floating on it. Full-bleed on purpose — the cards stretch to the window,
@@ -315,6 +323,7 @@ export function ViewList({
                   <li className="px-4 py-3 text-xs text-fg-muted">{group.emptyMessage}</li>
                 )}
                 {group.items.map((item) => {
+                  const eager = rowsSoFar++ < EAGER_ROWS;
                   const canReorderHere =
                     reorderable && !group.reorderDisabled && dragging !== null && fromKey === group.key && dragging.id !== item.id;
                   const indicator = dropRow?.id === item.id ? dropRow.before : null;
@@ -322,6 +331,7 @@ export function ViewList({
                     <ListRow
                       key={item.id}
                       item={item}
+                      eager={eager}
                       sourceCycle={group.showSourceCycle ? item.cycle?.name : undefined}
                       draggable={draggable && !group.dragDisabled}
                       onDragStart={() => {
@@ -362,6 +372,8 @@ export function ViewList({
 
 interface ListRowProps {
   item: Item;
+  /** Mounted from the first render: the rows that open on screen (RADD-1565). */
+  eager: boolean;
   sourceCycle?: string;
   display: CardDisplayConfig;
   /** Epic-progress aggregates for the progress slot (spec 76). */
@@ -387,6 +399,7 @@ interface ListRowProps {
 
 function ListRow({
   item,
+  eager,
   sourceCycle,
   display,
   rollup,
@@ -409,6 +422,7 @@ function ListRow({
 }: ListRowProps) {
   const { open: openPeek } = usePeek();
   const open = () => openPeek(item.key);
+  const { ref, near, reserved } = useWindowedRow<HTMLLIElement>(eager);
   const indicatorClass =
     dropIndicator === true
       ? "shadow-[inset_0_2px_0_0] shadow-accent-hover"
@@ -417,6 +431,9 @@ function ListRow({
         : "";
   return (
     <li
+      ref={ref}
+      data-row-windowed={near ? undefined : ""}
+      style={near ? undefined : { minHeight: reserved ?? ROW_ESTIMATE_PX }}
       draggable={draggable}
       onDragStart={
         draggable
@@ -470,29 +487,40 @@ function ListRow({
           column (RADD-1110), cells share the row's single flex context
           (identical geometry to the header), and the trailing spacer absorbs
           the slack — the row can never outgrow the screen. */}
-      <span style={itemZoneStyle(columnWidths ?? {})} className={ITEM_ZONE_CLASS}>
-        <RowLeading
-          item={item}
-          selectable={selectable}
-          selected={selected}
-          onSelectToggle={onSelectToggle}
-          onStar={onStar}
-        />
-        <span className="min-w-0 flex-1 text-row text-heading"><span className="block truncate">{item.title}</span>{sourceCycle && <span className="block truncate text-meta text-fg-muted">From {sourceCycle}</span>}</span>
-      </span>
-      {listColumns.map((column) => (
-        <ColumnCell
-          key={column.id}
-          column={column}
-          item={item}
-          width={columnWidths?.[column.id] ?? column.width}
-          maxLabels={display.maxLabels}
-          rollup={rollup}
-          loggedSeconds={timelog?.logged_seconds}
-          usersById={usersById}
-        />
-      ))}
-      <SlackSpacer />
+      {near ? (
+        <>
+        <span style={itemZoneStyle(columnWidths ?? {})} className={ITEM_ZONE_CLASS}>
+          <RowLeading
+            item={item}
+            selectable={selectable}
+            selected={selected}
+            onSelectToggle={onSelectToggle}
+            onStar={onStar}
+          />
+          <span className="min-w-0 flex-1 text-row text-heading"><span className="block truncate">{item.title}</span>{sourceCycle && <span className="block truncate text-meta text-fg-muted">From {sourceCycle}</span>}</span>
+        </span>
+        {listColumns.map((column) => (
+          <ColumnCell
+            key={column.id}
+            column={column}
+            item={item}
+            width={columnWidths?.[column.id] ?? column.width}
+            maxLabels={display.maxLabels}
+            rollup={rollup}
+            loggedSeconds={timelog?.logged_seconds}
+            usersById={usersById}
+          />
+        ))}
+        <SlackSpacer />
+        </>
+      ) : (
+        // Far from the viewport: the row's key and title as plain text, so the
+        // page can still be searched and read, without its cells.
+        <span className="flex min-w-0 items-center gap-2 pl-8">
+          <span className="shrink-0 font-mono text-meta text-fg-muted">{item.key}</span>
+          <span className="truncate text-row text-heading">{item.title}</span>
+        </span>
+      )}
     </li>
   );
 }
