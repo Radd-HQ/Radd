@@ -26,6 +26,8 @@ ANONYMOUS_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/v1/items/slq/fields"),
         ("GET", "/api/v1/items/ids"),
         ("GET", "/api/v1/items/count"),
+        # RADD-1558: counted over the caller's own visible items, like /items/count.
+        ("GET", "/api/v1/items/project-stats"),
         ("GET", "/api/v1/items/by-key/{key}"),
         ("GET", "/api/v1/items/{item_id}"),
         ("GET", "/api/v1/items/{item_id}/history"),

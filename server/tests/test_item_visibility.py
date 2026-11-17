@@ -203,6 +203,20 @@ async def test_search_index_agrees(db, world):
         assert found == {rows[level].id for level in levels}, f"search for {who}"
 
 
+@pytest.mark.parametrize("who", sorted(EXPECTED))
+async def test_project_stats_count_only_what_the_actor_sees(db, world, who):
+    """RADD-1558: the projects list's open count is the caller's own count. Its
+    first version counted every non-restricted item of a readable project."""
+    from radd.modules.items.filters import ItemListFilters
+    from radd.modules.items.service import queries
+    from radd.modules.items.service.scope import visible_ids_query
+
+    project, actor = world["project"], world["actors"][who]
+    visible, _ = await visible_ids_query(db, actor=actor, filters=ItemListFilters(), q=None)
+    stats = await queries.project_stats(db, [project.id], visible.order_by(None))
+    assert stats[project.id][0] == len(EXPECTED[who]), who
+
+
 async def test_default_visibility_follows_the_project_setting(db, world):
     from radd.modules.settings import service as settings_service
     from radd.modules.settings.types import SettingKey, SettingScope

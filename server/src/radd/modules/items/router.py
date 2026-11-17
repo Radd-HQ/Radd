@@ -245,7 +245,10 @@ async def project_stats(
     from .service import queries
 
     readable = set(await authz.readable_projects(session, user))
-    stats = await queries.project_stats(session, [p for p in project_id if p in readable])
+    visible, _ = await bulk.visible_ids_query(session, actor=user, filters=ItemListFilters(), q=None)
+    stats = await queries.project_stats(
+        session, [p for p in project_id if p in readable], visible.order_by(None)
+    )
     return {
         pid: ProjectStats(open_items=opened, last_activity_at=last)
         for pid, (opened, last) in stats.items()

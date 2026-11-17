@@ -14,7 +14,7 @@ from radd.modules.projects.models import Project
 from radd.modules.workflow.models import State
 from radd.modules.workflow.types import StateCategory
 
-from ..enums import FINISHED_CATEGORIES, ItemEntity, ItemVisibility
+from ..enums import FINISHED_CATEGORIES, ItemEntity
 from ..hierarchy import nearest_epic_case
 from ..models import ItemKeyAlias, WorkItem
 
@@ -423,25 +423,26 @@ async def _resolve_number(session: AsyncSession, project_id: uuid.UUID, number: 
 
 
 async def project_stats(
-    session: AsyncSession, project_ids: Iterable[uuid.UUID]
+    session: AsyncSession, project_ids: Iterable[uuid.UUID], visible
 ) -> dict[uuid.UUID, tuple[int, object]]:
     """`{project: (open issues, last activity)}` for a page of projects (RADD-1558).
 
-    Two reads, each riding an index: the open count is an index-only pass over
-    `ix_work_items_project_state_cover`, and the last activity is the top of
-    `ix_work_items_project_updated` per project — never a scan of the rows.
-    The CALLER decides which projects the actor may ask about."""
+    `visible` is the caller's own readable-items SELECT (ids), so both numbers
+    describe what THAT actor can see. The first version counted every
+    non-restricted item of a readable project: on a public project that told a
+    visitor how many internal issues exist and when one last moved."""
     ids = list(dict.fromkeys(project_ids))
     if not ids:
         return {}
+    mine = WorkItem.id.in_(visible)
     open_rows = await session.execute(
         select(WorkItem.project_id, func.count())
         .join(State, State.id == WorkItem.state_id)
         .where(
             WorkItem.project_id.in_(ids),
             WorkItem.archived_at.is_(None),
-            WorkItem.visibility != ItemVisibility.RESTRICTED.value,
             State.category.not_in([c.value for c in FINISHED_CATEGORIES]),
+            mine,
         )
         .group_by(WorkItem.project_id)
     )
@@ -450,7 +451,7 @@ async def project_stats(
     for project_id in ids:
         last = await session.scalar(
             select(WorkItem.updated_at)
-            .where(WorkItem.project_id == project_id)
+            .where(WorkItem.project_id == project_id, mine)
             .order_by(WorkItem.updated_at.desc())
             .limit(1)
         )
