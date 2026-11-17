@@ -136,8 +136,7 @@ One user, the largest project, in process (no network), this release:
 ## The second pass (epic RADD-1548)
 
 A browser on the same database, one user, after the first results above were
-written. These are page measurements, not the 200-user test, which has not
-been re-run with these changes.
+written. Page measurements first, then the 200-user test.
 
 | What | Before | After |
 |---|---|---|
@@ -148,6 +147,35 @@ been re-run with these changes.
 | `/auth/me`: SQL statements | 19 | 10 (RADD-1560) |
 | List page: DOM nodes | 10,961 | 3,519 (50 rows, RADD-1553) |
 | Idle embedder | a sweep every few seconds | backs off to 5 minutes (RADD-1550) |
+
+The 200-user test, run again on the same database with four web processes and
+one worker (median / 95th percentile, seconds):
+
+| Request | first pass | second pass |
+|---|---|---|
+| detail | 0.24 / 1.37 | 0.04 / 0.26 |
+| comments | 0.13 / 0.85 | 0.02 / 0.08 |
+| history | 0.19 / 1.00 | 0.04 / 0.11 |
+| count | 0.16 / 0.83 | 0.02 / 0.05 |
+| list | 0.32 / 1.53 | 0.05 / 0.26 |
+| slq | 0.33 / 1.66 | 0.07 / 0.35 |
+| search | 0.35 / 1.19 | 0.09 / 0.34 |
+| mywork | 0.31 / 1.91 | 0.04 / 0.34 |
+| board | 1.06 / 2.98 | 0.24 / 0.56 |
+| report | 0.20 / 1.15 | 0.03 / 0.24 |
+| update | 0.32 / 1.82 | 0.06 / 0.22 |
+| comment | 0.14 / 0.76 | 0.02 / 0.21 |
+
+| | first pass | second pass |
+|---|---|---|
+| Requests served per second | 44.2 | 46.9 (bounded by the users' think time) |
+| Errors | 2 of 13,261 | 1 of 14,064 |
+| Web CPU (cores, mean) | 2.52 | 1.55 |
+| Database CPU (cores, mean / peak) | 4.4 / 5.9 | 1.5 / 2.2 |
+| Consumer lag (events, peak) | 92 | 44 |
+
+The test script calls the API directly, so it does not exercise the batch
+route or compression; those are in the browser numbers above.
 
 The board's 860 ms above was the window-function read; it is now a bounded
 read per cell, and the session asks PostgreSQL for a custom plan each time,
