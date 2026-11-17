@@ -15,6 +15,10 @@ import { byDay, dayLoad, durationText, isWorkingDay, shiftWeek, weekDays, weekSt
 import { CategoryTray, TicketTray } from "./TicketTray";
 import type { Dragged, Ticket, WeekActions } from "./types";
 
+/** The tray's text box searches all issues from this many characters, for this many. */
+const FIND_MIN_CHARS = 2;
+const FIND_MAX = 8;
+
 /**
  * A person's week of time, entered where it is read (RADD-1541).
  *
@@ -31,6 +35,8 @@ export function TimeLogCalendar({ anchor, onAnchor }: { anchor: string; onAnchor
   const { open: openPeek } = usePeek();
   const [dragged, setDragged] = useState<Dragged | null>(null);
   const [filter, setFilter] = useState("");
+  /** The day a typed duration goes on (RADD-1573); a day's header picks it. */
+  const [picked, setPicked] = useState<string | null>(null);
 
   const start = weekStart(anchor);
   const days = useMemo(() => weekDays(start), [start]);
@@ -53,6 +59,25 @@ export function TimeLogCalendar({ anchor, onAnchor }: { anchor: string; onAnchor
       })),
     [mine.data],
   );
+  /** From two characters the box also searches every readable issue; what it
+   *  finds beyond the list is offered under it. */
+  const needle = filter.trim();
+  const search = useQuery({
+    queryKey: ["timelogFind", needle],
+    queryFn: ({ signal }) =>
+      api.get<{ results: { item_id: string; key: string; title: string }[] }>("/search", {
+        signal,
+        query: { q: needle, limit: String(FIND_MAX) },
+      }),
+    enabled: needle.length >= FIND_MIN_CHARS,
+    staleTime: 30_000,
+  });
+  const found = useMemo<Ticket[]>(() => {
+    const listed = new Set(tickets.map((ticket) => ticket.id));
+    return (search.data?.results ?? [])
+      .filter((hit) => hit.item_id && hit.key && !listed.has(hit.item_id))
+      .map((hit) => ({ id: hit.item_id, key: hit.key, title: hit.title }));
+  }, [search.data, tickets]);
   const matches = (ticket: Ticket) => {
     const needle = filter.trim().toLowerCase();
     return !needle || `${ticket.key} ${ticket.title}`.toLowerCase().includes(needle);
@@ -125,6 +150,10 @@ export function TimeLogCalendar({ anchor, onAnchor }: { anchor: string; onAnchor
   const grouped = byDay(days, mineOnly);
   const today = todayIso();
   const total = mineOnly.reduce((sum, entry) => sum + entry.time_spent_seconds, 0);
+  // The picked day while it is on screen; else today; else the week's Monday.
+  const target = picked && days.includes(picked) ? picked : days.includes(today) ? today : days[0]!;
+  const targetLabel =
+    target === today ? "today" : formatIso(target, { weekday: "long", month: "short", day: "numeric" });
 
   return (
     <div className="flex flex-col gap-3" data-timelog-calendar>
@@ -133,6 +162,11 @@ export function TimeLogCalendar({ anchor, onAnchor }: { anchor: string; onAnchor
           title="My tickets"
           hint={mine.isPending ? "Loading…" : "Issues assigned to you, or that you logged time on or worked on lately, show up here"}
           tickets={tickets.filter(matches)}
+          found={needle.length >= FIND_MIN_CHARS ? found : []}
+          day={targetLabel}
+          filter={filter}
+          onFilter={setFilter}
+          onLog={(ticket, seconds) => actions.log({ ticket }, target, seconds)}
           onDrag={setDragged}
           onPeek={openPeek}
         />
@@ -157,19 +191,13 @@ export function TimeLogCalendar({ anchor, onAnchor }: { anchor: string; onAnchor
           {formatIso(start, { month: "short", day: "numeric" })} –{" "}
           {formatIso(days[6]!, { month: "short", day: "numeric", year: "numeric" })}
         </h2>
-        <input
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder="Filter tickets by key or title"
-          aria-label="Filter tickets by key or title"
-          className="w-56 rounded-md border border-strong bg-base px-2 py-1 text-row text-fg outline-focus focus-visible:outline-2"
-        />
         <span className="ml-auto text-row text-fg-secondary" data-week-total>
           Week total: <span className="font-semibold tabular-nums text-heading">{durationText(total)}</span>
         </span>
       </div>
       <p className="text-meta text-fg-muted">
-        Drag a ticket onto a day to log an hour. Drag a card to another day to move it, with Ctrl or
+        Type a duration beside a ticket and press Enter to log it on the highlighted day; click a
+        day's name to highlight another. Or drag a ticket onto a day to log an hour. Drag a card to another day to move it, with Ctrl or
         Alt held to copy it. Pull a card's bottom edge to change its duration, or double-click the
         duration to type one; double-click the card for a note. With a card focused: + and − change
         it by 15 minutes, Enter edits the duration, N the note, Delete removes it.
@@ -184,6 +212,8 @@ export function TimeLogCalendar({ anchor, onAnchor }: { anchor: string; onAnchor
               key={day}
               day={day}
               today={day === today}
+              target={day === target}
+              onTarget={() => setPicked(day)}
               working={working}
               entries={bucket.entries}
               seconds={bucket.seconds}

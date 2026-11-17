@@ -30,6 +30,9 @@ const LOAD_TITLE: Record<DayLoadValue, string> = {
 interface DayProps {
   day: string;
   today: boolean;
+  /** This is the day a duration typed in the tray is logged on (RADD-1573). */
+  target: boolean;
+  onTarget: () => void;
   working: boolean;
   entries: TimesheetEntry[];
   seconds: number;
@@ -68,6 +71,7 @@ export function DayColumn(props: DayProps) {
       data-day={day}
       data-day-seconds={seconds}
       data-day-load={load}
+      data-day-target={props.target || undefined}
       aria-label={`${formatIso(day, { weekday: "long", month: "long", day: "numeric" })}, ${durationText(seconds) || "nothing"} logged`}
       onDragOver={(event) => {
         if (!dragged) return;
@@ -84,14 +88,25 @@ export function DayColumn(props: DayProps) {
         onDrag(null);
       }}
       className={`flex min-h-[22rem] min-w-[9.5rem] flex-1 flex-col rounded-xl border bg-surface ${
-        over ? "border-emphasis bg-elevated" : "border-subtle"
+        over ? "border-emphasis bg-elevated" : props.target ? "border-accent" : "border-subtle"
       } ${props.working ? "" : "opacity-80"}`}
     >
       <header className="flex items-baseline justify-between gap-2 border-b border-subtle px-2 py-1.5">
-        <span className={`text-row font-medium ${props.today ? "text-accent-text-strong" : "text-heading"}`}>
+        <button
+          type="button"
+          onClick={props.onTarget}
+          aria-pressed={props.target}
+          data-day-pick
+          title={
+            props.target
+              ? "Time typed beside a ticket is logged on this day"
+              : "Log typed time on this day"
+          }
+          className={`whitespace-nowrap rounded text-row font-medium cursor-pointer hover:underline ${props.today ? "text-accent-text-strong" : "text-heading"}`}
+        >
           {formatIso(day, { weekday: "short", month: "short", day: "numeric" })}
-        </span>
-        <span className={`text-row font-medium tabular-nums ${LOAD_CLASS[load]}`} title={LOAD_TITLE[load]} data-day-total>
+        </button>
+        <span className={`whitespace-nowrap text-row font-medium tabular-nums ${LOAD_CLASS[load]}`} title={LOAD_TITLE[load]} data-day-total>
           {seconds ? durationText(seconds) : "0m"}
         </span>
       </header>

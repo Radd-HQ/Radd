@@ -12,6 +12,8 @@
  *   6. the keyboard does the same: + adds 15 minutes, Delete removes the card
  *   7. a category chip logs general time with no issue
  *   8. the day's Add row finds an issue by key and logs it — no mouse drag needed
+ *   8b. a duration typed beside a ticket logs it on the highlighted day; a day's name picks the
+ *       day; the tray's box finds an issue that is not on the list (RADD-1573)
  *   9. every day total and the week total are the sum of the cards on screen, at every step
  *  10. the Report tab shows the same entries
  *  11. the layout holds: no horizontal page scroll at 1440px, columns at least 150px, text 12px+
@@ -28,6 +30,7 @@ import { startProof } from "./lib/proof.mjs";
 const PORT = 9497;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-timelog-proof");
 const KEY = `TL${Date.now().toString(36).slice(-4).toUpperCase()}`;
+const COLLEAGUE = `timelog-colleague-${Date.now().toString(36)}@example.test`;
 const HOUR_PX = 44; // timelog/model.ts
 
 /** The Monday-based week the page shows for today, as the page computes it (UTC date math). */
@@ -55,10 +58,11 @@ const STATE = `(() => {
 })()`;
 
 async function main() {
-  const { session, close, baseUrl, finish, check } = await startProof({ port: PORT, profile: PROFILE, width: 1440, height: 1000 });
+  const { session, close, baseUrl, email, password, finish, check } = await startProof({ port: PORT, profile: PROFILE, width: 1440, height: 1000 });
   const context = { key: KEY, week };
   let projectId = null;
   let offProjectId = null;
+  let colleagueId = null;
   const made = new Set();
   try {
     const setup = await session.eval(`(async () => { ${PAGE_API}
@@ -80,6 +84,13 @@ async function main() {
     const { project, off, unloggable, a, b, c, touched, categories } = setup;
     projectId = project?.id ?? null;
     offProjectId = off?.id ?? null;
+    // RADD-1573: an issue I have nothing to do with — a colleague's, so not even "created by me".
+    // Only the tray's search can reach it.
+    const colleague = (await session.eval(`(async () => { ${PAGE_API} return (await api("POST", "/users", { email: ${JSON.stringify(COLLEAGUE)}, name: "Time Proof Colleague", password: "change-me-too", instance_role: "admin" })).body; })()`));
+    colleagueId = colleague?.id ?? null;
+    await session.login(baseUrl, COLLEAGUE, "change-me-too");
+    const stranger = await session.eval(`(async () => { ${PAGE_API} return (await api("POST", "/items", { project_id: ${JSON.stringify(project.id)}, title: "zebra crossing audit" })).body; })()`);
+    await session.login(baseUrl, email, password);
     check("setup created a project and three assigned issues", Boolean(a?.key && b?.key && c?.key), JSON.stringify({ a: a?.key, b: b?.key, c: c?.key }));
 
     await session.navigate(`${baseUrl}/timesheet`, 2500);
@@ -230,9 +241,58 @@ async function main() {
     now = await settled((v) => v.days[TUE].cards.length === 1, "add row");
     check("the Add row finds an issue by its words and logs 1h on that day", Boolean(hit) && now.days[TUE].cards[0]?.key === b.key && sums(now), JSON.stringify({ hit, tue: now.days[TUE] }));
 
+    // --- 8b. type a duration beside a ticket (RADD-1573) -----------------------------------------
+    const now0 = new Date();
+    const TODAY = `${now0.getFullYear()}-${String(now0.getMonth() + 1).padStart(2, "0")}-${String(now0.getDate()).padStart(2, "0")}`;
+    const OTHER = week.find((day) => day !== TODAY && day !== MON && day !== TUE && day !== WED && day !== THU && day !== FRI) ?? week.find((day) => day !== TODAY);
+    const targetOf = () => session.eval(`({ day: document.querySelector("[data-day-target]")?.dataset.day ?? null, label: document.querySelector("[data-log-target-label]")?.textContent ?? "" })`);
+    const on = (value, day, key, seconds) => value.days[day].cards.filter((card) => card.key === key && card.seconds === seconds).length;
+    let target = await targetOf();
+    check("typed time goes on today unless another day is picked, and the tray says so", target.day === TODAY && /today/.test(target.label), JSON.stringify(target));
+    const beforeToday = on(now, TODAY, c.key, 5400);
+    await typeInto(`[data-quick-log='${c.key}']`, "1.5");
+    now = await settled((v) => on(v, TODAY, c.key, 5400) === beforeToday + 1, "quick log today");
+    check("typing 1.5 beside a ticket and pressing Enter logs 1h 30m on it today", on(now, TODAY, c.key, 5400) === beforeToday + 1 && sums(now), JSON.stringify(now.days[TODAY]));
+    const logged = await session.eval(`document.querySelector("[data-tray-row='${c.key}'] [data-ticket-why]")?.textContent ?? ""`);
+    let seen = logged;
+    for (let i = 0; i < 40 && !/1h 30m/.test(seen); i += 1) { await sleep(150); seen = await session.eval(`document.querySelector("[data-tray-row='${c.key}'] [data-ticket-why]")?.textContent ?? ""`); }
+    check("…and the ticket's own figure follows", /1h 30m/.test(seen), seen);
+
+    await session.eval(`document.querySelector("[data-day='${OTHER}'] [data-day-pick]").click()`);
+    await sleep(150);
+    target = await targetOf();
+    check("clicking another day's name makes it the day typed time goes on", target.day === OTHER && !/today/.test(target.label), JSON.stringify(target));
+    const beforeOther = now.days[OTHER].cards.length;
+    await typeInto(`[data-quick-log='${a.key}']`, "30m");
+    now = await settled((v) => v.days[OTHER].cards.length === beforeOther + 1, "quick log other day");
+    check("…and 30m typed beside a ticket lands there", on(now, OTHER, a.key, 1800) === 1 && sums(now), JSON.stringify(now.days[OTHER]));
+
+    const cardsBefore = Object.values(now.days).reduce((sum, day) => sum + day.cards.length, 0);
+    await typeInto(`[data-quick-log='${b.key}']`, "soon");
+    await sleep(600);
+    const refused = await session.eval(`(() => { const n = document.querySelector("[data-quick-log='${b.key}']"); return { invalid: n.getAttribute("aria-invalid"), value: n.value }; })()`);
+    now = await state();
+    check("something that is not a duration is marked and logs nothing", refused.invalid === "true" && refused.value === "soon" && Object.values(now.days).reduce((sum, day) => sum + day.cards.length, 0) === cardsBefore, JSON.stringify(refused));
+
+    const listedBefore = await session.eval(`Boolean(document.querySelector("[data-tray-row='${stranger.key}']"))`);
+    await session.eval(`document.querySelector("[data-ticket-filter]").focus()`);
+    await session.send("Input.insertText", { text: "zebra crossing" });
+    let foundRow = false;
+    for (let i = 0; i < 80 && !foundRow; i += 1) { await sleep(150); foundRow = await session.eval(`Boolean(document.querySelector("[data-ticket-found] [data-tray-row='${stranger.key}']"))`); }
+    check("an issue I have nothing to do with is not on my list, and the same box finds it", !listedBefore && foundRow, JSON.stringify({ listedBefore, foundRow, key: stranger.key }));
+    if (foundRow) {
+      await typeInto(`[data-quick-log='${stranger.key}']`, "1:15");
+      now = await settled((v) => on(v, OTHER, stranger.key, 4500) === 1, "quick log found");
+      check("…and 1:15 typed beside it logs 1h 15m", on(now, OTHER, stranger.key, 4500) === 1 && sums(now), JSON.stringify(now.days[OTHER]));
+    }
+    await session.eval(`(() => { const n = document.querySelector("[data-ticket-filter]"); n.focus(); n.select(); return true; })()`);
+    await session.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Backspace", code: "Backspace", windowsVirtualKeyCode: 8 });
+    await session.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Backspace", code: "Backspace", windowsVirtualKeyCode: 8 });
+    await sleep(300);
+
     // --- 9/11. totals and layout ----------------------------------------------------------------
     context.final = now;
-    check("the week total is the sum of every card on screen", sums(now) && now.week === 3 * 3600, `week ${now.week / 3600}h`);
+    check("the week total is the sum of every card on screen", sums(now) && now.week === 3 * 3600 + 5400 + 1800 + 4500, `week ${now.week / 3600}h`);
     const layout = await session.eval(`(() => {
       const columns = [...document.querySelectorAll("[data-day]")].map((n) => Math.round(n.getBoundingClientRect().width));
       const sizes = [...document.querySelectorAll("[data-timelog-calendar] *")].filter((n) => n.children.length === 0 && n.textContent.trim()).map((n) => parseFloat(getComputedStyle(n).fontSize));
@@ -260,6 +320,7 @@ async function main() {
       for (const id of ${JSON.stringify([...made])}) await api("DELETE", "/worklogs/" + id);
       ${projectId ? `await api("DELETE", "/projects/${projectId}");` : ""}
       ${offProjectId ? `await api("DELETE", "/projects/${offProjectId}");` : ""}
+      ${colleagueId ? `await api("DELETE", "/users/${colleagueId}");` : ""}
       return true;
     })()`).catch(() => null);
     await close();
