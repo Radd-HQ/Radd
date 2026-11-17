@@ -14,3 +14,26 @@ spec:
       targetPort: 8000
       protocol: TCP
       name: http
+{{- if .Values.workers.enabled }}
+---
+{{/* The worker is one process, and co-editing rooms live in one process's
+     memory (spec 122): with the web tier split across several, every editor of
+     a page has to reach the same one. The Ingress sends /api/v1/collab here
+     (RADD-1544); a proxy of your own has to do the same. */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-worker
+  labels:
+    {{- include "radd.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: worker
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 8000
+      protocol: TCP
+      name: http
+{{- end }}

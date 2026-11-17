@@ -44,6 +44,9 @@ in values.yaml "for documentation" silently overrides the real one and the app
 dies with "no password supplied". Caught here instead of in a CrashLoopBackOff.
 */}}
 {{- define "radd.validate" -}}
+{{- if and (gt (int .Values.web.processes) 1) (not .Values.workers.enabled) }}
+{{- fail "values.web.processes is greater than 1 while workers.enabled is false. Every web process would then run the background loops too: the mail poller, the directory sync and the mailers would each run once per process. Set workers.enabled=true so one worker pod runs them." }}
+{{- end }}
 {{- if and .Values.envFromSecret .Values.env.RADD_DATABASE_URL }}
 {{/* "://user@host" (no colon in the userinfo) = no password in the URL. */}}
 {{- if regexMatch "://[^:@/]+@" (toString .Values.env.RADD_DATABASE_URL) }}

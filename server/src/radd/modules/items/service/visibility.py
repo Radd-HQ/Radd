@@ -267,10 +267,15 @@ def _filter_read(
     definitions: Sequence[FieldDefinition],
     ctx: fields.FieldAccessContext,
     builtin_denied: Sequence[str] = (),
+    *,
+    allowed: "set[str] | None" = None,
 ) -> ItemRead:
     """Drop custom_fields the actor may not see and blank read-restricted builtin
-    fields (spec 07 + 50)."""
-    allowed = fields.readable_keys(definitions, ctx)
+    fields (spec 07 + 50). `allowed` is `fields.readable_keys(definitions, ctx)`
+    when the caller already has it — it is the same for every row of a project,
+    so a list computes it once, not once per row."""
+    if allowed is None:
+        allowed = fields.readable_keys(definitions, ctx)
     update: dict[str, Any] = {
         "custom_fields": {k: v for k, v in read.custom_fields.items() if k in allowed}
     }

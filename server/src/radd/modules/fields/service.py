@@ -486,20 +486,25 @@ def _grants_for(definition: Any, ctx: FieldAccessContext) -> Sequence[AccessGran
 # these short-circuits are this module's own.
 
 
-def field_readable(definition: Any, ctx: FieldAccessContext) -> bool:
+def _field_access(definition: Any, ctx: FieldAccessContext, access: str) -> bool:
     if ctx.has_manage:
         return True
-    return access_res.has_access(
-        _grants_for(definition, ctx), ctx.as_subject(), Access.READ.value, ctx.project_id, _FIELD_SPEC
-    )
+    grants = _grants_for(definition, ctx)
+    if not grants:
+        # No grant names this field, so nothing restricts or denies it: the
+        # answer is the spec's default. Almost every field on almost every
+        # instance, and it used to walk the whole resolution for each one, for
+        # each row of a list (RADD-1544).
+        return _FIELD_SPEC.default_open
+    return access_res.has_access(grants, ctx.as_subject(), access, ctx.project_id, _FIELD_SPEC)
+
+
+def field_readable(definition: Any, ctx: FieldAccessContext) -> bool:
+    return _field_access(definition, ctx, Access.READ.value)
 
 
 def field_writable(definition: Any, ctx: FieldAccessContext) -> bool:
-    if ctx.has_manage:
-        return True
-    return access_res.has_access(
-        _grants_for(definition, ctx), ctx.as_subject(), Access.WRITE.value, ctx.project_id, _FIELD_SPEC
-    )
+    return _field_access(definition, ctx, Access.WRITE.value)
 
 
 def readable(

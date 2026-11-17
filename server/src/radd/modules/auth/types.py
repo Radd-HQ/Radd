@@ -256,12 +256,43 @@ _ACTION_VERB: dict[CrudAction, str] = {
 }
 
 
+#: `(registries, stamp, implied map, {granted: expanded})` for the registry
+#: state it was computed from. Every permission check ends in `expand_permissions`,
+#: and a request that reads across projects makes one per project — 126 on the
+#: perf seed's item page, each rebuilding this map from the registry (RADD-1544:
+#: about 8 ms of every request). Rebuilt when the set of loaded plugins changes.
+_expansion_cache: tuple[object, tuple, dict, dict] | None = None
+_EXPANSION_CACHE_MAX = 4096
+
+
+def _expansions() -> tuple[dict[str, frozenset[str]], dict[frozenset[str], frozenset[str]]]:
+    global _expansion_cache
+    from radd.kernel import registries
+
+    # What the map is derived from: WHICH plugins are loaded (enabling or
+    # disabling one is the only thing that changes their specs), and the sizes,
+    # because a spec can also be registered outside a plugin load.
+    stamp = (
+        tuple(registries.plugins),
+        len(registries.crud_resources),
+        len(registries.permissions),
+    )
+    cached = _expansion_cache
+    if cached is None or cached[0] is not registries or cached[1] != stamp:
+        cached = _expansion_cache = (registries, stamp, _build_implied_map(), {})
+    return cached[2], cached[3]
+
+
 def implied_map() -> dict[str, frozenset[str]]:
     """The umbrella→implied map, read LIVE from the kernel registry (a disabled
     plugin's umbrella stops expanding with it): a CrudResourceSpec's `manage`
     implies its `key.action` atoms; `PermissionSpec.implied_by` names umbrellas
     that expand to an atom; `.implies` covers relation-qualified forms
-    (`item.update` -> `attachment.delete@own`)."""
+    (`item.update` -> `attachment.delete@own`). Built once per set of loaded plugins."""
+    return _expansions()[0]
+
+
+def _build_implied_map() -> dict[str, frozenset[str]]:
     merged: dict[str, frozenset[str]] = {}
 
     def _add(umbrella: str, atoms: frozenset[str]) -> None:
@@ -282,8 +313,12 @@ def implied_map() -> dict[str, frozenset[str]]:
 def expand_permissions(granted: "frozenset[Permission] | set[Permission] | set[str]") -> frozenset[str]:
     """Apply the umbrella→implied closure to a permission set, transitively (pure
     over strings — StrEnum atoms and plugin atom strings are interchangeable)."""
-    result = {str(x) for x in granted}
-    implied = implied_map()
+    implied, expanded = _expansions()
+    key = frozenset(str(x) for x in granted)
+    hit = expanded.get(key)
+    if hit is not None:
+        return hit
+    result = set(key)
     changed = True
     while changed:
         changed = False
@@ -291,7 +326,10 @@ def expand_permissions(granted: "frozenset[Permission] | set[Permission] | set[s
             if umbrella in result and not atoms <= result:
                 result |= atoms
                 changed = True
-    return frozenset(result)
+    if len(expanded) >= _EXPANSION_CACHE_MAX:
+        expanded.clear()  # role sets are few; this only bounds a pathological caller
+    expanded[key] = frozenset(result)
+    return expanded[key]
 
 
 # Every project-scoped permission, in enum order (the Manager builtin's grant set).

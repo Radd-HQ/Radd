@@ -150,8 +150,12 @@ async def list_items(
             builtin_grants=builtin_grants,
         )
         builtin_denied[pid] = await _builtin_read_denied(session, projects[pid], ctxs[pid])
+    readable_keys = {pid: fields.readable_keys(definitions[pid], ctx) for pid, ctx in ctxs.items()}
     filtered = [
-        _filter_read(r, definitions[r.project_id], ctxs[r.project_id], builtin_denied[r.project_id])
+        _filter_read(
+            r, definitions[r.project_id], ctxs[r.project_id], builtin_denied[r.project_id],
+            allowed=readable_keys[r.project_id],
+        )
         for r in reads
     ]
     # RADD-842: the actor's per-row verdict rides every list read, so boards

@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, JSONResponse, ORJSONResponse
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import TimeoutError as PoolTimeout
 
 from radd import __version__, observability
 from radd.backup import keyguard as backup_keyguard
@@ -161,6 +162,7 @@ def create_app() -> FastAPI:
     ):
         app.add_exception_handler(error, _detail_handler(status_code))
     app.add_exception_handler(DBAPIError, _database_error_handler)
+    app.add_exception_handler(PoolTimeout, _pool_exhausted_handler)
 
     from radd.kernel.runtime import PluginRuntime, RuntimeMiddleware
     runtime = PluginRuntime(app)
@@ -200,6 +202,17 @@ async def _database_error_handler(request: Request, exc: DBAPIError) -> JSONResp
                 "narrow the search or the date range and try again"
             )
         },
+    )
+
+
+async def _pool_exhausted_handler(request: Request, exc: Exception) -> JSONResponse:
+    """No database connection came free within `db_pool_timeout_seconds`: the
+    instance is over capacity, which is a 503 a client may retry — the load test
+    (RADD-1536) got these as anonymous 500s, indistinguishable from a bug."""
+    return JSONResponse(
+        status_code=503,
+        headers={"Retry-After": "5"},
+        content={"detail": "the server is busy — every database connection is in use; try again shortly"},
     )
 
 

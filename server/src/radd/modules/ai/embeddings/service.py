@@ -73,11 +73,20 @@ def reset_availability_cache() -> None:  # test seam
     _available = None
 
 
+#: The advisory lock every process takes before the startup DDL below.
+_SCHEMA_LOCK = "radd.ai.embeddings.ensure_schema"
+
+
 async def ensure_schema(session: AsyncSession) -> bool:
     """Create the embeddings tables when the extension exists (idempotent).
     Returns availability, so the startup hook doubles as the gate check."""
     if not await vector_available(session):
         return False
+    # One process at a time (RADD-1544). Every web process and the worker run
+    # this at startup; two of them altering the same table at once deadlocked,
+    # and the loser failed its startup — found by starting four web processes
+    # and a worker together for the load test. Held until this transaction ends.
+    await session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": _SCHEMA_LOCK})
     for statement in _SCHEMA_SQL.strip().split(";"):
         if statement.strip():
             await session.execute(text(statement))

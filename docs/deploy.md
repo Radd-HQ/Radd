@@ -136,6 +136,37 @@ Three rules that keep this boring:
   app` until uvicorn starts serving. The app refuses traffic until the
   schema converges, which is the correct failure mode.
 
+### Upgrading from v0.52.0
+
+Read these before the upgrade, not after; the release notes are generated from
+commits and will not say them this plainly.
+
+- **Check the server's PostgreSQL major first.** Until this release the image's
+  client tools (17) could not restore a backup into a PostgreSQL 16 server:
+  backups verified, and did not restore. Backups taken before the upgrade are
+  restorable with the new image; take a fresh one after it anyway.
+- **The database now remembers its encryption key.** The first start records
+  the key it finds; a later start with a missing or different key file refuses
+  to run rather than minting a new one. If the instance runs with attachments
+  on S3 and the old chart, its key was on the pod's own disk: copy
+  `/data/radd-backup.key` out BEFORE upgrading the chart, which now always
+  mounts a volume there.
+- **The upgrade takes longer on a large instance.** One migration folds the
+  event ledger into a new table and holds a lock on issues while it does: about
+  two minutes per million issue events (11 min 20 s on 5.0M), nothing
+  noticeable on a few thousand issues. The app is down for that time.
+- **`/timesheet` opens on "My week"**, a calendar for entering time. The grid
+  it used to be is the **Report** tab; links with filters in them still open it.
+- **A failed background handler is no longer silent.** Events a worker could
+  not process are retried and then listed under Settings → Monitoring. An empty
+  list is the normal state; a growing one is something that was being lost
+  before.
+- **Timesheet requests are bounded**: 366 days and 50,000 time logs. A wider
+  request is refused with the reason. `GET /timesheet` callers that asked for
+  years at once need a date range or a filter.
+- **`PATCH /items/{id}` may answer 409** when it sends `description_version` and
+  the description changed since. Callers that do not send it are unaffected.
+
 ### Upgrading from v0.49.3
 
 Nothing switches off. Two migrations change rows you may notice:
@@ -170,20 +201,31 @@ release means restoring the backup you took first, as the rule above says.
 
 ## Sizing
 
-Radd is one Python process plus Postgres; the database is what you feed.
+Measured, not estimated: `docs/performance.md` has the 200-user load test these
+rows come from (RADD-1536), with what it did and did not cover.
 
-| Instance | App | Postgres | Disk |
-|---|---|---|---|
-| Trial / small team (≤25 people, ≤50k items) | 1 vCPU, 512 MB | 1 vCPU, 1 GB, `shm_size: 1g` | 10 GB + attachments |
-| Team (≤150 people, ≤250k items) | 2 vCPU, 1 GB | 2 vCPU, 4 GB | 50 GB + attachments |
-| Heavy (500k+ items, semantic search on) | 2-4 vCPU, 2 GB | 4 vCPU, 8 GB | 100 GB+ + attachments |
+**One web process serves about 20 requests a second**, whatever the database
+can do: it is one event loop, and a request costs 25 to 50 ms of Python. That
+is roughly 50 people working at once. Past that, run more web processes beside
+one worker (`web.processes` and `workers.enabled` in the chart).
+
+| Instance | Web | Worker | Postgres | Disk |
+|---|---|---|---|---|
+| Trial / small team (≤25 people, ≤50k items) | 1 process, 1 vCPU, 512 MB | same process | 1 vCPU, 1 GB, `shm_size: 1g` | 10 GB + attachments |
+| Team (≤50 people working at once, ≤250k items) | 1 process, 1 vCPU, 1 GB | same process | 2 vCPU, 4 GB | 50 GB + attachments |
+| Heavy (200 working at once, 500k items, 5M events: measured) | 4 processes, 3 vCPU, 2 GB | 1 pod, 1 vCPU, 512 MB | 6 vCPU, 8 GB, `max_connections` ≥ 100 | 100 GB+ + attachments |
 
 The database connection pool is `RADD_DB_POOL_SIZE` (5) plus
-`RADD_DB_MAX_OVERFLOW` (10) per process; a request waits
-`RADD_DB_POOL_TIMEOUT_SECONDS` (30) for a connection. A request's statements
-are cancelled after `RADD_DB_STATEMENT_TIMEOUT_SECONDS` (30, `0` disables) and
+`RADD_DB_MAX_OVERFLOW` (10) **per process**: four web processes and a worker can
+hold 75 connections. A request waits `RADD_DB_POOL_TIMEOUT_SECONDS` (30) for one
+and is then answered 503 with `Retry-After`. A request's statements are
+cancelled after `RADD_DB_STATEMENT_TIMEOUT_SECONDS` (30, `0` disables) and
 answered with a 504 that says so; imports, backfills and the background loops
-are not bound by it. These defaults have not been tuned under concurrent load.
+are not bound by it.
+
+A timesheet request covers at most `RADD_TIMESHEET_MAX_RANGE_DAYS` (366) and
+`RADD_TIMESHEET_MAX_ENTRIES` (50,000) time logs; past either it is refused with
+the reason, never truncated.
 
 Notes that matter more than the table: **attachments dominate disk** (budget
 them separately; S3-mode moves them off-box); **semantic search** adds
@@ -219,6 +261,7 @@ What `/metrics` exposes, and the alerts worth having:
 | `radd_event_loop_lag_seconds` | above ~0.5 for minutes: something is blocking the one event loop |
 | `radd_db_pool_connections{state}` | `in_use` sits at pool size plus overflow |
 | `radd_consumer_lag_events{consumer}`, `radd_consumer_seconds_since_progress` | lag grows while the cursor does not move: notifications, webhooks, automations or search are behind. A long-running import holds consumers back until it commits; that shows here |
+| `radd_consumer_failed_events{consumer,status}` | `status="dead"` above zero: a handler gave up on an event; look at Settings → Monitoring |
 | `radd_backup_age_seconds` | older than twice your schedule's interval |
 
 Also alert, outside Radd, on the instance answering at all and on the
@@ -227,15 +270,26 @@ times a user noticed first.
 
 Metrics are per process. With the worker split on, scrape both pods.
 
-## One replica, on purpose
+## One worker, several web processes
 
-Run **one app replica** (plus at most the optional worker split below).
-Webhooks, automations, notifications and realtime fan-out all run in-process
-today; a second replica would double-fire timers and split the WebSocket
-audience. The Helm chart's `workers.replicas: 1` guidance is the same rule.
-This is a stated v1 boundary, not an accident — the multi-replica path
-(queue-backed consumers, a shared realtime bus) is tracked upstream and a
-single node comfortably serves hundreds of users in the meantime.
+**The background loops run in exactly one process.** Mail polling, directory
+sync, the mailers, schedules and the SLA clock are not written to run twice.
+Event consumers themselves claim their cursor per tick since RADD-1538, so two
+of them would not double-deliver, but that is a safety net, not a licence.
+
+**The web tier can be several processes** (`web.processes` in the chart, with
+`workers.enabled=true`). Each tails the event stream for its own realtime
+sockets, plugin state converges through the lease table, and the measured
+effect is in `docs/performance.md`. Three things are per process and stay that
+way: the login and write throttles (a limit of N becomes up to N times the
+process count), `/metrics` (each process answers with its own numbers), and
+co-editing rooms, below.
+
+A failed handler in a consumer is no longer a lost side effect: the event is
+recorded, retried with backoff, and listed under **Settings → Monitoring →
+Failed events** when it runs out of attempts, where it can be replayed or
+discarded. `radd_consumer_failed_events{status="dead"}` above zero is worth an
+alert.
 
 **Collaborative editing (spec 122) sharpens that rule.** A wiki page being
 co-edited is a room held in the API process's memory (`radd.modules.collab`):
@@ -243,7 +297,10 @@ the Yjs document, who is connected, the seed grant, the debounced write to
 `page_collab_docs`. Every editor of one page must reach the SAME process, so
 with more than one API replica the whole of `/api/v1/collab/*` — the join and
 the WebSocket — needs sticky routing to one replica, or a shared relay in front
-of the rooms. Neither is built; one replica is the supported shape. The stored
+of the rooms. The chart does the first: with `workers.enabled=true` its Ingress
+sends `/api/v1/collab` to the single worker pod (RADD-1544). A proxy of your own
+must do the same. That routing has been rendered and reviewed, not yet run on a
+cluster: check two browsers on one page after turning it on. The stored
 state survives a restart (a room resumes it when its `page_version` still
 matches the page's), so a rollout costs editors a reconnect, not their work.
 
@@ -402,8 +459,9 @@ tag (workflow_dispatch) is how a fixable one gets picked up.
 - **Worker split**: `--set workers.enabled=true` gives web replicas
   `RADD_RUN_WORKERS=false` and adds ONE worker pod running the loops
   (webhooks, automations, notifications/email, search indexing, SLA clock,
-  connectors). Keep `workers.replicas: 1` — consumers are single-writer by
-  design (per-consumer offsets); scale beyond that means NATS per the plan.
+  connectors). Keep `workers.replicas: 1`: the pollers and mailers are not
+  written to run twice. `--set web.processes=4` then runs four web processes
+  in the web pod (see Sizing); the Ingress routes co-editing to the worker.
 - Probes hit `GET /api/v1/instance/login-options` (unauthenticated).
 
 ## Backup & restore

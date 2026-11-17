@@ -16,6 +16,17 @@ spec:
     - host: {{ .Values.ingress.host }}
       http:
         paths:
+          {{- if .Values.workers.enabled }}
+          # Co-editing rooms are held in ONE process's memory: every editor of a
+          # page must land on the same one, so collab goes to the single worker.
+          - path: /api/v1/collab
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-worker
+                port:
+                  number: {{ .Values.service.port }}
+          {{- end }}
           - path: /
             pathType: Prefix
             backend:

@@ -34,7 +34,17 @@ spec:
           # Migrations run via the chart Job (templates/job-migrate.yaml);
           # the image CMD's inline upgrade is skipped by overriding command.
           command: ["uvicorn"]
-          args: ["--factory", "radd.app:create_app", "--host", "0.0.0.0", "--port", "8000"]
+          args:
+            - "--factory"
+            - "radd.app:create_app"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8000"
+            {{- if gt (int .Values.web.processes) 1 }}
+            - "--workers"
+            - {{ .Values.web.processes | quote }}
+            {{- end }}
           ports:
             - containerPort: 8000
           env:
