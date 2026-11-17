@@ -333,6 +333,20 @@ class Settings(BaseSettings):
     # right behind a proxy. See radd/clientip.py.
     trusted_proxies: str = ""
 
+    # Where a USER-SUPPLIED URL may make this server send a request (webhook
+    # endpoints, automation HTTP actions; radd/outbound.py, RADD-1546). By
+    # default only public addresses: loopback, private ranges and link-local
+    # (cloud metadata) are refused. Comma-separated hostnames and CIDRs to allow
+    # anyway, e.g. "chat.internal.example,10.20.0.0/16".
+    outbound_allowed_hosts: str = ""
+    # Browser requests that change something must come from this instance
+    # (radd/origin_check.py, RADD-1547): the Origin of a cookie-authenticated
+    # write, or of a WebSocket handshake, must be the request's own host,
+    # `app_base_url`, or one of these (comma-separated origins, e.g.
+    # "https://radd.example.com"). `false` turns the check off.
+    origin_check: bool = True
+    trusted_origins: str = ""
+
     # AI layer (radd/modules/ai). provider/base_url/api_key/model are SEED-ONLY (spec 101):
     # one provider row + chat role on first boot. max_tokens/timeouts stay live.
     ai_provider: str = ""  # "openai" (any OpenAI-compatible base_url) | "anthropic"

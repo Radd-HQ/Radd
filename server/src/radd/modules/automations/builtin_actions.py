@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from radd import outbound
 from radd.config import settings
 from radd.kernel.specs import AutomationNodeSpec, OutputField
 
@@ -179,6 +180,13 @@ def _check(action: ActionType):
         from .types import ARITY_PARAM
 
         ActionAdapter.validate_python({"type": action.value, "params": params})
+        target_url = {ActionType.SEND_WEBHOOK: "url", ActionType.POST_CHAT: "webhook_url"}.get(action)
+        if target_url is not None:
+            # RADD-1546: refused here is refused at send too; say it at save.
+            try:
+                outbound.check_url(str(params.get(target_url) or ""))
+            except outbound.OutboundRefused as error:
+                raise ValueError(str(error)) from error
         if action is ActionType.NOTIFY_USER:
             target = str(params.get("user") or "")
             arity = str(params.get(ARITY_PARAM) or ACTION_ARITY_DEFAULT[action].value)

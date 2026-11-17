@@ -164,6 +164,20 @@ commits and will not say them this plainly.
 - **Timesheet requests are bounded**: 366 days and 50,000 time logs. A wider
   request is refused with the reason. `GET /timesheet` callers that asked for
   years at once need a date range or a filter.
+- **Webhooks and automation HTTP actions only call public addresses.** A
+  webhook endpoint, a "Send webhook" or a "Post to chat" action pointing at a
+  private, loopback or link-local address stops delivering after the upgrade:
+  the delivery log says why, and saving such a URL is refused. If you send to an
+  internal chat server or service, list it BEFORE upgrading:
+  `RADD_OUTBOUND_ALLOWED_HOSTS=chat.internal.example,10.20.0.0/16` (hostnames
+  and CIDRs).
+- **A signed-in browser's writes must come from the instance's own address.**
+  If people reach Radd under more than one address, or a proxy in front
+  rewrites the `Host` header, set `RADD_APP_BASE_URL` to the address people use
+  and list any others in `RADD_TRUSTED_ORIGINS`
+  (`https://radd.example.com,https://radd.internal`). The symptom of getting
+  this wrong is every save answering 403 with a message naming that setting.
+  API tokens are not affected.
 - **`PATCH /items/{id}` may answer 409** when it sends `description_version` and
   the description changed since. Callers that do not send it are unaffected.
 
@@ -673,6 +687,26 @@ sign-in, disable, regenerate — and burns on use. The admin fallback (clearing
 the user's `user_totp` row) remains for the person who lost the phone AND the
 printout.
 
+
+## What the server will call, and who may call it
+
+Two guards, both on by default.
+
+**Outbound requests** (`RADD_OUTBOUND_ALLOWED_HOSTS`). Webhook endpoints and the
+automation HTTP actions call a URL a user typed. They are only sent to public
+addresses: loopback, private ranges and link-local (the cloud metadata range)
+are refused when the URL is saved and again when the name is resolved, and the
+request goes to the address that was checked. Redirects are not followed. To
+allow internal targets, list hostnames and CIDRs. The connectors an instance
+admin configures (version control, SSO, AI, imports, storage) are not subject
+to this: naming internal services is what those settings are for.
+
+**Request origin** (`RADD_TRUSTED_ORIGINS`, `RADD_ORIGIN_CHECK`). A write or a
+WebSocket handshake that carries the session cookie must come from the
+instance's own origin: the request's own host, `RADD_APP_BASE_URL`, or a listed
+origin. Requests with an `Authorization` header and clients that send no
+browser headers are not checked. `RADD_ORIGIN_CHECK=false` turns it off; do
+that only to diagnose.
 
 ## Login and realtime limits
 

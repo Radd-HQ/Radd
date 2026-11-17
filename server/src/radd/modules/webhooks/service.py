@@ -11,7 +11,7 @@ import httpx
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd import secretbox
+from radd import outbound, secretbox
 from radd.config import settings
 from radd.modules.fields import service as fields_service
 from radd.modules.items.redaction import redact_item_payload
@@ -266,13 +266,21 @@ async def _attempt(
         "webhook-signature": sign(secretbox.decrypt(endpoint.secret), msg_id, timestamp, body),
     }
     try:
-        response = await client.post(endpoint.url, content=body, headers=headers)
+        # Through the outbound guard (RADD-1546): the host is resolved, every
+        # address checked, and the request sent to the checked one.
+        response = await outbound.post(client, endpoint.url, content=body, headers=headers)
         delivery.last_status_code = response.status_code
         if 200 <= response.status_code < 300:
             delivery.status = DeliveryStatus.SUCCESS.value
             delivery.last_error = None
             return
         _schedule_retry(delivery, error=f"HTTP {response.status_code}")
+    except outbound.OutboundRefused as exc:
+        # Not a transient failure: retrying a refused address five times helps
+        # nobody. Dead at once, with the reason an admin can act on.
+        delivery.last_status_code = None
+        delivery.status = DeliveryStatus.DEAD.value
+        delivery.last_error = str(exc)[:500]
     except httpx.HTTPError as exc:
         delivery.last_status_code = None
         _schedule_retry(delivery, error=str(exc)[:500])

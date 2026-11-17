@@ -23,6 +23,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import outbound
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.auth.models import User
@@ -136,8 +137,10 @@ async def _apply_plan(
         url, body, secret = plan.http
         body_bytes = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
         async with httpx.AsyncClient(timeout=settings.webhook_timeout) as client:
-            response = await client.post(
-                url, content=body_bytes, headers=_signed_headers(body_bytes, secret)
+            # Through the outbound guard (RADD-1546); a refused address raises,
+            # and the run records it like any other failed action.
+            response = await outbound.post(
+                client, url, content=body_bytes, headers=_signed_headers(body_bytes, secret)
             )
             response.raise_for_status()
     elif plan.kind is PlanKind.NOTIFY and plan.notify is not None:
