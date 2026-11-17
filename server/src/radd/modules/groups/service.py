@@ -13,6 +13,7 @@ from collections.abc import Iterable
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import authcache
 from radd.db import ilike_term
 from radd.config import settings
 from radd.exceptions import NotFoundError
@@ -139,14 +140,19 @@ async def user_group_ids(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.
     cached: set[uuid.UUID] | None = session.info.get(key)
     if cached is not None:
         return cached
-    direct = set(
-        (
-            await session.execute(
-                select(GroupMember.group_id).where(GroupMember.user_id == user_id)
-            )
-        ).scalars()
-    )
-    resolved = await _ancestors_closure(session, direct)
+
+    async def load() -> frozenset[uuid.UUID]:
+        direct = set(
+            (
+                await session.execute(
+                    select(GroupMember.group_id).where(GroupMember.user_id == user_id)
+                )
+            ).scalars()
+        )
+        return frozenset(await _ancestors_closure(session, direct))
+
+    # Across requests too, until a membership or an edge changes (RADD-1560).
+    resolved = set(await authcache.cached(session, "groups.user_group_ids", user_id, load))
     session.info[key] = resolved
     return resolved
 

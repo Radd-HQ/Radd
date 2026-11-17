@@ -4,14 +4,13 @@
 import uuid
 from collections.abc import Iterable, Sequence
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ForbiddenError
 from radd.modules.projects.models import Project
 
 from . import grants
-from .models import Role, User
+from .models import User
 from .principals import is_instance_admin
 from .types import (
     BuiltinRoleKey,
@@ -81,8 +80,8 @@ async def _permission_sets_for_roles(
 ) -> list[Sequence[str]]:
     if not role_ids:
         return []
-    result = await session.execute(select(Role.permissions).where(Role.id.in_(role_ids)))
-    return list(result.scalars())
+    by_id, _by_key = await grants.role_permissions(session)
+    return [by_id[role_id] for role_id in role_ids if role_id in by_id]
 
 
 async def _project_permission_sets(
@@ -123,12 +122,8 @@ async def floor_permissions(session: AsyncSession, user: User) -> frozenset[Perm
     cached: frozenset[Permission] | None = session.info.get(_REQUESTER_CACHE_KEY)
     if cached is not None:
         return cached
-    row = (
-        await session.execute(
-            select(Role.permissions).where(Role.key == BuiltinRoleKey.REQUESTER.value)
-        )
-    ).scalar()
-    resolved = frozenset(row or ())
+    _by_id, by_key = await grants.role_permissions(session)
+    resolved = frozenset(by_key.get(BuiltinRoleKey.REQUESTER.value, ()))
     session.info[_REQUESTER_CACHE_KEY] = resolved
     return resolved
 
@@ -139,11 +134,8 @@ async def baseline_permissions(session: AsyncSession) -> frozenset[Permission]:
     cached: frozenset[Permission] | None = session.info.get(_BASELINE_CACHE_KEY)
     if cached is not None:
         return cached
-    row = (
-        await session.execute(
-            select(Role.permissions).where(Role.key == BuiltinRoleKey.BASELINE.value)
-        )
-    ).scalar_one_or_none()
+    _by_id, by_key = await grants.role_permissions(session)
+    row = by_key.get(BuiltinRoleKey.BASELINE.value)
     resolved = frozenset(row) if row else EMPTY_BASELINE
     session.info[_BASELINE_CACHE_KEY] = resolved
     return resolved

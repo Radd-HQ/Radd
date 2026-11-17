@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import authcache
 from radd.exceptions import ConflictError, NotFoundError
 from radd.kernel import changes, registries
 from radd.modules.events import service as events
@@ -63,6 +64,32 @@ _SCOPE_COLUMN = {
 }
 
 
+async def _reaching(session: AsyncSession, user_id: uuid.UUID) -> tuple[tuple, ...]:
+    """Every grant that reaches the user by any channel, at any scope, expired
+    or not: `(role_id, project_id, space_id, expires_at)`. The one read behind
+    the three resolvers below, reused across requests until a grant or a
+    membership changes (`radd.authcache`, RADD-1560). Expiry is NOT applied
+    here — it is a comparison with the clock, so each resolver applies it when
+    it answers."""
+
+    async def load() -> tuple[tuple, ...]:
+        rows = await session.execute(
+            select(
+                GlobalRoleGrant.role_id,
+                GlobalRoleGrant.project_id,
+                GlobalRoleGrant.space_id,
+                GlobalRoleGrant.expires_at,
+            ).where(await _subject_condition(session, user_id))
+        )
+        return tuple(tuple(row) for row in rows.all())
+
+    return await authcache.cached(session, "auth.grants_reaching", user_id, load)
+
+
+def _is_live(expires_at, now) -> bool:
+    return expires_at is None or expires_at > now
+
+
 async def granted_role_ids(
     session: AsyncSession,
     user_id: uuid.UUID,
@@ -73,16 +100,19 @@ async def granted_role_ids(
     """Role ids the user holds by grant in one scope: neither id = only the
     unscoped grants; a project or a space id (RADD-791) = the unscoped grants plus
     the ones bound to it. Spaces resolve through this same function."""
-    subject = await _subject_condition(session, user_id)
-    scope = _unscoped()
-    if project_id is not None:
-        scope = scope | (GlobalRoleGrant.project_id == project_id)
-    if space_id is not None:
-        scope = scope | (GlobalRoleGrant.space_id == space_id)
-    result = await session.execute(
-        select(GlobalRoleGrant.role_id).where(subject & scope & _live()).distinct()
-    )
-    return set(result.scalars())
+    now = utcnow()
+    held: set[uuid.UUID] = set()
+    for role_id, grant_project, grant_space, expires_at in await _reaching(session, user_id):
+        if not _is_live(expires_at, now):
+            continue
+        unscoped = grant_project is None and grant_space is None
+        if (
+            unscoped
+            or (project_id is not None and grant_project == project_id)
+            or (space_id is not None and grant_space == space_id)
+        ):
+            held.add(role_id)
+    return held
 
 
 async def scoped_role_ids(
@@ -97,14 +127,12 @@ async def scoped_role_ids(
     ids = set(scope_ids)
     if not ids:
         return {}
-    column = _SCOPE_COLUMN[kind]
-    subject = await _subject_condition(session, user_id)
-    rows = await session.execute(
-        select(column, GlobalRoleGrant.role_id).where(subject & column.in_(ids) & _live())
-    )
+    now = utcnow()
     out: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
-    for scope_id, role_id in rows.all():
-        out[scope_id].add(role_id)
+    for role_id, grant_project, grant_space, expires_at in await _reaching(session, user_id):
+        scope_id = grant_project if kind is GrantScopeKind.PROJECT else grant_space
+        if scope_id in ids and _is_live(expires_at, now):
+            out[scope_id].add(role_id)
     return out
 
 
@@ -145,11 +173,28 @@ async def attributed_rows_for_user(
 async def held_role_ids_anywhere(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
     """Role ids reaching the user through ANY channel (direct, team, group) at
     ANY scope — the RADD-809 inspector's subject set."""
-    subject = await _subject_condition(session, user_id)
-    result = await session.execute(
-        select(GlobalRoleGrant.role_id).where(subject & _live()).distinct()
-    )
-    return set(result.scalars())
+    now = utcnow()
+    return {
+        role_id
+        for role_id, _project, _space, expires_at in await _reaching(session, user_id)
+        if _is_live(expires_at, now)
+    }
+
+
+async def role_permissions(session: AsyncSession) -> "tuple[dict, dict]":
+    """`({role id: permissions}, {role key: permissions})` for every role — a
+    small table read on every request by the floor and by each grant
+    resolution, reused until a role changes (RADD-1560). The tuples are shared
+    between requests: read, never mutate."""
+
+    async def load() -> tuple[dict, dict]:
+        rows = (await session.execute(select(Role.id, Role.key, Role.permissions))).all()
+        return (
+            {role_id: tuple(permissions or ()) for role_id, _key, permissions in rows},
+            {key: tuple(permissions or ()) for _id, key, permissions in rows},
+        )
+
+    return await authcache.cached(session, "auth.role_permissions", None, load)
 
 
 async def list_grants(session: AsyncSession, role_id: uuid.UUID) -> list[GlobalRoleGrant]:

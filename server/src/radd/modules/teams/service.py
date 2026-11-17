@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import authcache
 from radd.db import ilike_term
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth import service as auth
@@ -502,10 +503,15 @@ async def user_team_ids(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.U
     cached: set[uuid.UUID] | None = session.info.get(key)
     if cached is not None:
         return cached
-    result = await session.execute(
-        select(TeamMember.team_id).where(await _membership_filter(session, user_id))
-    )
-    resolved = set(result.scalars())
+
+    async def load() -> frozenset[uuid.UUID]:
+        result = await session.execute(
+            select(TeamMember.team_id).where(await _membership_filter(session, user_id))
+        )
+        return frozenset(result.scalars())
+
+    # Across requests too, until a membership or a group edge changes (RADD-1560).
+    resolved = set(await authcache.cached(session, "teams.user_team_ids", user_id, load))
     session.info[key] = resolved
     return resolved
 

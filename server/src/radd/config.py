@@ -333,6 +333,13 @@ class Settings(BaseSettings):
     # right behind a proxy. See radd/clientip.py.
     trusted_proxies: str = ""
 
+    # Reuse authorization answers across requests while nothing has changed
+    # (radd/authcache.py, RADD-1560): memberships, grants and role permissions
+    # are cached per process and dropped the moment a database trigger moves the
+    # epoch. `false` = every request resolves them from the database.
+    auth_cache: bool = True
+    auth_cache_max_entries: int = Field(default=20_000, gt=0)
+
     # Where a USER-SUPPLIED URL may make this server send a request (webhook
     # endpoints, automation HTTP actions; radd/outbound.py, RADD-1546). By
     # default only public addresses: loopback, private ranges and link-local

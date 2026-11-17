@@ -5,7 +5,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ForbiddenError
@@ -21,7 +20,7 @@ from .authz_core import (
     floor_permissions,
     holds_base,
 )
-from .models import Role, User
+from .models import User
 from .types import GrantScopeKind, InstanceRole, Permission, all_permission_keys
 
 #: Key prefix for the per-request memo of `readable_projects` (per actor).
@@ -64,13 +63,7 @@ async def _permissions_for_project_ids(
         await grants.scoped_role_ids(session, user.id, GrantScopeKind.PROJECT, project_ids)
     ).items():
         granted[project_id] |= role_ids
-    all_role_ids = {role_id for role_ids in granted.values() for role_id in role_ids}
-    permissions_by_role: dict[uuid.UUID, list[str]] = {}
-    if all_role_ids:
-        rows = await session.execute(
-            select(Role.id, Role.permissions).where(Role.id.in_(all_role_ids))
-        )
-        permissions_by_role = dict(rows.all())
+    permissions_by_role, _by_key = await grants.role_permissions(session)
 
     # Spec 113: the batched path must narrow too, or a scoped key would see the
     # full set anywhere a list hydrates permissions instead of resolving one project.
@@ -110,13 +103,7 @@ async def permissions_for_spaces(
         return {space_id: held for space_id in space_ids}
     unscoped = await grants.granted_role_ids(session, user.id)
     scoped = await grants.scoped_role_ids(session, user.id, GrantScopeKind.SPACE, space_ids)
-    role_ids = unscoped | {role_id for ids in scoped.values() for role_id in ids}
-    by_role: dict[uuid.UUID, list[str]] = {}
-    if role_ids:
-        rows = await session.execute(
-            select(Role.id, Role.permissions).where(Role.id.in_(role_ids))
-        )
-        by_role = dict(rows.all())
+    by_role, _by_key = await grants.role_permissions(session)
     floor = await floor_permissions(session, user)
     return {
         space_id: _narrow_to_key_scope(
