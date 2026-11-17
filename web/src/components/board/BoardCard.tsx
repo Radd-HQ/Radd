@@ -66,18 +66,19 @@ function CardLane({
   const rendered = cells
     .map((cell) => ({ cell, node: renderCardCell(cell.attr, ctx) }))
     .filter((entry) => entry.node !== null);
-  // Uniform card heights: a lane whose cells are all empty still RESERVES its
-  // single-row height (min-h-5 = one chip row), so a card's height comes from
-  // the designed LAYOUT, not from which fields happen to carry values.
-  if (rendered.length === 0) return <div className={`${marginClass} min-h-5`} aria-hidden />;
+  // A card is as tall as what it holds (RADD-1555). Empty lanes used to reserve
+  // a row each and the title two lines, so every card was the height of the
+  // fullest possible one — about 155 px, three and a half to a column on a
+  // laptop — and most of a column was reserved space. Uniform height bought
+  // tidy rows across columns; it cost seeing the work.
+  if (rendered.length === 0) return null;
 
   // A lane holding only the title renders the bare title paragraph, no flex
-  // wrapper; min-h reserves both clamped lines so one-line titles don't
-  // shrink the card (2 × leading-snug = 2.75em).
+  // wrapper; still clamped at two lines, no longer padded up to them.
   if (rendered.length === 1 && rendered[0].cell.attr === CARD_TITLE_ATTR) {
     return (
       <p
-        className={`${marginClass} min-h-[2.75em] line-clamp-2 text-sm font-medium leading-snug text-heading`}
+        className={`${marginClass} line-clamp-2 text-sm font-medium leading-snug text-heading`}
       >
         {ctx.item.title}
       </p>
