@@ -8,7 +8,7 @@ from radd.kernel import PermissionSpec, ProjectPurgeSpec, ProjectRelationSpec
 from radd.kernel import SettingSpec
 
 from .enums import ItemEvent
-from .filters import FilterParseError
+from .filters import DescriptionConflict, FilterParseError
 from .router import router
 from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .service.refs import item_ref
@@ -23,6 +23,20 @@ from .slq import SlqError
 # comments-deferred), so it must join an already-loaded graph rather than be the
 # first entry into it — an early import here is a collection-time cycle (RADD-889).
 from .mcptools import MCP_TOOLS
+
+
+async def _description_conflict_handler(request: Request, exc: DescriptionConflict) -> JSONResponse:
+    # The current text rides along so the editor can show both without a second
+    # request (and without racing a third writer between the two).
+    return JSONResponse(
+        status_code=409,
+        content={
+            "detail": str(exc),
+            "code": "description_conflict",
+            "description": exc.current,
+            "description_version": exc.version,
+        },
+    )
 
 
 async def _filter_parse_handler(request: Request, exc: FilterParseError) -> JSONResponse:
@@ -91,6 +105,7 @@ plugin = RaddPlugin(
     routers=(router,),
     exception_handlers=(
         (FilterParseError, _filter_parse_handler),
+        (DescriptionConflict, _description_conflict_handler),
         (SlqError, _slq_handler),
     ),
     event_types=(

@@ -502,6 +502,12 @@ class Settings(BaseSettings):
     # Manual item ranking (see radd/modules/items) — gap between fractional rank
     # keys on create/rebalance; a wide gap allows many midpoint insertions.
     item_rank_step: float = 1024.0
+    # A collapsed gap is repaired by respacing the rows after it (RADD-1539): this
+    # many at first, four times as many while that stretch is still too tight,
+    # up to the max — past which the whole order is renumbered, as it used to be
+    # on every collapse.
+    item_rank_respace_window: int = Field(default=64, gt=0)
+    item_rank_respace_max: int = Field(default=4096, gt=0)
 
     # Bulk operations (spec 68) — max items per bulk-update/bulk-move request and
     # the id cap on GET /items/ids ("select all matching").

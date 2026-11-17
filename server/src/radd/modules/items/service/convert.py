@@ -43,7 +43,7 @@ async def convert_item_kind(
     parent_id: uuid.UUID | None | object = _UNSET,
 ) -> ItemRead:
     item, project, permissions = await require_item_permission(
-        session, item_id, actor, Permission.ITEM_UPDATE
+        session, item_id, actor, Permission.ITEM_UPDATE, lock=True
     )
 
     old_kind = ItemKind(item.kind)

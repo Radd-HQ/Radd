@@ -1,6 +1,6 @@
 import { ContentBody } from "../components/editor/ContentBody";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Slot, SlotId, CollapsibleCard, ReadingPaneContext, useConfirm, type EditorTransform, CalloutKind } from "@radd/plugin-sdk";
+import { ApiError, Slot, SlotId, CollapsibleCard, ReadingPaneContext, useConfirm, type EditorTransform, CalloutKind } from "@radd/plugin-sdk";
 import { Archive, ArchiveRestore, CopyPlus, Flag, LayoutGrid, Pencil, Star, Trash2, SlidersHorizontal } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -131,10 +131,38 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
     else setTitle(item.title);
   };
 
-  const saveDescription = () => {
-    if (description !== item.description) patch({ description });
+  // RADD-1539: the version the open edit started from. Captured when the editor
+  // opens, not read at save time — the item refreshes underneath an open editor
+  // (realtime), and comparing against the refreshed version would wave through
+  // exactly the overwrite this exists to catch.
+  const descriptionBase = useRef<number | undefined>(undefined);
+  const [descriptionConflict, setDescriptionConflict] = useState(false);
+  const editDescription = () => {
+    descriptionBase.current = item.description_version;
+    setDescriptionConflict(false);
+    setEditingDescription(true);
+  };
+  const closeDescription = () => {
     setEditingDescription(false);
     setPendingTransform(null);
+    setDescriptionConflict(false);
+  };
+
+  /** `over` = the version to save over; "Keep mine" passes the CURRENT one. */
+  const saveDescription = (over: number | undefined = descriptionBase.current) => {
+    if (description === item.description) return closeDescription();
+    updateItem.mutate(
+      { itemId: item.id, patch: { description, description_version: over } },
+      {
+        onSuccess: closeDescription,
+        // Someone else saved first. The editor stays open with this person's
+        // text; the item refetches (the mutation invalidates it), so `item`
+        // becomes theirs and the callout offers the two ways out.
+        onError: (error) => {
+          if (error instanceof ApiError && error.status === 409) setDescriptionConflict(true);
+        },
+      },
+    );
   };
 
   const onCustomFieldChange = (fieldKey: string, value: CustomFieldValue) => {
@@ -399,8 +427,40 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
                   initialTransform={pendingTransform ?? undefined}
                   className="[&_.ProseMirror]:min-h-[12rem]"
                 />
+                {descriptionConflict && (
+                  <Callout kind={CalloutKind.warning} data-description-conflict>
+                    <p className="font-medium">
+                      Someone else changed this description while you were editing.
+                    </p>
+                    <p className="mt-0.5">
+                      Your text is still in the editor and has not been saved. Keep it to replace
+                      their version, or take theirs and lose your edit.
+                    </p>
+                    <details className="mt-1.5">
+                      <summary className="cursor-pointer">Show their version</summary>
+                      <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-base/60 p-2 text-meta">
+                        {item.description || "(empty)"}
+                      </pre>
+                    </details>
+                    <div className="mt-2 flex gap-2">
+                      <Button size="sm" onClick={() => saveDescription(item.description_version)}>
+                        Keep mine
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          setDescription(item.description);
+                          closeDescription();
+                        }}
+                      >
+                        Use theirs
+                      </Button>
+                    </div>
+                  </Callout>
+                )}
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={saveDescription}>
+                  <Button size="sm" onClick={() => saveDescription()} disabled={descriptionConflict}>
                     Save
                   </Button>
                   <Button
@@ -408,8 +468,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
                     variant="ghost"
                     onClick={() => {
                       setDescription(item.description);
-                      setEditingDescription(false);
-                      setPendingTransform(null);
+                      closeDescription();
                     }}
                   >
                     Cancel
@@ -438,7 +497,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
                       canEditDescription
                         ? (transform: EditorTransform) => {
                             setPendingTransform(transform);
-                            setEditingDescription(true);
+                            editDescription();
                           }
                         : undefined
                     }
@@ -449,7 +508,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
                       type="button"
                       onClick={() => {
                         setPendingTransform(null);
-                        setEditingDescription(true);
+                        editDescription();
                       }}
                       aria-label="Edit description"
                       title="Edit description"
@@ -463,7 +522,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
             ) : canEditDescription ? (
               <button
                 type="button"
-                onClick={() => setEditingDescription(true)}
+                onClick={editDescription}
                 className="rounded-md border border-transparent px-1.5 py-1 text-left text-row text-fg-faint hover:border-subtle hover:text-fg-secondary cursor-pointer"
               >
                 Add a description…

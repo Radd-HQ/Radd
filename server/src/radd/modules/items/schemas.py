@@ -166,6 +166,10 @@ class ItemUpdate(BaseModel):
     updated_at: UtcDatetime | None = None
     title: str | None = Field(default=None, min_length=1, max_length=500)
     description: str | None = None
+    #: The `description_version` the edit started from (RADD-1539). Sent, a
+    #: description that changed since is a 409 carrying the current text; omitted,
+    #: the write is last-write-wins as before (imports, automations, MCP).
+    description_version: int | None = None
     # For the nullable relations/dates: omitted = unchanged, explicit null = clear.
     parent_id: uuid.UUID | None = None
     type_id: uuid.UUID | None = None  # spec 51 — omitted = unchanged, null = clear
@@ -359,6 +363,9 @@ class ItemRead(BaseModel):
     type: TypeRef | None = None  # spec 51 — the issue-type classification
     title: str
     description: str
+    #: RADD-1539: send this back as `description_version` with a description
+    #: edit, and a save over someone else's newer text is refused, not applied.
+    description_version: int = 0
     email_signature: str | None = None
     state: StateRef
     priority: Priority

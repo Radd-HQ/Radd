@@ -277,4 +277,8 @@ def test_ungoverned_write_paths_stay_ungrantable():
     # writable_check, not the builtin map. visibility: spec 121 — governed by
     # item.update plus the self-lockout refusal, never by a field rule (a rule
     # hiding WHO may see an issue would itself need a visibility).
-    assert unmapped == {"updated_at", "type_id", "custom_fields", "visibility"}
+    # description_version (RADD-1539): not a write at all — the precondition a
+    # description edit carries, and `description` itself is in the map.
+    assert unmapped == {
+        "updated_at", "type_id", "custom_fields", "visibility", "description_version"
+    }

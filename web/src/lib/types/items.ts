@@ -105,6 +105,9 @@ export interface Item {
   capabilities?: ItemCapabilities | null;
   title: string;
   description: string;
+  /** RADD-1539: counts description edits; sent back with a description save so
+   *  the server can refuse one made over somebody else's newer text. */
+  description_version?: number;
   state: StateRef;
   priority: PriorityValue;
   labels: string[];
@@ -184,6 +187,8 @@ export interface ItemCreate {
 export interface ItemUpdate {
   title?: string;
   description?: string;
+  /** The `description_version` this edit started from; a mismatch is a 409. */
+  description_version?: number;
   state_id?: string;
   priority?: PriorityValue;
   labels?: string[];

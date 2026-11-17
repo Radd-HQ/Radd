@@ -22,6 +22,7 @@ from radd.modules.workflow.models import State
 from radd.hooks import hooks
 
 from ..enums import FINISHED_CATEGORIES, ItemEntity, ItemEvent, ItemKind, ItemVisibility
+from ..filters import DescriptionConflict
 from ..hooks import ItemCreating, ItemHook
 from ..models import ItemStar, WorkItem
 from ..schemas import ItemBatchUpdate, ItemCreate, ItemRankUpdate, ItemRead, ItemUpdate
@@ -31,7 +32,9 @@ from radd.clock import utcnow
 from .queries import (
     _next_rank,
     _rebalance_ranks,
+    _respace_after,
     _resolve_number,
+    lock_items,
     require_item,
     require_item_permission,
     require_readable_item,
@@ -214,6 +217,9 @@ async def update_items(
     (patched last) never, and a reload showed one child and no epic dates.
     A `RaddError` is re-raised as itself (its own status code) with the item's
     key in front, so the client can say which row refused."""
+    # Every row first, in id order (RADD-1539): two Saves that overlap wait for
+    # each other instead of deadlocking on rows taken in two different orders.
+    await lock_items(session, (entry.item_id for entry in data.patches))
     updated: list[ItemRead] = []
     for entry in data.patches:
         try:
@@ -243,7 +249,7 @@ async def update_item(
     session: AsyncSession, item_id: uuid.UUID, data: ItemUpdate, actor: User
 ) -> ItemRead:
     item, project, permissions = await require_item_permission(
-        session, item_id, actor, Permission.ITEM_UPDATE
+        session, item_id, actor, Permission.ITEM_UPDATE, lock=True
     )
     await _check_builtin_field_rules(session, actor, project, permissions, data.model_fields_set)
     definitions = await fields.definitions_for_project(session, project)
@@ -253,7 +259,13 @@ async def update_item(
 
     if data.title is not None:
         item.title = data.title
-    if data.description is not None:
+    if data.description is not None and data.description != item.description:
+        # The row is locked, so this is the committed text. A client that says
+        # which version it edited is told when that is no longer the one stored.
+        if data.description_version is not None and data.description_version != (
+            item.description_version or 0
+        ):
+            raise DescriptionConflict(item.description, item.description_version or 0)
         item.description = data.description
     if data.state_id is not None:
         item.state_id = (await _resolve_state(session, project, data.state_id)).id
@@ -403,7 +415,7 @@ async def set_archived(
     """Soft archive/unarchive (spec 38) — hidden from lists by default, still
     reachable by key/detail. An ordinary item.updated with an `archived` diff."""
     item, project, permissions = await require_item_permission(
-        session, item_id, actor, Permission.ITEM_UPDATE
+        session, item_id, actor, Permission.ITEM_UPDATE, lock=True
     )
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
@@ -485,7 +497,7 @@ async def reorder_item(
 ) -> ItemRead:
     """Set an item's manual rank between two neighbours (drag-to-rank, spec 24)."""
     item, project, permissions = await require_item_permission(
-        session, item_id, actor, Permission.ITEM_UPDATE
+        session, item_id, actor, Permission.ITEM_UPDATE, lock=True
     )
 
     async def rank_of(neighbour_id: uuid.UUID | None) -> float | None:
@@ -501,10 +513,15 @@ async def reorder_item(
     if after is not None and before is not None:
         new_rank = (after + before) / 2
         if new_rank <= after or new_rank >= before:  # float gap collapsed → respace + retry
-            await _rebalance_ranks(session)
-            after = await rank_of(data.after_id)
-            before = await rank_of(data.before_id)
-            new_rank = ((after or 0.0) + (before or 0.0)) / 2
+            # The rows that follow `after` are spread to open a gap; the whole
+            # order is renumbered only when that cannot work (RADD-1539).
+            if await _respace_after(session, data.after_id, item_id):
+                new_rank = after + (await rank_of(data.before_id) - after) / 2
+            else:
+                await _rebalance_ranks(session)
+                after = await rank_of(data.after_id)
+                before = await rank_of(data.before_id)
+                new_rank = ((after or 0.0) + (before or 0.0)) / 2
     elif before is not None:  # move to the top of the bucket
         new_rank = before - settings.item_rank_step
     elif after is not None:  # move to the bottom of the bucket

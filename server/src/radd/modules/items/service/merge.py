@@ -30,7 +30,8 @@ from radd.modules.workflow.types import StateCategory
 
 from ..enums import ItemEntity, ItemEvent
 from ..schemas import ItemRead
-from .queries import require_item
+from ..transitions import record as record_transition
+from .queries import lock_items, require_item
 from .read import get_item
 from .visibility import _check_builtin_field_rules, ensure_item_relation
 
@@ -75,10 +76,10 @@ _KEEP: frozenset[tuple[str, str]] = frozenset(
     {
         ("search_index", "item_id"),  # the tombstone remains findable
         ("item_embeddings", "item_id"),
-        # item_links is handled specially below (both ends + self-link removal).
         # Each item's state history is its own: the source's ends at the
         # tombstone, the survivor's is not rewritten with someone else's past.
         ("item_transitions", "item_id"),
+        # item_links is handled specially below (both ends + self-link removal).
     }
 )
 #: Polymorphic parents (no FK): entity_type='item' + entity_id.
@@ -123,8 +124,9 @@ async def _merge_items(
 ) -> ItemRead:
     if source_id == target_id:
         raise ConflictError(ItemEntity.ITEM, reason="an item cannot merge into itself")
-    source = await require_item(session, source_id)
-    target = await require_item(session, target_id)
+    await lock_items(session, (source_id, target_id))  # both, in one order (RADD-1539)
+    source = await require_item(session, source_id, lock=True)
+    target = await require_item(session, target_id, lock=True)
     if source.kind != target.kind:
         raise ConflictError(
             ItemEntity.ITEM,
@@ -211,11 +213,11 @@ async def _merge_items(
         },
     )
     await session.flush()
-
-    for item_id, changes in (
     # The tombstone is a state change the merge events do not carry (they hold a
     # ref, not a snapshot), so the ledger fold never saw it; the history does.
     await record_transition(session, source)
+
+    for item_id, changes in (
         (source.id, [{"field": "merged_into", "from": None, "to": target_key}]),
         (target.id, [{"field": "merged_from", "from": None, "to": source_key}]),
     ):

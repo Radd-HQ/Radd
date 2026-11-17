@@ -40,6 +40,18 @@ class ItemFilterParam(StrEnum):
     CF = "cf"
 
 
+class DescriptionConflict(RaddError):
+    """A description edit started from a version that is no longer the stored one
+    (-> 409 carrying the current text and version, RADD-1539)."""
+
+    def __init__(self, current: str, version: int):
+        self.current = current
+        self.version = version
+        super().__init__(
+            "the description was changed by someone else while you were editing it"
+        )
+
+
 class FilterParseError(RaddError):
     """Malformed filter value (-> 422 via the items module exception handler)."""
 

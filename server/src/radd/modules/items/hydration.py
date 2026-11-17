@@ -343,6 +343,7 @@ async def hydrate(
             type=type_ref(i.type_id),
             title=i.title,
             description=i.description,
+            description_version=i.description_version or 0,
             email_signature=i.email_signature,
             state=StateRef.model_validate(states[i.state_id]),
             priority=i.priority,

@@ -21,6 +21,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm.base import NEVER_SET, NO_VALUE
 
 from radd.db import Base, TimestampMixin
 
@@ -96,6 +97,18 @@ class WorkItem(Base, TimestampMixin):
         ForeignKey("releases.id", ondelete="SET NULL"), index=True, nullable=True
     )
     custom_fields: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    #: Counts the description's edits (RADD-1539), bumped by the attribute
+    #: listener below on EVERY writer. A client that sends the version its edit
+    #: started from is refused when the text has moved on since — the one field
+    #: where a silent last-write-wins loses someone's paragraphs.
+    description_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+
+@event.listens_for(WorkItem.description, "set")
+def _count_description_edit(target: WorkItem, value: str, oldvalue: object, _initiator) -> None:
+    if oldvalue is NO_VALUE or oldvalue is NEVER_SET or value == oldvalue:
+        return  # being constructed, or restated unchanged
+    target.description_version = (target.description_version or 0) + 1
 
 
 class ItemKeyAlias(Base, TimestampMixin):

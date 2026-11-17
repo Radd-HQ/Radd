@@ -20,16 +20,50 @@ from ..models import ItemKeyAlias, WorkItem
 
 
 
-async def require_item(session: AsyncSession, item_id: uuid.UUID) -> WorkItem:
-    """Fetch a raw item or 404 — the cheap existence check other modules build on."""
-    item = await session.get(WorkItem, item_id)
+async def require_item(
+    session: AsyncSession, item_id: uuid.UUID, *, lock: bool = False
+) -> WorkItem:
+    """Fetch a raw item or 404 — the cheap existence check other modules build on.
+
+    `lock=True` is for a WRITE (RADD-1539): the row is taken `FOR UPDATE` and
+    re-read, so two requests changing one item run one after the other and the
+    second works from what the first committed. Without it both read the same
+    row, both validated a transition from the same state, and both wrote back a
+    whole `custom_fields` document — the later commit silently undoing the
+    earlier one's field."""
+    if lock:
+        item = await session.scalar(
+            select(WorkItem)
+            .where(WorkItem.id == item_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    else:
+        item = await session.get(WorkItem, item_id)
     if item is None:
         raise NotFoundError(ItemEntity.ITEM, item_id)
     return item
 
 
+async def lock_items(session: AsyncSession, item_ids: Iterable[uuid.UUID]) -> None:
+    """Take every row a multi-item write will touch, in ONE order (by id), before
+    touching any: two batches that overlap then queue behind each other instead
+    of each holding a row the other wants."""
+    ids = sorted(set(item_ids))
+    if ids:
+        await session.execute(
+            select(WorkItem.id).where(WorkItem.id.in_(ids)).order_by(WorkItem.id).with_for_update()
+        )
+
+
 async def require_item_permission(
-    session: AsyncSession, item_id: uuid.UUID, actor, permission, *, as_missing: bool = False
+    session: AsyncSession,
+    item_id: uuid.UUID,
+    actor,
+    permission,
+    *,
+    as_missing: bool = False,
+    lock: bool = False,
 ) -> "tuple[WorkItem, Project, frozenset]":
     """Item + project + the actor's permissions there, with `permission` required
     on the project AND for this row (relations + the restricted-row guard) — the
@@ -38,7 +72,7 @@ async def require_item_permission(
 
     from .visibility import ensure_item_relation
 
-    item = await require_item(session, item_id)
+    item = await require_item(session, item_id, lock=lock)
     project = await projects_service.get_project(session, item.project_id)
     permissions = await authz.require(session, actor, permission, project=project)
     await ensure_item_relation(session, actor, item, permissions, permission, as_missing=as_missing)
@@ -312,10 +346,9 @@ async def _next_rank(session: AsyncSession) -> float:
 
 
 async def _rebalance_ranks(session: AsyncSession) -> None:
-    """Respace every rank by `item_rank_step` in current order (the backstop for
-    collapsed float midpoints), in ONE set-based statement — a per-row loop was
-    503k UPDATEs inside a drag request. GLOBAL on purpose: rank is one
-    instance-wide order that cross-project views interleave."""
+    """Respace EVERY rank by `item_rank_step` in current order, in one set-based
+    statement. The last resort only (see `_respace_after`): it rewrites the whole
+    table — 503k rows on the perf seed — inside whichever request reached it."""
     ranked = select(
         WorkItem.id.label("item_id"),
         func.row_number().over(order_by=(WorkItem.rank, WorkItem.created_at)).label("rn"),
@@ -327,6 +360,52 @@ async def _rebalance_ranks(session: AsyncSession) -> None:
         .execution_options(synchronize_session=False)
     )
     await session.flush()
+
+
+async def _respace_after(session: AsyncSession, after_id: uuid.UUID, moving_id: uuid.UUID) -> bool:
+    """Open a gap right after `after_id` by spreading the rows that FOLLOW it
+    (RADD-1539). Rank is one instance-wide order, and two neighbours whose float
+    midpoint has collapsed used to be repaired by renumbering all of it inside
+    the drag. Only the neighbourhood is crowded: the next `window` rows are
+    spread evenly up to the rank of the row beyond them, and the window widens
+    while that stretch is itself too tight to hold them. True = a gap exists.
+
+    False = `after_id` shares its rank with more rows than the widest window
+    (data seeded with one rank for everything): the caller falls back to the
+    full rebalance, which is the only thing that can order such rows at all."""
+    anchor = await session.scalar(select(WorkItem.rank).where(WorkItem.id == after_id))
+    if anchor is None:
+        return False
+    window = settings.item_rank_respace_window
+    while window <= settings.item_rank_respace_max:
+        rows = (
+            await session.execute(
+                select(WorkItem.id, WorkItem.rank)
+                .where(WorkItem.rank >= anchor, WorkItem.id.not_in((after_id, moving_id)))
+                .order_by(WorkItem.rank, WorkItem.created_at.desc(), WorkItem.id)
+                .limit(window + 1)
+            )
+        ).all()
+        if len(rows) <= window:
+            # The end of the order: nothing above to stay under.
+            spacing, crowded = settings.item_rank_step, rows
+        else:
+            crowded, ceiling = rows[:window], rows[window].rank
+            spacing = (ceiling - anchor) / (window + 2)
+        # Wide enough that a midpoint between two of them is a distinct float
+        # many times over; the first slot stays free for the row being placed.
+        if spacing > max(abs(anchor), 1.0) * 1e-9:
+            for position, row in enumerate(crowded, start=2):
+                await session.execute(
+                    update(WorkItem)
+                    .where(WorkItem.id == row.id)
+                    .values(rank=anchor + spacing * position)
+                    .execution_options(synchronize_session=False)
+                )
+            await session.flush()
+            return True
+        window *= 4
+    return False
 
 
 async def _resolve_number(session: AsyncSession, project_id: uuid.UUID, number: int | None) -> int:
