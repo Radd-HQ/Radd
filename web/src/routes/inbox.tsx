@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCheck, Inbox, Trash2 } from "lucide-react";
+import { CheckCheck, Inbox, Trash2, X } from "lucide-react";
 import { RoutePath } from "../lib/constants";
 import { pagePermalink } from "@radd-plugin-ui/pages/links";
 import {
+  useClearNotifications,
   useClearReadNotifications,
   useMarkAllNotificationsRead,
   useMarkNotificationsRead,
@@ -13,7 +14,7 @@ import { pushToast, ToastKind } from "../lib/toast";
 import { INBOX_PAGE_SIZE, notificationsQuery } from "../lib/queries";
 import type { Notification } from "../lib/types";
 import { Button } from "../components/Button";
-import { EmptyState, Switch, Pager, useConfirm } from "@radd/plugin-sdk";
+import { EmptyState, IconButton, Switch, Pager, useConfirm } from "@radd/plugin-sdk";
 import { NotificationRow } from "../components/notifications/NotificationRow";
 import { Spinner } from "../components/Spinner";
 import { groupNotificationBursts } from "../lib/notification-bursts";
@@ -28,6 +29,8 @@ export function InboxPage() {
   const markRead = useMarkNotificationsRead();
   const markAllRead = useMarkAllNotificationsRead();
   const clearRead = useClearReadNotifications();
+  const clearOne = useClearNotifications();
+  const clear = (ids: string[]) => clearOne.mutate(ids);
   const [confirmDialog, confirm] = useConfirm();
   const navigate = useNavigate();
 
@@ -128,17 +131,27 @@ export function InboxPage() {
       <ul className="divide-y divide-subtle/70 overflow-hidden rounded-lg border border-subtle">
         {groupNotificationBursts(data?.notifications ?? []).map((burst) => (
           <li key={burst.lead.id} data-burst={burst.members.length}>
-            <NotificationRow
-              notification={burst.lead}
-              onOpen={(lead) => {
-                // Opening a burst reads all of it: they are one fact.
-                const unread = burst.members.filter((member) => !member.read).map((member) => member.id);
-                if (unread.length > 1) markRead.mutate(unread);
-                open(lead);
-              }}
-            />
+            <ClearableRow
+              label={
+                burst.members.length > 1
+                  ? `Clear these ${burst.members.length} notifications`
+                  : "Clear this notification"
+              }
+              // Clearing a folded row clears all of it, as opening it reads all of it.
+              onClear={() => clear(burst.members.map((member) => member.id))}
+            >
+              <NotificationRow
+                notification={burst.lead}
+                onOpen={(lead) => {
+                  // Opening a burst reads all of it: they are one fact.
+                  const unread = burst.members.filter((member) => !member.read).map((member) => member.id);
+                  if (unread.length > 1) markRead.mutate(unread);
+                  open(lead);
+                }}
+              />
+            </ClearableRow>
             {burst.members.length > 1 && (
-              <BurstMore burst={burst.members} onOpen={open} />
+              <BurstMore burst={burst.members} onOpen={open} onClear={(id) => clear([id])} />
             )}
           </li>
         ))}
@@ -157,8 +170,26 @@ export function InboxPage() {
   );
 }
 
+/** A notification row with its clear button beside it (RADD-1569). Beside, not
+ *  inside: the row is itself a button, and a button cannot hold another. No
+ *  confirm: it is one row the person chose, and the list answers at once. */
+function ClearableRow({ label, onClear, children }: { label: string; onClear: () => void; children: ReactNode }) {
+  return (
+    <div className="flex items-center">
+      <div className="min-w-0 flex-1">{children}</div>
+      <IconButton aria-label={label} title={label} data-clear-notification onClick={onClear} className="mr-2 shrink-0 p-1.5">
+        <X size={14} aria-hidden />
+      </IconButton>
+    </div>
+  );
+}
+
 /** "×14 — show all": the rest of a collapsed burst, on demand. */
-function BurstMore({ burst, onOpen }: { burst: Notification[]; onOpen: (notification: Notification) => void }) {
+function BurstMore({ burst, onOpen, onClear }: {
+  burst: Notification[];
+  onOpen: (notification: Notification) => void;
+  onClear: (id: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const rest = burst.slice(1);
   return (
@@ -171,7 +202,9 @@ function BurstMore({ burst, onOpen }: { burst: Notification[]; onOpen: (notifica
         <ul className="mt-1 flex flex-col divide-y divide-subtle/50 rounded-md border border-subtle/60">
           {rest.map((notification) => (
             <li key={notification.id}>
-              <NotificationRow notification={notification} onOpen={onOpen} />
+              <ClearableRow label="Clear this notification" onClear={() => onClear(notification.id)}>
+                <NotificationRow notification={notification} onOpen={onOpen} />
+              </ClearableRow>
             </li>
           ))}
         </ul>

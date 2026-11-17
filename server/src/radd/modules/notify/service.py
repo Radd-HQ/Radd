@@ -238,6 +238,20 @@ async def mark_all_read(session: AsyncSession, user_id: uuid.UUID) -> None:
     )
 
 
+async def clear(session: AsyncSession, user_id: uuid.UUID, ids: Sequence[uuid.UUID]) -> int:
+    """Delete these of the caller's inbox notifications, read or unread; how
+    many went (RADD-1569). An id that is someone else's, or not an inbox row,
+    matches nothing: the count never says whether another person's id exists."""
+    if not ids:
+        return 0
+    result = await session.execute(
+        delete(Notification).where(
+            Notification.user_id == user_id, Notification.id.in_(list(ids)), _INBOX_ROW
+        )
+    )
+    return int(result.rowcount or 0)
+
+
 async def clear_read(session: AsyncSession, user_id: uuid.UUID) -> int:
     """Delete the caller's READ inbox notifications; how many went (RADD-1568).
 

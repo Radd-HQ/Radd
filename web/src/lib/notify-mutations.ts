@@ -3,6 +3,7 @@ import { api } from "./api";
 import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import {
   apiItemWatchPath,
+  apiNotificationsClearPath,
   apiNotificationsReadAllPath,
   apiNotificationsReadPath,
 } from "./constants";
@@ -20,6 +21,15 @@ export function useMarkAllNotificationsRead() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api.post<void>(apiNotificationsReadAllPath()),
+    onSettled: () => invalidateEntities(queryClient, Entity.notification),
+  });
+}
+
+/** Delete these notifications: one row, or every member of a folded burst (RADD-1569). */
+export function useClearNotifications() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => api.post<{ deleted: number }>(apiNotificationsClearPath(), { ids }),
     onSettled: () => invalidateEntities(queryClient, Entity.notification),
   });
 }

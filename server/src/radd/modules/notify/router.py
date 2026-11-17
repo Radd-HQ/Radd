@@ -14,6 +14,7 @@ from . import prefs as prefs_read, service, targets
 from .models import Notification
 from .schemas import (
     ClearedRead,
+    ClearRequest,
     MarkReadRequest,
     NotificationActor,
     NotificationList,
@@ -116,6 +117,12 @@ async def mark_read(data: MarkReadRequest, session: Session, user: CurrentUser) 
 @router.post("/notifications/read-all", status_code=204)
 async def mark_all_read(session: Session, user: CurrentUser) -> None:
     await service.mark_all_read(session, user.id)
+
+
+@router.post("/notifications/clear", response_model=ClearedRead)
+async def clear(data: ClearRequest, session: Session, user: CurrentUser) -> ClearedRead:
+    """Remove these of the caller's inbox notifications, read or not (RADD-1569)."""
+    return ClearedRead(deleted=await service.clear(session, user.id, data.ids))
 
 
 @router.delete("/notifications/read", response_model=ClearedRead)

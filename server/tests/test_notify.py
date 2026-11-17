@@ -617,3 +617,62 @@ async def test_clearing_read_removes_exactly_the_callers_read_inbox_rows(db):
     assert [n.id for n in await _rows(db, other)] == [theirs.id]
     # Nothing left to clear: the second call says so rather than failing.
     assert await notify_service.clear_read(db, me.id) == 0
+
+
+def _inbox_row(db, user, *, read_days_ago=None, inbox=True):
+    from datetime import timedelta
+
+    from radd.clock import utcnow
+
+    notification = Notification(
+        user_id=user.id, type=NotificationType.ASSIGNED.value, payload={}, inbox=inbox, email=not inbox,
+        read_at=None if read_days_ago is None else utcnow() - timedelta(days=read_days_ago),
+    )
+    db.add(notification)
+    return notification
+
+
+async def test_clearing_named_notifications_removes_only_the_callers(db):
+    """RADD-1569: a row or a whole burst, read or unread; never someone else's."""
+    me = await make_user(db, name="Clearer")
+    other = await make_user(db, name="Bystander")
+    burst = [_inbox_row(db, me), _inbox_row(db, me, read_days_ago=1)]
+    kept = _inbox_row(db, me)
+    mail_only = _inbox_row(db, me, inbox=False)
+    theirs = _inbox_row(db, other)
+    await db.flush()
+
+    assert await notify_service.unread_count(db, me.id) == 2
+    # Their id and an email-only id ride along and match nothing.
+    removed = await notify_service.clear(db, me.id, [*(n.id for n in burst), theirs.id, mail_only.id, uuid.uuid4()])
+    assert removed == len(burst)
+    assert {n.id for n in await _rows(db, me)} == {kept.id, mail_only.id}
+    assert await notify_service.unread_count(db, me.id) == 1
+    assert [n.id for n in await _rows(db, other)] == [theirs.id]
+    assert await notify_service.clear(db, me.id, []) == 0
+
+
+async def test_retention_deletes_what_was_read_long_ago_and_nothing_else(db, monkeypatch):
+    """RADD-1570: by read age, in batches; unread and email-only rows stay; 0 is off."""
+    from radd.config import settings
+    from radd.modules.notify import retention
+
+    me = await make_user(db, name="Reader")
+    old = [_inbox_row(db, me, read_days_ago=days) for days in (91, 120, 400)]
+    recent = _inbox_row(db, me, read_days_ago=89)
+    unread = _inbox_row(db, me)
+    mail_only = _inbox_row(db, me, read_days_ago=400, inbox=False)
+    await db.flush()
+    everything = {n.id for n in (*old, recent, unread, mail_only)}
+
+    monkeypatch.setattr(settings, "notify_read_retention_days", 0)
+    assert await retention.sweep(db) == 0
+    assert {n.id for n in await _rows(db, me)} == everything
+
+    monkeypatch.setattr(settings, "notify_read_retention_days", 90)
+    monkeypatch.setattr(settings, "notify_retention_batch", 2)
+    # A batch is a ceiling: two go, and a full batch says there may be more.
+    assert await retention.sweep(db) == 2
+    assert await retention.sweep(db) == 1
+    assert await retention.sweep(db) == 0
+    assert {n.id for n in await _rows(db, me)} == {recent.id, unread.id, mail_only.id}

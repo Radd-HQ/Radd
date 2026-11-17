@@ -165,6 +165,7 @@ export const apiStorageMoveJobPath = (jobId: string) => `${ApiPath.storageMoveJo
 /** Notification + watcher paths (spec 26). */
 export const apiNotificationsReadPath = () => `${ApiPath.notifications}/read`;
 export const apiNotificationsReadAllPath = () => `${ApiPath.notifications}/read-all`;
+export const apiNotificationsClearPath = () => `${ApiPath.notifications}/clear`;
 export const apiItemWatchPath = (itemId: string) => `${ApiPath.items}/${itemId}/watch`;
 export const apiItemWatchersPath = (itemId: string) => `${ApiPath.items}/${itemId}/watchers`;
 
