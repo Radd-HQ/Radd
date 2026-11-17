@@ -70,6 +70,10 @@ export const CHART_LEGEND_SLOT = "reporting.chart.legend";
 export interface LegendEntry {
   label: string;
   color: string;
+  /** With `onToggle`, the entry is a button that shows or hides its series;
+   *  `hidden` is its current state (RADD-1557). */
+  hidden?: boolean;
+  onToggle?: () => void;
 }
 export interface ChartLegendProps {
   entries: LegendEntry[];
