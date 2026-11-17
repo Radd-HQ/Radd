@@ -196,6 +196,8 @@ commits and will not say them this plainly.
   the legend to show it. The sidebar lists eight wiki spaces and a "Show all".
   Every date field is the app's own calendar: it shows the month spelled
   ("22 Nov 2026"), accepts typed dates, and looks the same in every browser.
+  The Inbox has a **Clear read** button: it deletes the notifications a person
+  has read (after asking), and unread ones stay.
   On a long list, rows far from view show only their key and title until
   scrolled near, so the browser's find-in-page does not match their labels or
   assignee.

@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCheck, Inbox } from "lucide-react";
+import { CheckCheck, Inbox, Trash2 } from "lucide-react";
 import { RoutePath } from "../lib/constants";
 import { pagePermalink } from "@radd-plugin-ui/pages/links";
 import {
+  useClearReadNotifications,
   useMarkAllNotificationsRead,
   useMarkNotificationsRead,
 } from "../lib/notify-mutations";
+import { pushToast, ToastKind } from "../lib/toast";
 import { INBOX_PAGE_SIZE, notificationsQuery } from "../lib/queries";
 import type { Notification } from "../lib/types";
 import { Button } from "../components/Button";
-import { EmptyState, Switch, Pager } from "@radd/plugin-sdk";
+import { EmptyState, Switch, Pager, useConfirm } from "@radd/plugin-sdk";
 import { NotificationRow } from "../components/notifications/NotificationRow";
 import { Spinner } from "../components/Spinner";
 import { groupNotificationBursts } from "../lib/notification-bursts";
@@ -25,7 +27,31 @@ export function InboxPage() {
   const { data, isPending } = useQuery(notificationsQuery(unreadOnly, page));
   const markRead = useMarkNotificationsRead();
   const markAllRead = useMarkAllNotificationsRead();
+  const clearRead = useClearReadNotifications();
+  const [confirmDialog, confirm] = useConfirm();
   const navigate = useNavigate();
+
+  // Clearing deletes, so it asks first and says what stays (RADD-1568).
+  const askToClear = async () => {
+    const ok = await confirm({
+      title: "Clear read notifications?",
+      message: "Every notification you have read is removed from your inbox. Unread ones stay. This cannot be undone.",
+      confirmLabel: "Clear read",
+      danger: true,
+    });
+    if (!ok) return;
+    clearRead.mutate(undefined, {
+      onSuccess: ({ deleted }) => {
+        setPage(1);
+        pushToast(
+          deleted === 0
+            ? "Nothing to clear: no read notifications."
+            : `Cleared ${deleted.toLocaleString()} read notification${deleted === 1 ? "" : "s"}.`,
+          ToastKind.success,
+        );
+      },
+    });
+  };
 
   const open = (notification: Notification) => {
     if (!notification.read) markRead.mutate([notification.id]);
@@ -73,8 +99,20 @@ export function InboxPage() {
           <CheckCheck size={13} aria-hidden />
           Mark all read
         </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          data-clear-read
+          onClick={() => void askToClear()}
+          // Known to be pointless only when everything in view is unread.
+          disabled={clearRead.isPending || !data || (!unreadOnly && page === 1 && data.notifications.every((n) => !n.read))}
+        >
+          <Trash2 size={13} aria-hidden />
+          Clear read
+        </Button>
       </div>
 
+      {confirmDialog}
       {isPending && <Spinner />}
       {data && data.notifications.length === 0 && (
         <EmptyState

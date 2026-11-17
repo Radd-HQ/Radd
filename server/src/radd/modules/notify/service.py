@@ -238,6 +238,21 @@ async def mark_all_read(session: AsyncSession, user_id: uuid.UUID) -> None:
     )
 
 
+async def clear_read(session: AsyncSession, user_id: uuid.UUID) -> int:
+    """Delete the caller's READ inbox notifications; how many went (RADD-1568).
+
+    Unread rows stay. So do email-only rows (`inbox` false): they were never in
+    the inbox, and the same filter keeps "mark all read" from cancelling a
+    pending send. A read row has no send left to lose: the mailer skips rows
+    that have been read."""
+    result = await session.execute(
+        delete(Notification).where(
+            Notification.user_id == user_id, Notification.read_at.is_not(None), _INBOX_ROW
+        )
+    )
+    return int(result.rowcount or 0)
+
+
 # --- per-user rules (no rows = `rules.default_matrix()`) ---
 
 

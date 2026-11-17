@@ -35,6 +35,12 @@ class MarkReadRequest(BaseModel):
     ids: list[uuid.UUID] = Field(min_length=1)
 
 
+class ClearedRead(BaseModel):
+    """How many read notifications `DELETE /notifications/read` removed."""
+
+    deleted: int
+
+
 class WatcherRef(BaseModel):
     id: uuid.UUID
     name: str

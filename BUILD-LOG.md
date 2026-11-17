@@ -46,6 +46,10 @@ row keeps its element and mounts its cells only near the list's scroll container
 3,368 nodes). RADD-1566: `DateInput` is the app's own calendar popover with typed entry, replacing the
 browser's native control; `TextField type="date"` renders it too.
 
+RADD-1567: My Work's inbox widget reads the badge's answer (the badge now carries the newest 20 unread
+rows), so My Work sends one notifications request too. RADD-1568: `DELETE /notifications/read` and a
+**Clear read** button on the Inbox delete a person's read notifications after a confirm.
+
 **Found on the way.** Two review findings were partly wrong and are corrected on their issues (the
 sidebar was capped at 50, not unbounded; the rail order I saw was partly one project's saved screen).
 An aggregate "optimisation" of the board summary measured slower and was reverted. A hook placed after

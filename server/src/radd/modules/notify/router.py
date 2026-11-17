@@ -13,6 +13,7 @@ from radd.modules.items import service as items_service
 from . import prefs as prefs_read, service, targets
 from .models import Notification
 from .schemas import (
+    ClearedRead,
     MarkReadRequest,
     NotificationActor,
     NotificationList,
@@ -115,6 +116,12 @@ async def mark_read(data: MarkReadRequest, session: Session, user: CurrentUser) 
 @router.post("/notifications/read-all", status_code=204)
 async def mark_all_read(session: Session, user: CurrentUser) -> None:
     await service.mark_all_read(session, user.id)
+
+
+@router.delete("/notifications/read", response_model=ClearedRead)
+async def clear_read(session: Session, user: CurrentUser) -> ClearedRead:
+    """Remove the caller's read inbox notifications (RADD-1568). Unread ones stay."""
+    return ClearedRead(deleted=await service.clear_read(session, user.id))
 
 
 @router.put("/items/{item_id}/watch", status_code=204)

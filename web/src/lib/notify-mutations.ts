@@ -24,6 +24,15 @@ export function useMarkAllNotificationsRead() {
   });
 }
 
+/** Delete the caller's read notifications (RADD-1568); resolves to how many went. */
+export function useClearReadNotifications() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete<{ deleted: number }>(apiNotificationsReadPath()),
+    onSettled: () => invalidateEntities(queryClient, Entity.notification),
+  });
+}
+
 /** Follow/unfollow an item (manual watch, spec 26). */
 export function useToggleWatch() {
   const queryClient = useQueryClient();

@@ -584,3 +584,36 @@ async def test_muting_participant_added_silences_it(db):
 
     assert await _rows(db, muted) == []
     assert await _count(db, heard, NotificationType.PARTICIPANT_ADDED) == 1
+
+
+async def test_clearing_read_removes_exactly_the_callers_read_inbox_rows(db):
+    """RADD-1568: read rows go; unread, email-only and other people's stay."""
+    from radd.modules.notify import service as notify_service
+    from radd.clock import utcnow
+
+    me = await make_user(db, name="Clearer")
+    other = await make_user(db, name="Bystander")
+
+    def row(user, *, read, inbox=True, email=False):
+        notification = Notification(
+            user_id=user.id, type=NotificationType.ASSIGNED.value, payload={}, inbox=inbox, email=email,
+            read_at=utcnow() if read else None,
+        )
+        db.add(notification)
+        return notification
+
+    mine_read = [row(me, read=True), row(me, read=True)]
+    mine_unread = row(me, read=False)
+    # An email-only row that happens to carry a read stamp was never in the inbox.
+    mail_only = row(me, read=True, inbox=False, email=True)
+    theirs = row(other, read=True)
+    await db.flush()
+    kept = {mine_unread.id, mail_only.id}
+
+    assert await notify_service.unread_count(db, me.id) == 1
+    assert await notify_service.clear_read(db, me.id) == len(mine_read)
+    assert {n.id for n in await _rows(db, me)} == kept
+    assert await notify_service.unread_count(db, me.id) == 1
+    assert [n.id for n in await _rows(db, other)] == [theirs.id]
+    # Nothing left to clear: the second call says so rather than failing.
+    assert await notify_service.clear_read(db, me.id) == 0
