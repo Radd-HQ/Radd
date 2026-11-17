@@ -163,3 +163,53 @@ async def test_directory_exceeds_old_group_limit_and_only_labels_matching_users(
     assert str(users[0].id) not in hidden.column_totals
     assert hidden.column_labels[str(users[0].id)] == users[0].name
     assert sum(hidden.column_totals.values()) == sum(summary.column_totals.values()) - 1
+
+
+async def test_one_directory_request_is_the_summary_plus_each_columns_first_window(setup):
+    """RADD-1545: the board's first paint in ONE request. It must agree with the
+    two things it replaces — the summary, and each column's first `rows_only`
+    window — and hand back a cursor that continues exactly where that window
+    would. And it must not number the project to do it."""
+    db, actor, project = setup
+    for n in range(7):
+        await items.create_item(
+            db,
+            ItemCreate(project_id=project.id, title=f"card {n}", priority="high" if n % 3 else "normal"),
+            actor=actor,
+        )
+    request = GroupPageRequest(project_id=project.id, axis="priority", cursor_mode=True, item_limit=2)
+    statements = []
+
+    def collect(conn, cursor, statement, parameters, context, many):
+        statements.append(statement)
+
+    event.listen(db.bind.sync_engine, "before_cursor_execute", collect)
+    try:
+        combined = await grouped_items(db, actor, request.model_copy(update={"directory": True}))
+    finally:
+        event.remove(db.bind.sync_engine, "before_cursor_execute", collect)
+    assert not any("row_number()" in sql for sql in statements)
+
+    summary = await grouped_items(db, actor, request.model_copy(update={"summary_only": True}))
+    assert combined.column_totals == summary.column_totals == {"high": 4, "normal": 3}
+    assert combined.column_labels == summary.column_labels
+    assert {cell.column for cell in combined.cells} == {"high", "normal"}
+    for cell in combined.cells:
+        window = await grouped_items(
+            db, actor, request.model_copy(update={"rows_only": True, "column_key": cell.column})
+        )
+        assert [i.id for i in cell.items] == [i.id for i in window.cells[0].items]
+        assert len(cell.items) == 2 and cell.next_cursor
+        # Both cursors continue to the same next cards.
+        after_combined = await grouped_items(
+            db, actor,
+            request.model_copy(update={"rows_only": True, "column_key": cell.column, "after": cell.next_cursor}),
+        )
+        after_window = await grouped_items(
+            db, actor,
+            request.model_copy(
+                update={"rows_only": True, "column_key": cell.column, "after": window.cells[0].next_cursor}
+            ),
+        )
+        assert [i.id for i in after_combined.cells[0].items] == [i.id for i in after_window.cells[0].items]
+        assert not {i.id for i in after_combined.cells[0].items} & {i.id for i in cell.items}

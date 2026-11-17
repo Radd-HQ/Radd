@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     db_pool_size: int = 5
     db_max_overflow: int = 10
     db_pool_pre_ping: bool = True
+    # Plan every statement for the values it is run with (RADD-1545), instead of
+    # letting PostgreSQL settle a prepared statement on one generic plan. See
+    # radd/db.py for the 15 ms -> 400 ms case that set this.
+    db_force_custom_plans: bool = True
     # How long /ready waits for the database before answering 503 (RADD-1534).
     readiness_timeout_seconds: float = 3.0
     # How long a request waits for a pooled connection before failing (RADD-1532).

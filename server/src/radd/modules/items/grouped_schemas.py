@@ -12,6 +12,10 @@ class GroupPageRequest(BaseModel):
     column_key: str | None = None
     lane_key: str | None = None
     summary_only: bool = False
+    #: With cards: also return the directory a summary carries (labels, epic
+    #: refs) and leave the groups unordered — the caller arranges its own
+    #: columns. One request then draws a whole board (RADD-1545).
+    directory: bool = False
     rows_only: bool = False
     cursor_mode: bool = False
     after: str | None = Field(None, max_length=16384)

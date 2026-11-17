@@ -11,6 +11,8 @@ import type { Cycle } from "@radd-plugin-ui/cycles/types";
 const PAGE_SIZE = 25;
 const BOARD_STALE_MS = 30_000;
 const BOARD_ALL_LANE = "__all__";
+/** How many columns the combined first request carries cards for (the server's cap). */
+const FIRST_COLUMNS = 40;
 type Page = { cells: {column:string;lane:string;items:Item[];next_cursor:string|null}[];
   column_totals:Record<string,number>;lane_totals:Record<string,number>;
   column_points:Record<string,number>|null;column_labels:Record<string,string>;
@@ -35,8 +37,22 @@ export function useBoardItems(view:View|undefined,axis:string|null,lane:string|n
     cycle_ids:cycleScope ? groupItemsForView([],"cycle",{cycles,cycleFilter:view?.cycle_filter}).flatMap(g=>g.cycleId?[g.cycleId]:[]) : null};
   const scope = JSON.stringify([view?.id,request]);
   const meta = entityMeta(Entity.item,Entity.cycle,Entity.view,Entity.team,Entity.member,Entity.field,Entity.project,Entity.accessGrant);
-  const summary = useQuery({queryKey:["board-summary",scope],meta,enabled,staleTime:BOARD_STALE_MS,
-    queryFn:({signal})=>api.get<Page>(`/items/grouped?${paramsOf({...request,summary_only:true})}`,{signal})});
+  // ONE request draws a plain board (RADD-1545): totals, labels and each
+  // column's first cards together, and the cards are filed under the same cache
+  // keys the per-column windows use, so a column scrolling into view finds its
+  // first window already there. It used to be a summary plus one request per
+  // visible column, each paying the full request overhead. Lanes multiply the
+  // cells, and a hidden column must stay in the directory (the combined read
+  // leaves hidden columns out), so those two keep the summary-then-cells path.
+  const combined = !lane && !(view?.hidden_columns?.length);
+  const firstWindow=(column:string)=>paramsOf({...request,rows_only:true,cursor_mode:true,column_key:column,lane_key:null,after:null,item_limit:PAGE_SIZE});
+  const summary = useQuery({queryKey:["board-summary",scope,combined],meta,enabled,staleTime:BOARD_STALE_MS,
+    queryFn:async({signal})=>{
+      if(!combined) return api.get<Page>(`/items/grouped?${paramsOf({...request,summary_only:true})}`,{signal});
+      const page=await api.get<Page>(`/items/grouped?${paramsOf({...request,directory:true,cursor_mode:true,group_limit:FIRST_COLUMNS,item_limit:PAGE_SIZE})}`,{signal});
+      for(const cell of page.cells) client.setQueryData<Page>(["board-cell-window",scope,firstWindow(cell.column)],{...page,cells:[cell]});
+      return page;
+    }});
   const [requested,setRequested] = useState<{scope:string;cells:Record<string,number>}>({scope,cells:{}});
   const wanted = requested.scope === scope ? requested.cells : {};
   const descriptors = Object.entries(wanted).flatMap(([id,count])=>{

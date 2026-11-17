@@ -51,10 +51,21 @@ def ilike_term(q: str) -> str:
 def _connect_args() -> dict[str, str]:
     """Engine-level idle-in-transaction backstop (RADD-845). Server-side, so it
     catches every leak shape — including ones this codebase hasn't written yet."""
-    if not settings.db_idle_tx_timeout_seconds:
-        return {}
-    ms = settings.db_idle_tx_timeout_seconds * 1000
-    return {"options": f"-c idle_in_transaction_session_timeout={ms}"}
+    options = []
+    if settings.db_idle_tx_timeout_seconds:
+        ms = settings.db_idle_tx_timeout_seconds * 1000
+        options.append(f"-c idle_in_transaction_session_timeout={ms}")
+    if settings.db_force_custom_plans:
+        # RADD-1545. The driver prepares a statement it has run five times, and
+        # PostgreSQL then switches a prepared statement to ONE generic plan for
+        # every parameter value. For "this column's first 25 cards by rank" the
+        # generic plan walks the project's rank index hoping to meet the state:
+        # 15 ms planned for the actual state, 400 ms generic, measured on a
+        # 100k-item project — and only after the connection has warmed up, which
+        # is why it never showed in a quick test. Planning each execution for
+        # its own values costs a fraction of a millisecond and cannot do this.
+        options.append("-c plan_cache_mode=force_custom_plan")
+    return {"options": " ".join(options)} if options else {}
 
 
 engine = create_async_engine(

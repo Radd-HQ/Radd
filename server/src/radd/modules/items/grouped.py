@@ -109,7 +109,7 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
             (WorkItem.estimate_points if points_readable else literal(0.0)).label("points"),
             *(
                 []
-                if data.summary_only
+                if data.summary_only or data.directory
                 else [func.row_number().over(order_by=ranking).label("global_pos")]
             ),
         ).subquery()
@@ -120,7 +120,7 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
             func.coalesce(func.sum(ranked.c.points), 0.0),
         ).group_by(ranked.c.col, ranked.c.lane)
         # Board identity/order comes from its directory, never the first card.
-        if not data.summary_only:
+        if not data.summary_only and not data.directory:
             aggregate = aggregate.order_by(
                 func.min(ranked.c.global_pos), ranked.c.col, ranked.c.lane
             )
@@ -186,6 +186,9 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
             "lane_key",
             "rows_only",
             "summary_only",
+            # Which rows a cell holds does not depend on how they were asked for:
+            # a cursor from the combined read continues a per-column one.
+            "directory",
             "item_offset",
             "item_limit",
             "group_offset",
@@ -226,22 +229,28 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
         rows = fetched[: data.item_limit]
         continued_more = len(fetched) > data.item_limit
     else:
-        selected = selected_query.add_columns(
-            *boundary_columns,
-            func.row_number().over(partition_by=(column, lane), order_by=ranking).label("pos"),
-        ).subquery()
-        rows = list(
-            (
-                await session.execute(
-                    select(selected)
-                    .where(
-                        selected.c.pos > data.item_offset,
-                        selected.c.pos <= data.item_offset + data.item_limit,
+        # One bounded read per chosen cell, each riding whatever index serves the
+        # ranking (RADD-1545). This used to be ONE query numbering every row of
+        # the project by (column, lane) to keep the first few of each: 230 ms on
+        # a 100,864-item project, which is why the board asked for its columns
+        # one request at a time instead. A cell's read is the same statement a
+        # `rows_only` continuation runs, so the two cannot drift apart.
+        rows = []
+        for col, ln, _count, _points in chosen:
+            cell_query = query.where(bucket_filter(data.axis, col, column, data.project_id))
+            if data.lane:
+                cell_query = cell_query.where(bucket_filter(data.lane, ln, lane, data.project_id))
+            if data.item_offset:
+                cell_query = cell_query.offset(data.item_offset)
+            rows += list(
+                (
+                    await session.execute(
+                        cell_query.add_columns(*boundary_columns)
+                        .order_by(*ranking)
+                        .limit(data.item_limit)
                     )
-                    .order_by(selected.c.col, selected.c.lane, selected.c.pos)
-                )
-            ).all()
-        )
+                ).all()
+            )
         continued_more = False
         cursor_position = data.item_offset
 
@@ -285,10 +294,17 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
         )
         for col, ln, count, points in chosen
     ]
-    return GroupPage(
+    page = GroupPage(
         cells=cells,
         total_groups=len(counts),
         column_totals=column_totals,
         lane_totals=lane_totals,
         column_points=column_points,
     )
+    if data.directory:
+        from .grouped_labels import board_labels
+
+        page.column_labels, column_refs = await board_labels(session, data.axis, directory_columns)
+        page.lane_labels, lane_refs = await board_labels(session, data.lane, lane_totals)
+        page.epic_refs = column_refs | lane_refs
+    return page
