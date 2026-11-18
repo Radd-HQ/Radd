@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -326,6 +327,15 @@ async def _upgraded_instance_works() -> list[str]:
 # --- fixture ---
 
 
+_PGVECTOR = re.compile(r"^(?:CREATE EXTENSION IF NOT EXISTS|COMMENT ON EXTENSION) vector\b.*\n", re.MULTILINE)
+
+
+def _without_pgvector(dump: str) -> str:
+    """pgvector is optional, and the drill runs on a server without it (RADD-1583):
+    a fixture dumped where it is installed must still load where it is not."""
+    return _PGVECTOR.sub("", dump)
+
+
 def make_fixture() -> int:
     """Dump a seeded database at the CURRENT head. Run it on the release commit,
     commit the file, and the NEXT release's migrations are tested against it."""
@@ -342,7 +352,7 @@ def make_fixture() -> int:
         [*command, "--inserts", "--no-owner", "--no-acl", f"--dbname={url}"],
         check=True, capture_output=True, text=True,
     ).stdout
-    (FIXTURES / FIXTURE_NAME).write_text(dump)
+    (FIXTURES / FIXTURE_NAME).write_text(_without_pgvector(dump))
     (FIXTURES / FIXTURE_KEY_NAME).write_bytes(Path(os.environ["RADD_BACKUP_KEY_FILE"]).read_bytes())
     _say(f"wrote {FIXTURES / FIXTURE_NAME} ({len(dump) // 1024} KiB)")
     return 0
