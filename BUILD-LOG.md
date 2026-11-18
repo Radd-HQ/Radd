@@ -39,6 +39,18 @@ Left out on purpose: recording issue views as a relevance signal, a hard daily c
 flagged, not refused), and a read-only calendar of another person's week (a row opens to its days
 and entries instead, which works for a month as well as a week).
 
+Follow-ups the same day, five issues (RADD-1576 to 1580), from the "not done" list of the first
+report. RADD-1576: a team's owner and managers see their own team's time without `timesheet.view`
+(`visible_user_ids` widens only when they ASK for someone; `GET /timesheet/teams`). RADD-1577:
+part-day leave lowers a day's expected hours by its overlap with the working window; the
+`timesheetAnnotations` contract gained `awayFrom`/`awayUntil`, and there is a new setting for the
+hour the working day starts. RADD-1578: planning-only edits and watching no longer count as
+"acted on" (two tunables in `config.py`). RADD-1579: My Work offers a new suggested widget once
+to people with a stored layout (`OFFERED_KINDS` in `dashboards/personal.py`); widget rows take two
+lines. RADD-1580: `scripts/run-proofs.sh` and `npm run test:proofs` run the three real-backend
+proofs (81 checks), and `checks.yaml` has a `proofs` job that calls the script. The job has not
+run on a runner yet; the script it calls passed locally on a fresh database.
+
 ### Performance and usability, second pass — epic RADD-1548 (2026-11-17), on main, unreleased
 
 After the readiness wave Hussein asked for another pass, for a plan he could skim, then: "do all of

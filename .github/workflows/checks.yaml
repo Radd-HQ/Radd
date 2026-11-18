@@ -120,6 +120,56 @@ jobs:
         working-directory: server
         run: uv run python scripts/drills.py upgrade
 
+  # RADD-1580: the proofs that need a REAL backend. `npm run check` drives a
+  # fixture API with no database; these log real worklogs and read them back,
+  # which is the only thing that shows the time-logging surfaces still work
+  # end to end. scripts/run-proofs.sh is the whole procedure, so the job and a
+  # laptop run the same commands.
+  proofs:
+    name: proofs (real backend, Chromium)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: radd
+          POSTGRES_PASSWORD: radd
+          POSTGRES_DB: radd_proofs
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U radd -d radd_proofs"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: server/uv.lock
+      - name: Install the server
+        working-directory: server
+        run: uv sync --locked
+      - name: Install the web workspace
+        working-directory: web
+        run: npm ci
+      # The host AND the plugin remotes: the Team proof reads leave through the
+      # leave plugin's own UI bundle.
+      - name: Build the SPA and the plugin UIs
+        working-directory: web
+        run: npm run build:all
+      - name: Run the proofs
+        env:
+          RADD_PROOF_DATABASE_URL: postgresql+psycopg://radd:radd@localhost:5432/radd_proofs
+          RADD_CHROME: /usr/bin/google-chrome
+        run: sh scripts/run-proofs.sh
+
   frontend:
     name: frontend (tests, host + plugin builds, Chromium smoke)
     runs-on: ubuntu-latest

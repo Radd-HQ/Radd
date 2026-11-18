@@ -60,6 +60,12 @@ pattern for driving headless Chromium and measuring the result, and
 on three debug ports editing one page). Several bugs have shipped past a
 green build because nobody looked at the output.
 
+Some proofs need a real backend, because what they assert on is a row the app
+wrote (a worklog, a team's roster). `sh scripts/run-proofs.sh` migrates an
+EMPTY throwaway database named by `RADD_PROOF_DATABASE_URL`, seeds an admin,
+starts the app and runs them (`npm run test:proofs`); build the SPA first with
+`npm run build:all`. The `proofs` job in CI runs the same script.
+
 ## What a good change looks like
 
 The conventions in `CLAUDE.md` are not stylistic preferences; they are what
