@@ -574,6 +574,10 @@ class Settings(BaseSettings):
     timesheet_attention_low_percent: int = 75
     timesheet_attention_high_percent: int = 125
     timesheet_attention_days_percent: int = 75
+    # The hour a working day starts (RADD-1577). With `timelog_hours_per_day` it
+    # is the window a day's hours are expected in (09:00-17:00), which is what
+    # part-day leave is subtracted from on the Team view.
+    timesheet_work_day_start_hour: int = Field(default=9, ge=0, le=23)
     # What one timesheet request may ask for (RADD-1540). The sheet returns one
     # entry per time log, so an open-ended window is the whole table: a year for
     # everyone was 340k rows built as objects on the request path. A request past

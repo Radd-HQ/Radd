@@ -20,7 +20,10 @@ function annotate(p: Calendar, index: number): TimesheetAnnotation[] {
   if (!isTimed(p)) return [{ ...common, id: `${index}`, start: p.start_date, end: p.end_date, title: base }];
   return Array.from(days(p.start_date, p.end_date), day => {
     const note = dayNote(p, day);
-    return { ...common, id: `${index}:${day}`, start: day, end: day, title: note ? `${base}, ${note}${zoneSuffix(p.timezone, true)}` : base };
+    // The boundary days are away for part of the day (RADD-1577); the days between are whole.
+    const awayFrom = day === p.start_date && p.start_time ? hm(p.start_time) : undefined;
+    const awayUntil = day === p.end_date && p.end_time ? hm(p.end_time) : undefined;
+    return { ...common, id: `${index}:${day}`, start: day, end: day, awayFrom, awayUntil, title: note ? `${base}, ${note}${zoneSuffix(p.timezone, true)}` : base };
   });
 }
 

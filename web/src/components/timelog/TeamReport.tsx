@@ -17,7 +17,7 @@ import { QueryError } from "../QueryError";
 import { Select } from "../Select";
 import { Spinner } from "../Spinner";
 import { durationText } from "./model";
-import { TeamFlag, teamRows, type TeamDay, type TeamFlagValue, type TeamRow } from "./team";
+import { TeamFlag, awayHours, teamRows, type TeamDay, type TeamFlagValue, type TeamRow } from "./team";
 
 const PERIODS: { value: TimesheetPeriodValue; label: string }[] = [
   { value: TimesheetPeriod.week, label: "Week" },
@@ -83,23 +83,27 @@ export function TeamReport({
   const rows = useMemo(() => {
     const data = sheet.data;
     if (!data) return [];
-    // Leave and holidays: the days nothing is expected of a person.
-    const exempt = new Map<string, Set<string>>();
+    const window = { dayStartHour: data.work_day_start_hour, hoursPerDay: data.hours_per_day };
+    // Leave and holidays: the hours each takes from a person's days. Several
+    // on one day add up; a whole day is a whole day whatever else is on it.
+    const off = new Map<string, Map<string, number>>();
     for (const note of annotations) {
       if (!note.suppressOutlier) continue;
       const from = note.start > start ? note.start : start;
       const to = note.end < end ? note.end : end;
-      const set = exempt.get(note.personId) ?? new Set<string>();
-      for (const day of daysInRange(from, to)) set.add(day);
-      exempt.set(note.personId, set);
+      const hoursOff = awayHours({ from: note.awayFrom, until: note.awayUntil }, window);
+      const mine = off.get(note.personId) ?? new Map<string, number>();
+      for (const day of daysInRange(from, to)) mine.set(day, (mine.get(day) ?? 0) + hoursOff);
+      off.set(note.personId, mine);
     }
-    return teamRows(data.people ?? [], days, data.entries, exempt, {
+    return teamRows(data.people ?? [], days, data.entries, off, {
       workDays: data.work_days,
       hoursPerDay: data.hours_per_day,
       dayMaxHours: data.day_max_hours,
       lowPercent: data.attention_low_percent,
       highPercent: data.attention_high_percent,
       daysPercent: data.attention_days_percent,
+      dayStartHour: data.work_day_start_hour,
       today,
     });
   }, [sheet.data, annotations, days, start, end, today]);
@@ -291,7 +295,9 @@ function dayTitle(day: TeamDay): string {
   if (day.open) return "Not over yet: not judged";
   if (day.long) return "More than a day's maximum";
   if (!day.working) return "Not a working day";
-  return day.seconds === 0 ? "A working day with nothing logged" : "";
+  const part = day.partial ? `Leave for part of the day: ${hours(day.expectedSeconds)} expected` : "";
+  if (day.seconds === 0) return part ? `${part}, nothing logged` : "A working day with nothing logged";
+  return part;
 }
 
 /** The days behind one person's row, and the entries on them: what the
@@ -318,6 +324,7 @@ function PersonDays({
           <li
             key={day.day}
             data-team-day={day.day}
+            data-team-day-expected={day.expectedSeconds}
             title={dayTitle(day) || undefined}
             className={`flex w-16 flex-col items-center rounded-md border bg-base px-1 py-1 ${dayClass(day)}`}
           >
@@ -327,6 +334,11 @@ function PersonDays({
             <span className="text-row font-medium tabular-nums">
               {day.exempt && day.seconds === 0 ? "off" : day.seconds ? hours(day.seconds) : "·"}
             </span>
+            {day.partial && (
+              <span className="text-meta text-fg-muted" data-team-day-part>
+                of {hours(day.expectedSeconds)}
+              </span>
+            )}
           </li>
         ))}
       </ol>

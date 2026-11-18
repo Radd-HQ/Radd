@@ -45,6 +45,7 @@ class SettingKey(StrEnum):
     TIMESHEET_ATTENTION_LOW_PERCENT = "timesheet_attention_low_percent"
     TIMESHEET_ATTENTION_HIGH_PERCENT = "timesheet_attention_high_percent"
     TIMESHEET_ATTENTION_DAYS_PERCENT = "timesheet_attention_days_percent"
+    TIMESHEET_WORK_DAY_START_HOUR = "timesheet_work_day_start_hour"
     WORKFLOW_TRANSITION_MODE = "workflow_transition_mode"
     CSAT_ENABLED = "csat_enabled"
     ESTIMATION_POINTS = "estimation_points"

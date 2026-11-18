@@ -17,13 +17,14 @@ const RULES = {
   lowPercent: 75,
   highPercent: 125,
   daysPercent: 75,
+  dayStartHour: 9,
   today: "2026-11-16",
 };
 const H = 3600;
 const person = { id: "p", name: "Pat" };
 const log = (day, hours, id = "p") => ({ user: { id, name: id }, worked_on: day, time_spent_seconds: hours * H });
 const flags = (row) => row.attention.map((item) => item.flag);
-const none = new Set();
+const none = new Map();
 
 test("eight hours a working day draws no attention", () => {
   const row = team.teamRow(person, WEEK, WEEK.slice(0, 5).map((day) => log(day, 8)), none, RULES);
@@ -58,14 +59,49 @@ test("well under and well over expected are flagged with the figures", () => {
 });
 
 test("leave lowers what is expected, so a short week with leave in it is not flagged", () => {
-  const leave = new Set(["2026-11-12", "2026-11-13"]);
+  const leave = new Map([["2026-11-12", team.WHOLE_DAY], ["2026-11-13", team.WHOLE_DAY]]);
   const row = team.teamRow(person, WEEK, WEEK.slice(0, 3).map((day) => log(day, 8)), leave, RULES);
   assert.equal(row.expectedSeconds, 24 * H);
   assert.equal(row.workingDays, 3);
   assert.deepEqual(flags(row), []);
-  const whole = team.teamRow(person, WEEK, [], new Set(WEEK), RULES);
+  const whole = team.teamRow(person, WEEK, [], new Map(WEEK.map((day) => [day, team.WHOLE_DAY])), RULES);
   assert.equal(whole.percent, null);
   assert.deepEqual(flags(whole), []); // a week of leave with nothing logged is as it should be
+});
+
+test("leave for part of a day takes its overlap with the working window, not the day", () => {
+  // 8h from 09:00: the window is 09:00-17:00.
+  assert.equal(team.awayHours({ from: "13:00" }, RULES), 4);
+  assert.equal(team.awayHours({ until: "12:00" }, RULES), 3);
+  assert.equal(team.awayHours({ from: "10:00", until: "12:00" }, RULES), 2);
+  assert.equal(team.awayHours({ from: "18:00" }, RULES), 0); // an evening is not working time
+  assert.equal(team.awayHours({ from: "08:00", until: "17:30" }, RULES), team.WHOLE_DAY);
+  assert.equal(team.awayHours({}, RULES), team.WHOLE_DAY);
+  // A later, shorter day moves the window with it.
+  assert.equal(team.awayHours({ from: "13:00" }, { dayStartHour: 10, hoursPerDay: 6 }), 3);
+});
+
+test("a half day expects half, and a half day with nothing on it is a day missed", () => {
+  const friday = "2026-11-13";
+  const off = new Map([[friday, 4]]);
+  const worked = team.teamRow(person, WEEK, [...WEEK.slice(0, 4).map((day) => log(day, 8)), log(friday, 4)], off, RULES);
+  assert.equal(worked.expectedSeconds, 36 * H);
+  assert.equal(worked.percent, 100);
+  assert.equal(worked.workingDays, 5); // still a working day
+  assert.deepEqual(flags(worked), []);
+  const tile = worked.days.find((day) => day.day === friday);
+  assert.equal(tile.partial, true);
+  assert.equal(tile.exempt, false);
+  assert.equal(tile.expectedSeconds, 4 * H);
+
+  const skipped = team.teamRow(person, WEEK, WEEK.slice(0, 4).map((day) => log(day, 8)), off, RULES);
+  assert.equal(skipped.daysLogged, 4);
+  assert.equal(skipped.percent, 89); // 32h of 36h: the morning counts against them
+
+  // Two absences on one day add up to the whole of it.
+  const both = team.teamRow(person, WEEK, [], new Map([[friday, 4 + 4]]), RULES);
+  assert.equal(both.days.find((day) => day.day === friday).exempt, true);
+  assert.equal(both.workingDays, 4);
 });
 
 test("days that are not over yet are shown and never judged", () => {

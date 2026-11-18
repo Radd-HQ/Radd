@@ -129,6 +129,7 @@ export interface Timesheet {
   attention_low_percent: number;
   attention_high_percent: number;
   attention_days_percent: number;
+  work_day_start_hour: number;
 }
 
 /** Why an issue is on a person's "my tickets" list (RADD-1572) — the server's `TicketReason`. */

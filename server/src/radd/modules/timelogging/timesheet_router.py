@@ -74,6 +74,10 @@ async def get_timesheet(
     sheet.attention_days_percent = int(
         await settings_service.resolve(session, SettingKey.TIMESHEET_ATTENTION_DAYS_PERCENT)
     )
+    sheet.work_day_start_hour = min(
+        23,
+        max(0, int(await settings_service.resolve(session, SettingKey.TIMESHEET_WORK_DAY_START_HOUR))),
+    )
     return sheet
 
 

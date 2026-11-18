@@ -411,7 +411,7 @@ Owns `worklogs` (booked to a `worked_on` date; itemless ones need a category), `
 
 - **Events:** `worklog.created`, `worklog.updated`, `worklog.estimate_changed`, `worklog.deleted`, `work_category.created`, `work_category.updated`, `project.timelogging_changed`
 - **Permissions:** `worklog.write (project)`, `worklog.delete (project)`, `timesheet.view (global)`
-- **Settings:** `work_week_days (instance/project)`, `timelog_hours_per_day (instance)`, `timesheet_day_min_hours (instance)`, `timesheet_day_max_hours (instance)`, `timesheet_attention_low_percent (instance)`, `timesheet_attention_high_percent (instance)`, `timesheet_attention_days_percent (instance)`
+- **Settings:** `work_week_days (instance/project)`, `timelog_hours_per_day (instance)`, `timesheet_day_min_hours (instance)`, `timesheet_day_max_hours (instance)`, `timesheet_attention_low_percent (instance)`, `timesheet_attention_high_percent (instance)`, `timesheet_attention_days_percent (instance)`, `timesheet_work_day_start_hour (instance)`
 - **Access:** relations `worklog@own`
 - **Contributes:** MCP tools `log_work`, `update_worklog`, `delete_worklog`, `list_worklogs`; SLQ fields `logged_by`; nav facts `timesheet`
 - **Data:** audit links `work_category`; record-local entities `worklog`, `item_estimate`; project purges `timelogging`

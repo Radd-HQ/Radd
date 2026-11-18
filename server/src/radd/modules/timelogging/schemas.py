@@ -217,3 +217,5 @@ class Timesheet(BaseModel):
     attention_low_percent: int = 75
     attention_high_percent: int = 125
     attention_days_percent: int = 75
+    # RADD-1577: the hour the working day starts, for part-day leave.
+    work_day_start_hour: int = 9

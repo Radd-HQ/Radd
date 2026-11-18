@@ -9,6 +9,9 @@
  *
  * Only COMPLETED days are judged. A day still being worked always reads short,
  * and a period that has only just begun would flag everyone.
+ *
+ * Leave lowers what a day expects by the hours it takes from the working
+ * window (RADD-1577): a whole day off expects nothing, a half day expects half.
  */
 import { durationText, isWorkingDay } from "./model";
 
@@ -44,6 +47,9 @@ export interface TeamRules {
   highPercent: number;
   /** Time on fewer than this percent of the working days draws attention. */
   daysPercent: number;
+  /** The hour the working day starts: with `hoursPerDay`, the window part-day
+   *  leave is subtracted from. */
+  dayStartHour: number;
   /** Today, as an ISO date: days from here on are not judged yet. */
   today: string;
 }
@@ -52,8 +58,12 @@ export interface TeamDay {
   day: string;
   seconds: number;
   working: boolean;
-  /** Leave or a holiday: nothing is expected of it. */
+  /** What the day expects: a working day's hours, less any leave on it. */
+  expectedSeconds: number;
+  /** Leave or a holiday covers the working day: nothing is expected of it. */
   exempt: boolean;
+  /** Leave covers part of it (RADD-1577): less is expected, not nothing. */
+  partial: boolean;
   /** Not over yet (today or later): shown, never judged. */
   open: boolean;
   long: boolean;
@@ -91,12 +101,42 @@ function dayName(iso: string): string {
   });
 }
 
-/** One person's period. `exempt` is the days nothing is expected of them. */
+/** A time away on one day, "HH:MM" wall clock; an absent bound is that end of the day. */
+export interface Away {
+  from?: string;
+  until?: string;
+}
+
+/** Hours off per day; `WHOLE_DAY` when nothing is expected of it at all. */
+export type TimeOff = ReadonlyMap<string, number>;
+export const WHOLE_DAY = Number.POSITIVE_INFINITY;
+
+const minutes = (clock: string): number => {
+  const [hour, minute] = clock.split(":").map(Number);
+  return (hour || 0) * 60 + (minute || 0);
+};
+
+/**
+ * How many of a working day's hours a time away takes (RADD-1577): its overlap
+ * with the window the day's hours are expected in. A whole-day absence, or one
+ * that covers the window, is `WHOLE_DAY`.
+ */
+export function awayHours(away: Away, rules: Pick<TeamRules, "dayStartHour" | "hoursPerDay">): number {
+  if (!away.from && !away.until) return WHOLE_DAY;
+  const opens = rules.dayStartHour * 60;
+  const closes = opens + rules.hoursPerDay * 60;
+  const from = Math.max(opens, away.from ? minutes(away.from) : 0);
+  const until = Math.min(closes, away.until ? minutes(away.until) : 24 * 60);
+  const off = Math.max(0, until - from) / 60;
+  return off >= rules.hoursPerDay ? WHOLE_DAY : off;
+}
+
+/** One person's period. `off` is the hours leave or a holiday takes from each day. */
 export function teamRow(
   person: { id: string; name: string },
   days: string[],
   entries: TeamEntry[],
-  exempt: ReadonlySet<string>,
+  off: TimeOff,
   rules: TeamRules,
 ): TeamRow {
   const perDay = new Map<string, number>();
@@ -108,11 +148,15 @@ export function teamRow(
   const breakdown: TeamDay[] = days.map((day) => {
     const seconds = perDay.get(day) ?? 0;
     const open = day >= rules.today;
+    const working = isWorkingDay(day, rules.workDays);
+    const away = Math.min(off.get(day) ?? 0, rules.hoursPerDay);
     return {
       day,
       seconds,
-      working: isWorkingDay(day, rules.workDays),
-      exempt: exempt.has(day),
+      working,
+      expectedSeconds: working ? Math.round((rules.hoursPerDay - away) * 3600) : 0,
+      exempt: away >= rules.hoursPerDay,
+      partial: working && away > 0 && away < rules.hoursPerDay,
       open,
       long: !open && seconds > maxSeconds,
     };
@@ -121,7 +165,7 @@ export function teamRow(
   const judged = breakdown.filter((day) => !day.open);
   const expectedOf = judged.filter((day) => day.working && !day.exempt);
   const loggedSeconds = judged.reduce((sum, day) => sum + day.seconds, 0);
-  const expectedSeconds = expectedOf.length * rules.hoursPerDay * 3600;
+  const expectedSeconds = expectedOf.reduce((sum, day) => sum + day.expectedSeconds, 0);
   const daysLogged = expectedOf.filter((day) => day.seconds > 0).length;
   const percent = expectedSeconds ? Math.round((loggedSeconds / expectedSeconds) * 100) : null;
 
@@ -195,14 +239,14 @@ export function teamRows(
   people: { id: string; name: string }[],
   days: string[],
   entries: TeamEntry[],
-  exempt: ReadonlyMap<string, ReadonlySet<string>>,
+  off: ReadonlyMap<string, TimeOff>,
   rules: TeamRules,
 ): TeamRow[] {
   const roster = new Map(people.map((person) => [person.id, person]));
   for (const entry of entries) if (!roster.has(entry.user.id)) roster.set(entry.user.id, entry.user);
-  const none: ReadonlySet<string> = new Set();
+  const none: TimeOff = new Map();
   return [...roster.values()]
-    .map((person) => teamRow(person, days, entries, exempt.get(person.id) ?? none, rules))
+    .map((person) => teamRow(person, days, entries, off.get(person.id) ?? none, rules))
     .sort(
       (a, b) =>
         Number(b.attention.length > 0) - Number(a.attention.length > 0) ||

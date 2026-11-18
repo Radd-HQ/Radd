@@ -168,6 +168,19 @@ plugin = RaddPlugin(
             section="timelogging",
             page_scopes=("instance", "project"),
         ),
+        SettingSpec(
+            key="timesheet_work_day_start_hour",
+            type="int",
+            scopes=("instance",),
+            label="Working day starts at (hour, 0-23)",
+            description=(
+                "With 'Hours per working day' this is the window a day's hours are expected "
+                "in (9 and 8 hours: 09:00 to 17:00). Leave that covers part of a day lowers "
+                "what the Team timesheet expects by its overlap with that window."
+            ),
+            section="timelogging",
+            page_scopes=("instance", "project"),
+        ),
     ),
     description=(
         "Time logging: worklogs, estimates and the timesheet."

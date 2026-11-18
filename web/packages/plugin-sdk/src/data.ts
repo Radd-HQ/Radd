@@ -18,6 +18,11 @@ export interface TimesheetAnnotation extends StatusIndicator {
   start: string;
   end: string;
   suppressOutlier: boolean;
+  /** Wall-clock "HH:MM" bounds when the annotation covers only PART of its
+   *  day(s): away from `awayFrom` and/or until `awayUntil`. Both absent means
+   *  the whole day, so a provider that knows nothing of times keeps its meaning. */
+  awayFrom?: string;
+  awayUntil?: string;
 }
 export interface DataContracts {
   personIndicators: { args: Record<string, never>; result: PersonIndicator[] };

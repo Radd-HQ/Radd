@@ -157,13 +157,16 @@ commits and will not say them this plainly.
   noticeable on a few thousand issues. The app is down for that time.
 - **`/timesheet` opens on "My week"**, a calendar for entering time. The grid
   it used to be is the **Report** tab; links with filters in them still open it.
-- **`/timesheet` has a Team tab** for people who hold `timesheet.view`: one row
-  per member of a team for a week or a month, logged against expected, with a
-  flag and its reason on logging that is not believable (a week booked on one
-  day, a day over the daily maximum, nothing at all). Expected is the working
-  days times "Hours per working day", less leave and holidays. The three
-  thresholds are under Settings → Time logging (75 %, 125 %, and time on at
-  least 75 % of the working days); only days that are over are judged.
+- **`/timesheet` has a Team tab**: one row per member of a team for a week or
+  a month, logged against expected, with a flag and its reason on logging that
+  is not believable (a week booked on one day, a day over the daily maximum,
+  nothing at all). People who hold `timesheet.view` can open any team; a
+  team's owner and managers can open their own team without it, and see no
+  other time. Expected is the working days times "Hours per working day", less
+  leave and holidays. Leave for part of a day takes only its overlap with the
+  working day, which starts at "Working day starts at" (09:00 by default). The
+  three thresholds are under Settings → Time logging (75 %, 125 %, and time on
+  at least 75 % of the working days); only days that are over are judged.
 - **A failed background handler is no longer silent.** Events a worker could
   not process are retried and then listed under Settings → Monitoring. An empty
   list is the normal state; a growing one is something that was being lost

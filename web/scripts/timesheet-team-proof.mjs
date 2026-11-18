@@ -2,22 +2,24 @@
 /**
  * RADD-1574 proof — the timesheet's Team tab, in a real browser against a real backend.
  *
- * Four people in one team, last week (a complete one):
+ * Five people in one team, last week (a complete one):
  *   - Bulk   booked the whole week, 40h, on Friday
  *   - Silent logged nothing
  *   - Steady logged 8h a day
  *   - Away   logged 8h Monday to Wednesday and was on leave Thursday and Friday
+ *   - Half   logged 8h Monday to Thursday, 4h on Friday, and was on leave Friday from 13:00
  *
  *   1. /timesheet has a Team tab for someone who may see others' time
- *   2. it lists all four — Silent included, who has no time at all
+ *   2. it lists all five — Silent included, who has no time at all
  *   3. Bulk is flagged for booking the week on one day AND for a 40h day, with the figures in words
  *   4. Silent is flagged for nothing logged
  *   5. Steady and Away are not flagged; Away's leave lowered what was expected of them
+ *      and Half's afternoon off lowered Friday to 4h, not to nothing (RADD-1577)
  *   6. the people to follow up come first, and the header counts them
  *   7. opening a row shows the days behind it; the report opens filtered to that person
  *   8. the flag text is legible (4.5:1) and nothing scrolls sideways
  *   9. a member who may not see others' time gets no tab and no roster
- *  10. the team's manager, who holds no timesheet.view, gets the tab, their team only, all four
+ *  10. the team's manager, who holds no timesheet.view, gets the tab, their team only, all five
  *      rows with the same flags, and none of an outsider's time (RADD-1576)
  *
  *   node web/scripts/timesheet-team-proof.mjs http://127.0.0.1:8000 admin@example.com change-me
@@ -61,7 +63,7 @@ async function main() {
       const item = (await api("POST", "/items", { project_id: project.id, title: "shot work" })).body;
       const team = (await api("POST", "/teams", { name: ${JSON.stringify(`Team proof ${STAMP}`)} })).body;
       const people = {};
-      for (const name of ["Bulk", "Silent", "Steady", "Away"]) {
+      for (const name of ["Bulk", "Silent", "Steady", "Away", "Half"]) {
         const user = (await api("POST", "/users", { email: name.toLowerCase() + "-${STAMP}@example.test", name: name + " ${STAMP}", password: "change-me-too" })).body;
         people[name] = user;
         await api("POST", "/teams/" + team.id + "/members", { user_id: user.id });
@@ -73,13 +75,17 @@ async function main() {
       await log("Bulk", ${JSON.stringify(FRI)}, "40h");
       for (const day of ${JSON.stringify([MON, TUE, WED, THU, FRI])}) await log("Steady", day, "8h");
       for (const day of ${JSON.stringify([MON, TUE, WED])}) await log("Away", day, "8h");
+      for (const day of ${JSON.stringify([MON, TUE, WED, THU])}) await log("Half", day, "8h");
+      await log("Half", ${JSON.stringify(FRI)}, "4h");
+      const half = await api("POST", "/leave", { user_id: people.Half.id, label: "Appointment", start_date: ${JSON.stringify(FRI)}, end_date: ${JSON.stringify(FRI)}, start_time: "13:00:00" });
+      statuses.push(half.status);
       const leave = await api("POST", "/leave", { user_id: people.Away.id, label: "Holiday", start_date: ${JSON.stringify(THU)}, end_date: ${JSON.stringify(FRI)} });
       // An outsider's hour: the admin is on no team the lead manages.
       const me = (await api("GET", "/auth/me")).body;
       statuses.push((await api("POST", "/items/" + item.id + "/worklogs", { time_spent: "1h", worked_on: ${JSON.stringify(MON)} })).status);
       return { project, team, people, lead, managed, me, statuses, leave: leave.status };
     })()`);
-    check("setup: a team of four, their time and two days of leave", made.statuses.every((status) => status === 201) && made.leave === 201, JSON.stringify({ statuses: made.statuses, leave: made.leave }));
+    check("setup: a team of five, their time, two days of leave and an afternoon off", made.statuses.every((status) => status === 201) && made.leave === 201, JSON.stringify({ statuses: made.statuses, leave: made.leave }));
 
     await session.navigate(`${baseUrl}/timesheet`, 2000);
     const tab = await session.eval(`Boolean(document.querySelector("[data-timesheet-mode='team']"))`);
@@ -95,12 +101,12 @@ async function main() {
     for (let i = 0; i < 80; i += 1) {
       rows = await session.eval(READ);
       // Leave arrives from the plugin's own data source a moment after the sheet.
-      if (rows.length === 4 && rows.find((row) => row.name.startsWith("Away"))?.expected === "24h") break;
+      if (rows.length === 5 && rows.find((row) => row.name.startsWith("Away"))?.expected === "24h" && rows.find((row) => row.name.startsWith("Half"))?.expected === "36h") break;
       await sleep(150);
     }
     context.rows = rows;
     const of = (name) => rows.find((row) => row.name.startsWith(name)) ?? {};
-    check("all four people are listed, the one with no time included", rows.length === 4 && Boolean(of("Silent").id), JSON.stringify(rows.map((row) => row.name)));
+    check("all five people are listed, the one with no time included", rows.length === 5 && Boolean(of("Silent").id), JSON.stringify(rows.map((row) => row.name)));
     check("a week booked on one day is flagged for too few days and for the day itself", of("Bulk").flags === "few_days,long_day", of("Bulk").flags);
     check("…with the figures in words", /Time on 1 of 5 working days; 40h of it on /.test(of("Bulk").reasons?.[0] ?? "") && /1 day over 10h: .*\(40h\)/.test(of("Bulk").reasons?.[1] ?? ""), JSON.stringify(of("Bulk").reasons));
     check("…although the total is exactly what was expected", of("Bulk").logged === "40h" && of("Bulk").expected === "40h", JSON.stringify(of("Bulk")));
@@ -108,9 +114,9 @@ async function main() {
     check("eight hours a day is not flagged", of("Steady").flags === "" && of("Steady").logged === "40h", JSON.stringify(of("Steady")));
     check("two days of leave lower what is expected (24h), and the short week is not flagged", of("Away").expected === "24h" && of("Away").logged === "24h" && of("Away").flags === "", JSON.stringify(of("Away")));
     const order = rows.map((row) => Boolean(row.flags));
-    check("people to follow up are listed first", JSON.stringify(order) === JSON.stringify([true, true, false, false]), JSON.stringify(rows.map((row) => `${row.name.split(" ")[0]}:${row.flags}`)));
+    check("people to follow up are listed first", JSON.stringify(order) === JSON.stringify([true, true, false, false, false]), JSON.stringify(rows.map((row) => `${row.name.split(" ")[0]}:${row.flags}`)));
     const summary = await session.eval(`document.querySelector("[data-team-summary]")?.textContent ?? ""`);
-    check("the header counts them", /2 of 4 to follow up/.test(summary), summary);
+    check("the header counts them", /2 of 5 to follow up/.test(summary), summary);
 
     // 7 — the days behind a row
     await session.eval(`document.querySelector("[data-team-row='${of("Bulk").id}'] button").click()`);
@@ -121,6 +127,14 @@ async function main() {
     await sleep(300);
     const away = await session.eval(`Object.fromEntries([...document.querySelectorAll("[data-team-detail='${of("Away").id}'] [data-team-day]")].map((n) => [n.dataset.teamDay, n.lastElementChild.textContent]))`);
     check("a day of leave reads as off, not as a gap", away[THU] === "off" && away[FRI] === "off" && away[MON] === "8h", JSON.stringify(away));
+
+    check("an afternoon of leave lowers Friday to 4h expected (36h for the week), and the half day worked is not flagged", of("Half").expected === "36h" && of("Half").logged === "36h" && of("Half").flags === "", JSON.stringify(of("Half")));
+    await session.eval(`document.querySelector("[data-team-row='${of("Half").id}'] button").click()`);
+    await sleep(300);
+    const half = await session.eval(`(() => { const n = document.querySelector("[data-team-detail='${of("Half").id}'] [data-team-day='${FRI}']"); return n ? { expected: n.dataset.teamDayExpected, part: n.querySelector("[data-team-day-part]")?.textContent ?? "", title: n.title, text: n.textContent } : null; })()`);
+    check("…and its tile says so: 4h logged of 4h, not off", half?.expected === "14400" && /of 4h/.test(half.part) && /part of the day/.test(half.title) && !/off$/.test(half.text), JSON.stringify(half));
+    await session.eval(`document.querySelector("[data-team-row='${of("Away").id}'] button").click()`);
+    await sleep(300);
 
     // 8 — legibility and layout
     const ink = await session.eval(`(() => {
@@ -141,6 +155,12 @@ async function main() {
     const report = await session.eval(`({ selected: document.querySelector("[data-timesheet-mode='report']")?.getAttribute("aria-selected"), search: location.search, text: document.body.innerText })`);
     check("the report opens filtered to that person", report.selected === "true" && report.search.includes(of("Away").id) && report.text.includes("Away") && !report.text.includes(`Steady ${STAMP}`), JSON.stringify({ selected: report.selected, search: report.search }));
 
+    // The rules above are settings an admin can see and change.
+    await session.navigate(`${baseUrl}/settings/timelogging`, 2500);
+    let labels = "";
+    for (let i = 0; i < 40; i += 1) { labels = await session.eval(`document.body.innerText`); if (/Working day starts at/.test(labels)) break; await sleep(150); }
+    check("Settings → Time logging lists the three thresholds and the working day's start", ["flag under this percent of expected", "flag over this percent of expected", "fewer than this percent of working days", "Working day starts at"].every((label) => labels.includes(label)), labels.slice(0, 200));
+
     // 9 — someone who may NOT see others' time: no tab, and the roster is not theirs to read
     await session.login(baseUrl, `steady-${STAMP}@example.test`, "change-me-too");
     await session.navigate(`${baseUrl}/timesheet?m=team&tm=${made.team.id}&d=${MON}`, 2000);
@@ -158,7 +178,7 @@ async function main() {
     let led = [];
     for (let i = 0; i < 80; i += 1) {
       led = await session.eval(READ);
-      if (led.length === 4 && led.find((row) => row.name.startsWith("Away"))?.expected === "24h") break;
+      if (led.length === 5 && led.find((row) => row.name.startsWith("Away"))?.expected === "24h") break;
       await sleep(150);
     }
     const lead = await session.eval(`(async () => { ${PAGE_API}
@@ -175,7 +195,7 @@ async function main() {
     const ledOf = (name) => led.find((row) => row.name.startsWith(name)) ?? {};
     check("the lead holds no timesheet.view", lead.view === false, JSON.stringify(lead.view));
     check("the lead gets the Team tab and is offered their own team, and only it", lead.tab && lead.teams.length === 1 && lead.teams[0] === made.team.id && lead.picker.includes("Team proof"), JSON.stringify({ tab: lead.tab, teams: lead.teams, picker: lead.picker }));
-    check("the lead sees all four members with the same flags", led.length === 4 && ledOf("Bulk").flags === "few_days,long_day" && ledOf("Silent").flags === "nothing" && ledOf("Steady").logged === "40h", JSON.stringify(led.map((row) => `${row.name.split(" ")[0]}:${row.logged}:${row.flags}`)));
+    check("the lead sees all five members with the same flags", led.length === 5 && ledOf("Bulk").flags === "few_days,long_day" && ledOf("Silent").flags === "nothing" && ledOf("Steady").logged === "40h", JSON.stringify(led.map((row) => `${row.name.split(" ")[0]}:${row.logged}:${row.flags}`)));
     check("the lead gets none of an outsider's time, and an unfiltered sheet stays their own", lead.outsider === 0 && lead.unasked.length === 0, JSON.stringify({ outsider: lead.outsider, unasked: lead.unasked }));
     await session.login(baseUrl, email, password);
     const admin = await session.eval(`(async () => { ${PAGE_API} return ((await api("GET", "/timesheet?start=${MON}&end=${FRI}&user_id=${made.me.id}")).body.entries ?? []).length; })()`);
