@@ -8,6 +8,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base
 
+from .types import FailureStatus
+
 
 #: `pg_current_xact_id()` is an xid8; through text it is a plain bigint, which is
 #: what a cursor column and a row-value comparison want.
@@ -44,7 +46,7 @@ class ConsumerFailure(Base):
     #: Plain id, no FK: the ledger may be pruned under a failure row, and a
     #: failure whose event is gone is simply dropped at the next attempt.
     event_id: Mapped[int] = mapped_column(BigInteger)
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # FailureStatus
+    status: Mapped[str] = mapped_column(String(20), default=FailureStatus.PENDING.value)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str] = mapped_column(Text, default="")
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

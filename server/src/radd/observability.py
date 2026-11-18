@@ -145,6 +145,7 @@ async def live_metrics() -> list[str]:
     try:
         from radd.db import SessionLocal
         from radd.modules.events import service as events
+        from radd.modules.events.types import FailureStatus
 
         async with SessionLocal() as session:
             consumers = await events.consumer_status(session)
@@ -162,7 +163,7 @@ async def live_metrics() -> list[str]:
             name = _labels(consumer=row["name"])
             lines.append(f"radd_consumer_lag_events{name} {row['lag']}")
             lines.append(f"radd_consumer_seconds_since_progress{name} {row['seconds_since_update']}")
-            for status in ("pending", "dead"):
+            for status in FailureStatus:
                 lines.append(
                     "radd_consumer_failed_events"
                     f"{_labels(consumer=row['name'], status=status)} {row[f'failed_{status}']}"

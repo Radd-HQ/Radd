@@ -42,7 +42,7 @@ def _base_url(monkeypatch):
 
 
 def test_the_middleware_names_the_real_session_cookie():
-    assert origin_check._SESSION_COOKIE == SESSION_COOKIE_NAME
+    assert origin_check.SESSION_COOKIE_NAME is SESSION_COOKIE_NAME  # one definition, in config
 
 
 async def _post(headers, method="POST"):

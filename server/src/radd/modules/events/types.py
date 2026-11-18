@@ -17,3 +17,10 @@ class EventSource(StrEnum):
     PEOPLE = "people"
     AUTOMATIONS = "automations"
     SYSTEM = "system"
+
+
+class FailureStatus(StrEnum):
+    """Where a consumer's failed event stands (`ConsumerFailure.status`)."""
+
+    PENDING = "pending"  # will be retried at `next_attempt_at`
+    DEAD = "dead"  # out of attempts, or never retried: waits for an operator

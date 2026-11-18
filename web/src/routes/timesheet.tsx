@@ -523,24 +523,24 @@ function TimesheetGrid({
       const workday = flagWorkDays.has(WEEKDAY_KEYS[fromISODate(day).getDay()]);
       if (!suppressOutlier && personMode && done && seconds > maxSeconds) {
         return {
-          className: " bg-red-500/10",
+          className: " bg-status-danger/10",
           title: `Over-logged: ${formatDuration(seconds, durationConfig)} (max ${sheet?.day_max_hours}h)`,
-          content: <span className="font-medium text-red-300">{formatDuration(seconds, durationConfig)}</span>,
+          content: <span className="font-medium text-status-danger-ink">{formatDuration(seconds, durationConfig)}</span>,
         };
       }
       if (!suppressOutlier && personMode && done && workday && seconds < minSeconds) {
         return {
-          className: " bg-amber-500/10",
+          className: " bg-status-warning/10",
           title: `Under-logged: ${
             seconds > 0 ? formatDuration(seconds, durationConfig) : "nothing"
           } (min ${sheet?.day_min_hours}h)`,
           content:
             seconds > 0 ? (
-              <span className="font-medium text-amber-300">
+              <span className="font-medium text-status-warning-ink">
                 {formatDuration(seconds, durationConfig)}
               </span>
             ) : (
-              <span className="text-amber-300/70">·</span>
+              <span className="text-status-warning-ink/70">·</span>
             ),
         };
       }
@@ -594,7 +594,7 @@ function TimesheetGrid({
                       {row.label}
                     </button>
                   ) : row.isCategory ? (
-                    <span className="inline-flex items-center gap-1 rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-px text-meta leading-4 text-amber-200">
+                    <span className="inline-flex items-center gap-1 rounded border border-status-warning/30 bg-status-warning/10 px-1.5 py-px text-meta leading-4 text-status-warning-ink">
                       <Tag size={10} aria-hidden />
                       {row.label}
                     </span>
@@ -635,7 +635,7 @@ function TimesheetGrid({
                   <td className="sticky left-0 z-10 bg-surface/40 px-2 py-1 pl-6 text-fg-secondary">
                     {entryLabel(entry, groupBy)}
                     {entry.category && groupBy !== TimesheetGroupBy.category && (
-                      <span className="ml-1.5 rounded bg-elevated px-1 py-px text-micro text-amber-200/80">
+                      <span className="ml-1.5 rounded bg-elevated px-1 py-px text-micro text-status-warning-ink/80">
                         {entry.category.name}
                       </span>
                     )}
@@ -673,7 +673,7 @@ function TimesheetGrid({
               )}
             </td>
           ))}
-          <td className="tnum px-3 py-2 text-right text-emerald-300">
+          <td className="tnum px-3 py-2 text-right text-status-success-ink">
             {formatDuration(grandTotal, durationConfig)}
           </td>
         </tr>

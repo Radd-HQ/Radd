@@ -26,10 +26,9 @@ from urllib.parse import urlsplit
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from radd.config import settings
+from radd.config import SESSION_COOKIE_NAME, settings
 
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
-_SESSION_COOKIE = "radd_session"  # auth.types.SESSION_COOKIE_NAME; the kernel imports no module
 #: `Sec-Fetch-Site` values a browser sends for a request this instance's own page made,
 #: or that a person started themselves (typed address, bookmark).
 _OWN_FETCH_SITES = frozenset({"same-origin", "none"})
@@ -78,7 +77,7 @@ def allowed(headers: dict[bytes, bytes]) -> bool:
 
 def _has_session(headers: dict[bytes, bytes]) -> bool:
     cookie = headers.get(b"cookie", b"").decode("latin-1")
-    return any(part.strip().startswith(f"{_SESSION_COOKIE}=") for part in cookie.split(";"))
+    return any(part.strip().startswith(f"{SESSION_COOKIE_NAME}=") for part in cookie.split(";"))
 
 
 class OriginCheckMiddleware:

@@ -67,7 +67,7 @@ export function DayColumn(props: DayProps) {
       data-day-seconds={seconds}
       data-day-load={load}
       data-day-target={props.target || undefined}
-      aria-label={`${formatIso(day, { weekday: "long", month: "long", day: "numeric" })}, ${durationText(seconds)} logged`}
+      aria-label={`${formatIso(day, { weekday: "long", month: "long", day: "numeric" })}, ${seconds ? durationText(seconds) : "nothing"} logged`}
       onDragOver={(event) => {
         if (!dragged) return;
         event.preventDefault();

@@ -26,7 +26,7 @@ class ConsumerFailureRead(BaseModel):
     id: int
     consumer: str
     event_id: int
-    status: str  # consumer.FailureStatus
+    status: str  # types.FailureStatus
     attempts: int
     error: str
     next_attempt_at: UtcDatetime | None

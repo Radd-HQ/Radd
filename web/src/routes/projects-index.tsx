@@ -2,7 +2,8 @@ import { PublicProjectChip } from "../components/items/ItemBadges";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { FolderKanban, Plus } from "lucide-react";
-import { RoutePath } from "../lib/constants";
+import { ApiPath, RoutePath } from "../lib/constants";
+import { queryKeys } from "../lib/queries/shared";
 import { usePermissions } from "../lib/hooks";
 import { useProjectDirectory } from "../lib/useProjectDirectory";
 import { DirectoryPager } from "../components/DirectoryPager";
@@ -28,9 +29,9 @@ export function ProjectsIndexPage() {
   // by the page that shows them, not carried on the sidebar's project list.
   const ids = list.map((project) => project.id);
   const stats = useQuery({
-    queryKey: ["projectStats", ids],
+    queryKey: queryKeys.projectStats(ids),
     queryFn: ({ signal }) =>
-      api.get<ProjectStats>(`/items/project-stats?${ids.map((id) => `project_id=${id}`).join("&")}`, { signal }),
+      api.get<ProjectStats>(`${ApiPath.itemsProjectStats}?${ids.map((id) => `project_id=${id}`).join("&")}`, { signal }),
     enabled: ids.length > 0,
     staleTime: 60_000,
   });

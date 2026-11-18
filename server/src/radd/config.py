@@ -1,6 +1,9 @@
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# One name for the session cookie: auth sets it, the origin check (RADD-1547) looks for it.
+SESSION_COOKIE_NAME = "radd_session"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="RADD_", env_file=".env", extra="ignore")

@@ -43,6 +43,7 @@ from radd.db import SessionLocal
 from . import service
 from .models import ConsumerFailure, ConsumerOffset, Event
 from .service import EventCursor
+from .types import FailureStatus
 
 logger = logging.getLogger(__name__)
 
@@ -64,11 +65,6 @@ class FirstStart(StrEnum):
 
     BEGINNING = "beginning"  # work through the backlog (an index, a projection)
     HEAD = "head"  # only what happens from now on (anything that tells people)
-
-
-class FailureStatus(StrEnum):
-    PENDING = "pending"  # will be retried at `next_attempt_at`
-    DEAD = "dead"  # out of attempts, or never retried: waits for an operator
 
 
 Handler = Callable[[AsyncSession, Event], Awaitable[None]]

@@ -2,8 +2,10 @@ import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 
+from radd import config
+
 # Wire-format constants (not tunables — changing them invalidates existing clients/tokens).
-SESSION_COOKIE_NAME = "radd_session"
+SESSION_COOKIE_NAME = config.SESSION_COOKIE_NAME
 PAT_PREFIX = "radd_pat_"
 PAT_PREFIX_DISPLAY_CHARS = 12  # how much of a token the UI may keep showing
 

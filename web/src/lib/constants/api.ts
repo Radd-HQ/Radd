@@ -73,6 +73,7 @@ export const ApiPath = {
   serviceAccounts: "/service-accounts",
   // Batched epic-progress rollup for board/list progress bars.
   itemsRollup: "/items/rollup",
+  itemsProjectStats: "/items/project-stats",
   // Batched estimate/logged seconds (roadmap durations and tints).
   itemsTimelogBatch: "/items/timelog/batch",
   // Bulk operations + the "select all matching" id listing.
