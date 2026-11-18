@@ -20,7 +20,9 @@ from radd.modules.auth.types import InstanceRole
 from radd.modules.comments import service as comments
 from radd.modules.comments.schemas import CommentCreate
 from radd.modules.items import service as items
+from radd.modules.items.enums import Priority
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
+from radd.modules.notify import service as notify
 from radd.modules.projects import service as projects
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.timelogging import mytickets
@@ -108,3 +110,43 @@ async def test_assigned_logged_and_acted_on_are_listed_and_nothing_unreadable(db
     assert tickets[booked.id].my_seconds == 7200
     assert tickets[assigned.id].loggable is False  # time logging is off for the project
     assert tickets[assigned.id].key == f"{mine.key}-{assigned.number}"
+
+
+async def test_planning_only_edits_and_watching_are_not_work_on_an_issue(db):
+    """RADD-1578: triage must not bury what a person worked on."""
+    admin = await _person(db, "admin", InstanceRole.ADMIN)
+    project = await _project(db, "Triage")
+
+    def new(title):
+        return items.create_item(db, ItemCreate(project_id=project.id, title=title), admin)
+
+    triaged = await new("Only re-prioritised and labelled")
+    moved = await new("Moved to another state")
+    both = await new("Re-prioritised and moved in one edit")
+    watched = await new("Only watched")
+    retitled = await new("Retitled")
+    states = await workflow.list_states(db, project.id)
+    done = next(state for state in states if state.category == StateCategory.DONE.value)
+    # A second actor does the acting: `admin` only created the issues.
+    actor = await _person(db, "triager", InstanceRole.ADMIN)
+    await items.update_item(db, triaged.id, ItemUpdate(priority=Priority.HIGH), actor)
+    await items.update_item(db, triaged.id, ItemUpdate(labels=["later"]), actor)
+    await items.update_item(db, moved.id, ItemUpdate(state_id=done.id), actor)
+    await items.update_item(db, both.id, ItemUpdate(priority=Priority.HIGH, state_id=done.id), actor)
+    await items.update_item(db, retitled.id, ItemUpdate(title="Retitled, properly"), actor)
+    await notify.watch(db, watched.id, actor.id)
+    await db.flush()
+
+    tickets = {ticket.id: ticket for ticket in await mytickets.my_tickets(db, actor)}
+
+    assert set(tickets) == {moved.id, both.id, retitled.id}
+    assert tickets[moved.id].reasons == [TicketReason.ACTED]
+    # The premise: with nothing configured as quiet, all five ARE listed, so the
+    # rule above is what removed the other two.
+    before = config.timelog_my_tickets_quiet_fields, config.timelog_my_tickets_quiet_events
+    config.timelog_my_tickets_quiet_fields, config.timelog_my_tickets_quiet_events = [], []
+    try:
+        everything = {ticket.id for ticket in await mytickets.my_tickets(db, actor)}
+    finally:
+        config.timelog_my_tickets_quiet_fields, config.timelog_my_tickets_quiet_events = before
+    assert everything == {triaged.id, moved.id, both.id, watched.id, retitled.id}

@@ -10,6 +10,10 @@ The "acted" read names no event types. It asks the kernel registry which types
 are item-scoped, so a module that adds one is counted without this file
 knowing, and its reason is that type's registered label.
 
+Not everything a person does to an issue is work on it (RADD-1578): an edit
+that only touches planning fields (priority, cycle, labels...) and following
+an issue are skipped, both from tunables in `config.py`.
+
 Viewing an issue is not a signal on purpose: nothing records it, and a write on
 every page open is not worth a tray.
 """
@@ -23,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.clock import utcnow
 from radd.config import settings
-from radd.kernel import registries
+from radd.kernel import changes as kchanges, registries
 from radd.modules.auth import authz
 from radd.modules.auth.models import User
 from radd.modules.events import service as events_service
@@ -55,14 +59,29 @@ class _Candidate:
 
 
 def _acted_event_types() -> list[str]:
-    """Every registered item-scoped event type but this module's own: booking
-    time is the LOGGED reason, with the day it was booked for."""
-    own = {event.value for event in WorklogEvent}
+    """Every registered item-scoped event type but this module's own (booking
+    time is the LOGGED reason, with the day it was booked for) and the ones
+    configured as not being work at all (RADD-1578)."""
+    skipped = {event.value for event in WorklogEvent} | set(
+        settings.timelog_my_tickets_quiet_events
+    )
     return sorted(
         event_type
         for event_type, spec in registries.event_types.items()
-        if spec.item_scoped and event_type not in own
+        if spec.item_scoped and event_type not in skipped
     )
+
+
+def _is_planning_only(payload: dict) -> bool:
+    """Did this event change nothing but planning fields (RADD-1578)? Read from
+    the `changes` list every diffing event carries, so no event type is named.
+    An event with no such list (a comment, an attachment) is never planning; an
+    empty list changed nothing a person would call work."""
+    changed = payload.get(kchanges.CHANGES_KEY)
+    if not isinstance(changed, list):
+        return False
+    quiet = set(settings.timelog_my_tickets_quiet_fields)
+    return all(isinstance(change, dict) and change.get("field") in quiet for change in changed)
 
 
 def _event_item_id(payload: dict) -> uuid.UUID | None:
@@ -124,7 +143,7 @@ async def my_tickets(
     )
     for event in events:  # newest first
         item_id = _event_item_id(event.payload)
-        if item_id is None:
+        if item_id is None or _is_planning_only(event.payload):
             continue
         candidate = found.setdefault(item_id, _Candidate())
         if TicketReason.ACTED not in candidate.at:

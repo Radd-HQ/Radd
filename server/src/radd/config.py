@@ -592,6 +592,17 @@ class Settings(BaseSettings):
     timelog_my_tickets_days: int = Field(default=14, gt=0)
     timelog_my_tickets_events: int = Field(default=300, gt=0)
     timelog_my_tickets_limit: int = Field(default=40, gt=0)
+    # What does NOT count as working on an issue (RADD-1578). An event whose
+    # recorded changes touch only these fields is planning, not work: triaging
+    # thirty issues must not bury the two a person worked on. Field names are
+    # the `changes` list's (items/changes.py).
+    timelog_my_tickets_quiet_fields: list[str] = [
+        "priority", "cycle", "release", "parent", "labels", "points",
+        "start_date", "target_date", "flagged", "team", "reporter",
+        "visibility", "archived",
+    ]
+    # Event types that are never work on an issue: following it is not doing it.
+    timelog_my_tickets_quiet_events: list[str] = ["item.watched", "item.unwatched"]
 
     # The instance's working week (spec 35): comma-separated day names. Drives
     # work-week-only SLA timers and timesheet display (GET /instance exposes it).
