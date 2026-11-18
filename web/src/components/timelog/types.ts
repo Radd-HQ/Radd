@@ -1,4 +1,4 @@
-import type { TicketReasonValue, TimesheetEntry, WorkCategory } from "../../lib/types";
+import type { MyTicket, SearchResult, TicketReasonValue, TimesheetEntry, WorkCategory } from "../../lib/types";
 
 /** Something a person can log time against from the tray. */
 export interface Ticket {
@@ -13,6 +13,22 @@ export interface Ticket {
   activity?: string;
   /** What this person has logged on it so far. */
   mySeconds?: number;
+}
+
+export function ticketOf(row: MyTicket): Ticket {
+  return {
+    id: row.id,
+    key: row.key,
+    title: row.title,
+    loggable: row.loggable,
+    reasons: row.reasons,
+    activity: row.activity,
+    mySeconds: row.my_seconds,
+  };
+}
+
+export function ticketOfHit(hit: SearchResult): Ticket {
+  return { id: hit.item_id, key: hit.key, title: hit.title };
 }
 
 /** What is being dragged over the week (RADD-1541). Held in state, not in the

@@ -131,6 +131,7 @@ export function CalendarPopover({
 
   if (!place) return null;
   const month = cursor.slice(0, 7);
+  const monthLabel = formatIso(`${month}-01`, { month: "long", year: "numeric" });
   return createPortal(
     <div
       ref={panel}
@@ -146,13 +147,13 @@ export function CalendarPopover({
           <ChevronLeft size={15} aria-hidden />
         </button>
         <span className="flex-1 text-center text-row font-semibold text-heading" aria-live="polite" data-calendar-month>
-          {formatIso(`${month}-01`, { month: "long", year: "numeric" })}
+          {monthLabel}
         </span>
         <button type="button" className={navButton} aria-label="Next month" onClick={() => setCursor(addMonths(cursor, 1))}>
           <ChevronRight size={15} aria-hidden />
         </button>
       </div>
-      <table role="grid" className="w-full border-collapse" aria-label={formatIso(`${month}-01`, { month: "long", year: "numeric" })}>
+      <table role="grid" className="w-full border-collapse" aria-label={monthLabel}>
         <thead>
           <tr>
             {WEEKDAYS.map((day) => (

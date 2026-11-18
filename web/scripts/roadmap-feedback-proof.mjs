@@ -24,7 +24,7 @@
  * unscheduled leaves, one two-week cycle, one roadmap view), measures, and deletes the project.
  */
 import { resolve } from "node:path";
-import { outputPath, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, sleep } from "./lib/cdp.mjs";
 import { startProof } from "./lib/proof.mjs";
 
 const PORT = 9491;

@@ -1,8 +1,7 @@
 """Read notifications do not live forever (RADD-1570).
 
-Nothing removed a notification unless its owner cleared it, so the table only
-grew and every inbox carried years of read history. A worker loop deletes inbox
-notifications that were READ more than `notify_read_retention_days` ago.
+A worker loop deletes inbox notifications that were READ more than
+`notify_read_retention_days` ago; otherwise the table only grows.
 
 - Measured from `read_at`, not `created_at`: a person who opens a two-month-old
   notification today still has it tomorrow.

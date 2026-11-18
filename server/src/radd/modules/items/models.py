@@ -187,11 +187,8 @@ class ItemTransition(Base):
     """One row each time an item's STATE or CYCLE changed, and one for its
     creation — the history every report folds (RADD-1537).
 
-    Reports used to rebuild this per request from the event ledger: every
-    `item.created`/`item.updated` a project ever had, loaded as ORM objects with
-    their full item snapshot (about 1.5 KB each) and folded in Python on the
-    event loop. This is the same fold, done once at write time by
-    `items.transitions.record`, in the transaction that made the change.
+    Written by `items.transitions.record` in the transaction that made the
+    change, so no report has to fold the event ledger per request.
 
     A row carries both sides of the change, so a report is one aggregate with
     no self-join: `from_*` is what the item left, `from_at` when it had entered

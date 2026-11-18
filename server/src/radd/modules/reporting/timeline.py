@@ -1,13 +1,10 @@
 """One item's state history as the SLA timers want it: per item the state
-`segments` (an open final one has `exited_at is None`), the `done_entries`
-(tagged with the cycle at that moment) and the `cycle_history`.
+`segments` (an open final one has `exited_at is None`) and the `done_entries`
+(tagged with the cycle at that moment).
 
-Read from `item_transitions` (RADD-1537) — a handful of narrow rows per item,
-written when the change happened. It used to be rebuilt per request from the
-event ledger, every `item.created`/`item.updated` with its full item snapshot.
-The project-wide REPORTS no longer build timelines at all: they aggregate the
-same table in SQL (`service.py`). This per-item view remains for callers that
-need the stays themselves, over a bounded set of items.
+Read from `item_transitions` (RADD-1537). The project-wide reports aggregate
+that table in SQL (`service.py`); this per-item view is for callers that need
+the stays themselves, over a bounded set of items.
 """
 
 import uuid
@@ -46,27 +43,6 @@ class ItemTimeline:
     item_id: uuid.UUID
     segments: list[StateSegment] = field(default_factory=list)
     done_entries: list[DoneEntry] = field(default_factory=list)
-    cycle_history: list[tuple[datetime, uuid.UUID | None]] = field(default_factory=list)
-
-    def category_at(self, moment: datetime) -> StateCategory | None:
-        """Category of the segment active at `moment`; None if the item didn't exist yet."""
-        result: StateCategory | None = None
-        for segment in self.segments:
-            if segment.entered_at <= moment:
-                result = segment.category
-            else:
-                break
-        return result
-
-    def cycle_at(self, moment: datetime) -> uuid.UUID | None:
-        """Cycle the item was assigned to at `moment` (None if unset or not yet created)."""
-        result: uuid.UUID | None = None
-        for at, cycle_id in self.cycle_history:
-            if at <= moment:
-                result = cycle_id
-            else:
-                break
-        return result
 
 
 async def build_item_timelines(
@@ -92,7 +68,6 @@ async def build_item_timelines(
             timeline = out.get(item_id)
             if timeline is None:
                 timeline = out[item_id] = ItemTimeline(item_id=item_id)
-            timeline.cycle_history.append((at, cycle_id))
             if not state_changed:
                 continue
             if timeline.segments:

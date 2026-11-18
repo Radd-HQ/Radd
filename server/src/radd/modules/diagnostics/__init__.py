@@ -1,9 +1,8 @@
 """What the browser saw go wrong (RADD-1528).
 
-A crash in the SPA used to be visible only to the person it happened to: no
-`window.onerror` hook, no reporting endpoint, and the one error boundary logged
-to that browser's console. This module is the receiving end — one route that
-turns a report into one structured log line. It stores nothing: the log is
+Without this a crash in the SPA is visible only to the person it happened to.
+This module is the receiving end — one route that turns a report into one
+structured log line. It stores nothing: the log is
 where an operator already looks, and a table of stack traces is a retention
 question nobody has asked for.
 

@@ -16,7 +16,7 @@
  * planning + board views), measures, deletes the cycle then the project.
  */
 import { resolve } from "node:path";
-import { PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { PAGE_API, sleep } from "./lib/cdp.mjs";
 import { startProof } from "./lib/proof.mjs";
 
 const PORT = 9502;

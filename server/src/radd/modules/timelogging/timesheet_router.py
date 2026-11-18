@@ -14,7 +14,7 @@ from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey
 from radd.modules.teams import service as teams_service
 
-from . import enablement, mytickets, service, timesheet
+from . import mytickets, service, timesheet
 from .slq.suggest import suggest_worklog
 from .schemas import MyTicket, TeamRef, Timesheet, UserRef
 
@@ -91,17 +91,6 @@ async def reviewable_teams(session: Session, user: CurrentUser) -> list[TeamRef]
         TeamRef(id=team.id, name=team.name)
         for team in await timesheet.reviewable_teams(session, user)
     ]
-
-
-@router.get("/loggable-projects", response_model=list[uuid.UUID])
-async def loggable_projects(session: Session, user: CurrentUser) -> list[uuid.UUID]:
-    """The projects whose issues this person can log time on: time logging is
-    switched on there and they can read it. The entry calendar asks this once,
-    so a ticket that cannot take time is shown as such instead of refusing the
-    drop (RADD-1541)."""
-    await authz.require_member(session, user)
-    readable = await authz.readable_projects(session, user)
-    return sorted(await enablement.enabled_project_ids(session) & set(readable))
 
 
 @router.get("/my-tickets", response_model=list[MyTicket])

@@ -143,8 +143,7 @@ export interface RoadmapDatePatch {
  * The roadmap draft's Save: the net patches as ONE `PATCH /items` (RADD-1505),
  * painted optimistically into the view's paged `viewItems` cache. The server
  * applies the batch in a single transaction — all or nothing — so a refusal
- * on the Nth item never leaves the first N-1 written (the sequential loop this
- * replaced saved some children and never the epic). A failure rolls the
+ * on the Nth item never leaves the first N-1 written. A failure rolls the
  * optimistic paint back; the caller owns the error display and the refetch.
  */
 export function useRoadmapItemPatch(view: Pick<View, "id" | "query_string"> | undefined) {

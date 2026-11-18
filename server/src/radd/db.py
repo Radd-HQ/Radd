@@ -56,14 +56,12 @@ def _connect_args() -> dict[str, str]:
         ms = settings.db_idle_tx_timeout_seconds * 1000
         options.append(f"-c idle_in_transaction_session_timeout={ms}")
     if settings.db_force_custom_plans:
-        # RADD-1545. The driver prepares a statement it has run five times, and
-        # PostgreSQL then switches a prepared statement to ONE generic plan for
-        # every parameter value. For "this column's first 25 cards by rank" the
-        # generic plan walks the project's rank index hoping to meet the state:
-        # 15 ms planned for the actual state, 400 ms generic, measured on a
-        # 100k-item project — and only after the connection has warmed up, which
-        # is why it never showed in a quick test. Planning each execution for
-        # its own values costs a fraction of a millisecond and cannot do this.
+        # RADD-1545. PostgreSQL switches a statement the driver has prepared
+        # (after five runs) to ONE generic plan for every parameter value: a
+        # board column's first 25 cards by rank went from 15 ms to 400 ms on a
+        # 100k-item project — only once the connection had warmed up, so a
+        # quick test never shows it. Planning per execution costs a fraction
+        # of a millisecond.
         options.append("-c plan_cache_mode=force_custom_plan")
     return {"options": " ".join(options)} if options else {}
 
@@ -90,13 +88,13 @@ async def bound_statements(session: AsyncSession) -> None:
         await session.execute(text(f"SET LOCAL statement_timeout = {ms}"))
 
 
+#: SQLSTATE 57014 — query_canceled.
+QUERY_CANCELED = "57014"
+
+
 def is_statement_timeout(error: BaseException) -> bool:
     """Whether a database error is Postgres cancelling a statement for running too long."""
     return getattr(getattr(error, "orig", None), "sqlstate", None) == QUERY_CANCELED
-
-
-#: SQLSTATE 57014 — query_canceled.
-QUERY_CANCELED = "57014"
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:

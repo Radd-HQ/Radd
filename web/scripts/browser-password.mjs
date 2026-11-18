@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import {mkdtemp} from "node:fs/promises";
 import {openBrowser, until} from "./lib/cdp.mjs";
 import {CORE_PLUGINS} from "./lib/core-plugins.mjs";
-import {serveBuiltSpa} from "./lib/spa-server.mjs";
+import {readBody, sendJson, serveBuiltSpa} from "./lib/spa-server.mjs";
 
 let local = true, answer = 200;
 const posts = [];
@@ -23,11 +23,10 @@ const spa = await serveBuiltSpa(async (req, res, url) => {
   if (url.pathname.startsWith("/plugins/")) {res.writeHead(404); res.end(); return true;}
   if (!url.pathname.startsWith("/api/")) return false;
   const route = url.pathname.replace("/api/v1", "");
-  let raw = ""; for await (const chunk of req) raw += chunk;
+  const raw = await readBody(req);
   if (route === "/auth/password" && req.method === "POST") {
     posts.push(JSON.parse(raw));
-    res.writeHead(answer, {"content-type": "application/json"});
-    res.end(JSON.stringify(answer === 200 ? {sessions_ended: 2} : {detail: "the current password is not correct"}));
+    sendJson(res, answer === 200 ? {sessions_ended: 2} : {detail: "the current password is not correct"}, answer);
     return true;
   }
   let data = [];

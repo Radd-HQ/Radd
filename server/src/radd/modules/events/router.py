@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
@@ -36,8 +37,6 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 
 async def _reads(session: AsyncSession, failures: list[ConsumerFailure]) -> list[ConsumerFailureRead]:
-    from sqlalchemy import select
-
     labels = {
         event_id: (event_type, label)
         for event_id, event_type, label in await session.execute(

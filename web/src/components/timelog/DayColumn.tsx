@@ -3,16 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { formatIso } from "@radd/plugin-sdk";
 import { api } from "../../lib/api";
-import type { TimesheetEntry } from "../../lib/types";
+import { ApiPath } from "../../lib/constants";
+import type { SearchResponse, TimesheetEntry } from "../../lib/types";
 import { DROP_SECONDS, DayLoad, durationText, type DayLoadValue } from "./model";
-import type { Dragged, Ticket, WeekActions } from "./types";
+import { ticketOfHit, type Dragged, type Ticket, type WeekActions } from "./types";
 import { WorklogCard } from "./WorklogCard";
-
-interface SearchHit {
-  item_id: string;
-  key: string;
-  title: string;
-}
 
 const LOAD_CLASS: Record<DayLoadValue, string> = {
   [DayLoad.empty]: "text-fg-faint",
@@ -72,7 +67,7 @@ export function DayColumn(props: DayProps) {
       data-day-seconds={seconds}
       data-day-load={load}
       data-day-target={props.target || undefined}
-      aria-label={`${formatIso(day, { weekday: "long", month: "long", day: "numeric" })}, ${durationText(seconds) || "nothing"} logged`}
+      aria-label={`${formatIso(day, { weekday: "long", month: "long", day: "numeric" })}, ${durationText(seconds)} logged`}
       onDragOver={(event) => {
         if (!dragged) return;
         event.preventDefault();
@@ -107,7 +102,7 @@ export function DayColumn(props: DayProps) {
           {formatIso(day, { weekday: "short", month: "short", day: "numeric" })}
         </button>
         <span className={`whitespace-nowrap text-row font-medium tabular-nums ${LOAD_CLASS[load]}`} title={LOAD_TITLE[load]} data-day-total>
-          {seconds ? durationText(seconds) : "0m"}
+          {durationText(seconds)}
         </span>
       </header>
       <div className="flex flex-1 flex-col gap-1.5 p-1.5">
@@ -144,7 +139,7 @@ function AddRow({ onPick, onClose }: { onPick: (ticket: Ticket) => void; onClose
   const hits = useQuery({
     queryKey: ["timelogAddSearch", query],
     queryFn: ({ signal }) =>
-      api.get<{ results: SearchHit[] }>("/search", { signal, query: { q: query, limit: "6" } }),
+      api.get<SearchResponse>(ApiPath.search, { signal, query: { q: query, limit: "6" } }),
     enabled: query.length >= 2,
     staleTime: 30_000,
   });
@@ -160,7 +155,7 @@ function AddRow({ onPick, onClose }: { onPick: (ticket: Ticket) => void; onClose
         onKeyDown={(event) => {
           if (event.key === "Escape") onClose();
           if (event.key === "Enter" && results[0]) {
-            onPick({ id: results[0].item_id, key: results[0].key, title: results[0].title });
+            onPick(ticketOfHit(results[0]));
           }
         }}
         onBlur={(event) => {
@@ -175,7 +170,7 @@ function AddRow({ onPick, onClose }: { onPick: (ticket: Ticket) => void; onClose
             <button
               type="button"
               data-add-hit={hit.key}
-              onClick={() => onPick({ id: hit.item_id, key: hit.key, title: hit.title })}
+              onClick={() => onPick(ticketOfHit(hit))}
               className="flex w-full min-w-0 items-baseline gap-1.5 rounded px-1 py-0.5 text-left text-meta hover:bg-elevated cursor-pointer"
             >
               <span className="shrink-0 font-mono text-accent-text">{hit.key}</span>

@@ -48,10 +48,8 @@ export function reloadOnStaleBuild(): void {
   window.addEventListener("vite:preloadError", () => {
     const now = Date.now();
     if (!shouldReloadForStaleBuild(lastReload(), now)) return; // let the error reach the screen
-    // A chunk can fail for reasons a reload does not cure (a plugin bundle that is
-    // down, a network blip): those already have their own handling, and reloading
-    // would throw away the page under it. Reload ONLY when the server has moved on
-    // to another build — which is the one case where the chunk will never come back.
+    // Reload ONLY when the server has moved on to another build (see the header):
+    // any other chunk failure keeps the handling it already has.
     void fetch("/", { cache: "no-store", credentials: "same-origin" })
       .then((response) => (response.ok ? response.text() : ""))
       .then((shell) => {

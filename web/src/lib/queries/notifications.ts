@@ -23,7 +23,7 @@ export const INBOX_PAGE_SIZE = 100;
 
 /** How many unread rows the badge's request carries: enough for My Work's
  *  inbox widget, which shows five groups, to read it instead of asking again. */
-export const BADGE_ROWS = 20;
+const BADGE_ROWS = 20;
 const BADGE_FRESH_MS = 10_000;
 
 /** The first-page list request under way, if any: its answer carries the unread

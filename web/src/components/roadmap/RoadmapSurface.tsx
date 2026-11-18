@@ -178,10 +178,9 @@ export function RoadmapSurface({
   // Gestures edit a LOCAL draft (useRoadmapDraft); only Save writes.
   const draft = useRoadmapDraft();
   // RADD-1506: rows the draft INSERTED exist nowhere in the server fetch, so
-  // their snapshot would freeze at gesture time — a dependency drawn from one
-  // never appeared until Save + reload. Fetch them live by key (the query is
-  // item-tagged, so every link/item write refetches it) and fold the draft
-  // over `base ∪ fresh`; the snapshot stays the fallback until the first
+  // their snapshot would freeze at gesture time. Fetch them live by key (the
+  // query is item-tagged, so every link/item write refetches it) and fold the
+  // draft over `base ∪ fresh`; the snapshot is the fallback until the first
   // fetch lands, so nothing flickers.
   const loadedIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
   const draftedKeys = useMemo(
@@ -426,10 +425,8 @@ export function RoadmapSurface({
     [items],
   );
 
-  // "Spread children across the epic" (RADD-1510): a layout verb — equal
-  // back-to-back slots across the epic's OWN window, no estimates involved.
-  // The one layout verb since RADD-1514 (the thread's call: auto-schedule's
-  // estimate-sized packing "means nothing scheduling wise").
+  // "Spread children across the epic" (RADD-1510): equal back-to-back slots
+  // across the epic's OWN window, no estimates involved.
   const handleSpreadChildren = useCallback(
     async (row: RoadmapRow) => {
       const children = await loadChildren(row);
@@ -452,7 +449,7 @@ export function RoadmapSurface({
 
   // "Bring children into roadmap": the as-is placement — only MISSING dates
   // fill, at the epic's start, estimate-sized or one day. The one verb that
-  // reads estimates now that auto-schedule is gone (RADD-1514).
+  // reads estimates (RADD-1514).
   const handleImportChildren = useCallback(
     async (row: RoadmapRow) => {
       const loaded = await loadChildrenWithEstimates(row);
@@ -679,7 +676,7 @@ export function RoadmapSurface({
               label: zoom.label,
             })),
             // Ctrl+wheel / ± / Fit leave the presets — show where we landed,
-            // as a share of the default: "22%" reads, "2.0px" did not.
+            // as a share of the default.
             ...(ROADMAP_ZOOM_LEVELS.some((zoom) => zoom.width === dayWidth)
               ? []
               : [{ value: String(dayWidth), label: zoomPercentLabel(dayWidth) }]),
@@ -831,8 +828,7 @@ export function RoadmapSurface({
               />
               {editing.saveError && (
                 // RADD-1505: a refused save stays visible beside the button,
-                // item named, until the next attempt or a Discard — a toast
-                // was the only signal before, and it read as "saved".
+                // item named, until the next attempt or a Discard.
                 <span
                   role="alert"
                   data-save-error

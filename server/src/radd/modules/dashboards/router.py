@@ -67,7 +67,7 @@ async def dashboard_summary(
 async def my_work_widgets(session: Session, user: CurrentUser):
     from . import personal
 
-    if "my_work_widgets" in (user.preferences or {}):
+    if personal.LAYOUT_KEY in (user.preferences or {}):
         return personal.read(user)
     return await personal.suggested_defaults(session, user)
 

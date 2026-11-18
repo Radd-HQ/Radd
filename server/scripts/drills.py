@@ -70,29 +70,30 @@ def _say(message: str) -> None:
     print(f"drill: {message}", flush=True)
 
 
-def _admin_connection() -> psycopg.Connection:
+def _connection(database: str) -> psycopg.Connection:
     return psycopg.connect(
         host=DRILL_URL.host, port=DRILL_URL.port, user=DRILL_URL.username,
-        password=DRILL_URL.password, dbname="postgres", autocommit=True,
+        password=DRILL_URL.password, dbname=database, autocommit=True,
     )
+
+
+def _admin_connection() -> psycopg.Connection:
+    return _connection("postgres")
 
 
 def _drill_connection() -> psycopg.Connection:
-    return psycopg.connect(
-        host=DRILL_URL.host, port=DRILL_URL.port, user=DRILL_URL.username,
-        password=DRILL_URL.password, dbname=DRILL_DATABASE, autocommit=True,
-    )
-
-
-def recreate_database() -> None:
-    with _admin_connection() as connection:
-        connection.execute(f'DROP DATABASE IF EXISTS "{DRILL_DATABASE}" WITH (FORCE)')
-        connection.execute(f'CREATE DATABASE "{DRILL_DATABASE}"')
+    return _connection(DRILL_DATABASE)
 
 
 def drop_database() -> None:
     with _admin_connection() as connection:
         connection.execute(f'DROP DATABASE IF EXISTS "{DRILL_DATABASE}" WITH (FORCE)')
+
+
+def recreate_database() -> None:
+    drop_database()
+    with _admin_connection() as connection:
+        connection.execute(f'CREATE DATABASE "{DRILL_DATABASE}"')
 
 
 def run(*command: str) -> None:
@@ -123,11 +124,9 @@ def fingerprint() -> dict[str, tuple[int, str]]:
         }
 
 
-def compare(before: dict, after: dict, *, ignore: frozenset[str] = frozenset()) -> list[str]:
+def compare(before: dict, after: dict) -> list[str]:
     problems = []
     for table in sorted(set(before) | set(after)):
-        if table in ignore:
-            continue
         if table not in after:
             problems.append(f"{table}: missing after")
         elif table not in before:

@@ -28,11 +28,9 @@ from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hook
 from . import mcptools
 
 
-async def _duration_error_handler(request: Request, exc: DurationError) -> JSONResponse:
-    return JSONResponse(status_code=422, content={"detail": str(exc)})
-
-
-async def _timesheet_too_large_handler(request: Request, exc: TimesheetTooLarge) -> JSONResponse:
+async def _unprocessable_handler(
+    request: Request, exc: DurationError | TimesheetTooLarge
+) -> JSONResponse:
     return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
@@ -195,8 +193,8 @@ plugin = RaddPlugin(
     # RADD-889: the worklog tools of the spec-114 MCP catalog live with their owner.
     mcp_tools=mcptools.MCP_TOOLS,
     exception_handlers=(
-        (DurationError, _duration_error_handler),
-        (TimesheetTooLarge, _timesheet_too_large_handler),
+        (DurationError, _unprocessable_handler),
+        (TimesheetTooLarge, _unprocessable_handler),
     ),
     on_startup=(categories.ensure_seeded,),
     event_types=(

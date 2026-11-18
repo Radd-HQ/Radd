@@ -40,10 +40,9 @@ export function useBoardItems(view:View|undefined,axis:string|null,lane:string|n
   // ONE request draws a plain board (RADD-1545): totals, labels and each
   // column's first cards together, and the cards are filed under the same cache
   // keys the per-column windows use, so a column scrolling into view finds its
-  // first window already there. It used to be a summary plus one request per
-  // visible column, each paying the full request overhead. Lanes multiply the
-  // cells, and a hidden column must stay in the directory (the combined read
-  // leaves hidden columns out), so those two keep the summary-then-cells path.
+  // first window already there. Lanes multiply the cells, and a hidden column
+  // must stay in the directory (the combined read leaves hidden columns out),
+  // so those two keep the summary-then-cells path.
   const combined = !lane && !(view?.hidden_columns?.length);
   const firstWindow=(column:string)=>paramsOf({...request,rows_only:true,cursor_mode:true,column_key:column,lane_key:null,after:null,item_limit:PAGE_SIZE});
   const summary = useQuery({queryKey:["board-summary",scope,combined],meta,enabled,staleTime:BOARD_STALE_MS,

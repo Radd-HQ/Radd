@@ -65,9 +65,9 @@ async def require_enabled(session: AsyncSession, project_id: uuid.UUID) -> None:
 
 
 async def enabled_project_ids(session: AsyncSession) -> set[uuid.UUID]:
-    """Every project with time logging on — what a surface listing issues from
-    several projects asks ONCE, so it can show which of them take time before
-    someone tries (RADD-1541) rather than answering each attempt with a 409."""
+    """Every project with time logging on: one read for a surface that lists
+    issues from several projects and marks the ones that take no time
+    (RADD-1541), instead of a 409 per attempt."""
     rows = await session.execute(
         select(ProjectTimeLogging.project_id).where(ProjectTimeLogging.enabled.is_(True))
     )

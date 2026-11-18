@@ -1,7 +1,6 @@
 /** Roadmap planners: import-children (spec 78, as-is placement) and the even
- *  spread (RADD-1510) — the one layout verb since RADD-1514, when the
- *  estimate/dependency/assignee-aware auto-schedule went (the thread's "it
- *  means nothing scheduling wise"). */
+ *  spread (RADD-1510) — the one layout verb since RADD-1514 removed the
+ *  estimate-driven auto-schedule. */
 
 import { shiftIsoDay } from "@radd/plugin-sdk";
 import { ROADMAP_LEAF_SPAN_DAYS } from "../../../lib/constants";
@@ -23,24 +22,15 @@ export function durationDaysFromEstimate(
   return Math.max(1, Math.ceil(estimateSeconds / (hoursPerDay * 3600)));
 }
 
-interface TopoOrder {
-  /** The children in dependency-then-rank order. */
-  order: Item[];
-  /** Per child, the ids of the loaded children that block it. */
-  blockersOf: ReadonlyMap<string, string[]>;
-}
-
 /**
  * Kahn topological order over the `blocks` edges among `children` (deduped
  * here; other endpoints and self-loops ignored) with rank (input-order)
- * tie-breaking — a cyclic remainder falls back to rank order. Shared by
- * auto-schedule and the spread, so both verbs read the same way.
+ * tie-breaking — a cyclic remainder falls back to rank order.
  */
-export function topoOrder(children: Item[], edges: BlocksEdge[]): TopoOrder {
+function topoOrder(children: Item[], edges: BlocksEdge[]): Item[] {
   const ids = new Set(children.map((child) => child.id));
   const indegree = new Map<string, number>(children.map((child) => [child.id, 0]));
   const dependentsOf = new Map<string, string[]>();
-  const blockersOf = new Map<string, string[]>();
   const seen = new Set<string>();
   for (const edge of edges) {
     const key = `${edge.sourceId}>${edge.targetId}`;
@@ -51,7 +41,6 @@ export function topoOrder(children: Item[], edges: BlocksEdge[]): TopoOrder {
     }
     indegree.set(edge.targetId, (indegree.get(edge.targetId) ?? 0) + 1);
     dependentsOf.set(edge.sourceId, [...(dependentsOf.get(edge.sourceId) ?? []), edge.targetId]);
-    blockersOf.set(edge.targetId, [...(blockersOf.get(edge.targetId) ?? []), edge.sourceId]);
   }
 
   // Sweep the rank-ordered list, placing every ready child, until a sweep
@@ -75,7 +64,7 @@ export function topoOrder(children: Item[], edges: BlocksEdge[]): TopoOrder {
   for (const child of children) {
     if (!placed.has(child.id)) order.push(child);
   }
-  return { order, blockersOf };
+  return order;
 }
 
 /** Date-less children imported AS-IS with no estimate span a single day —
@@ -164,7 +153,7 @@ export function spreadChildrenPlan(
   if (children.length === 0 || !epicStart || !epicTarget) {
     return { patches: [], spreadCount: 0, orderedIds: [] };
   }
-  const { order } = topoOrder(children, edges);
+  const order = topoOrder(children, edges);
   const totalDays = isoDaysBetween(epicStart, epicTarget) + 1;
   const slots = order.length;
   const patches = order.map((child, index) => {

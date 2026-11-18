@@ -21,7 +21,7 @@
  * deletes the project.
  */
 import { resolve } from "node:path";
-import { outputPath, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, sleep } from "./lib/cdp.mjs";
 import { startProof } from "./lib/proof.mjs";
 
 const PORT = 9492;
@@ -63,11 +63,10 @@ const STATE = `(() => {
   const bars = [...document.querySelectorAll("[data-bar-item]")].map((el) => ({ id: el.dataset.barItem, h: el.getBoundingClientRect().height, w: el.getBoundingClientRect().width, left: parseFloat(el.style.left) }));
   const regions = [...document.querySelectorAll("[data-epic-region]")].map((el) => { const r = el.getBoundingClientRect(); return { id: el.dataset.epicRegion, top: r.top, bottom: r.bottom }; });
   const sel = document.querySelector("[aria-label='Zoom (day width)']");
-  const windowFirst = Number((document.querySelector("[data-row-window]")?.dataset.rowWindow ?? "0-0").split("-")[0]);
   return {
-    dayWidth: Number(root.dataset.dayWidth), rowH: Number(root.dataset.rowH), tier: root.dataset.axisTier, windowFirst,
+    dayWidth: Number(root.dataset.dayWidth), rowH: Number(root.dataset.rowH), tier: root.dataset.axisTier,
     clientWidth: pane.clientWidth, clientHeight: pane.clientHeight, scrollWidth: pane.scrollWidth, scrollHeight: pane.scrollHeight,
-    scrollTop: pane.scrollTop, paneTop: pane.getBoundingClientRect().top + pane.clientTop, labelWidth: parseFloat(root.querySelector(".sticky.top-0 > div").style.width),
+    paneTop: pane.getBoundingClientRect().top + pane.clientTop,
     rows, labels: labels.length, overlaps, weekLabels: root.querySelectorAll(".sticky.top-0 span.absolute.top-5").length,
     bars, regions, zoomLabel: sel?.textContent ?? null, keys: rows.map((r) => r.text.slice(0, 12)),
   };
@@ -84,6 +83,7 @@ const WHEEL = (steps) => `(() => new Promise((done) => {
 const stepsTo = (from, to) => -Math.log(to / from) / Math.log(WHEEL_FACTOR);
 
 const SAVE = `(() => { const b = [...document.querySelectorAll("button")].find((x) => /^Sav/.test(x.textContent || "")); return b ? b.textContent : null; })()`;
+const UNDO = `(() => { document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true })); return true; })()`;
 const BAR_RECT = (id) => `(() => { const r = document.querySelector("[data-bar-item='${id}']")?.getBoundingClientRect(); return r ? { x: r.left, y: r.top, w: r.width, h: r.height } : null; })()`;
 
 async function main() {
@@ -220,7 +220,7 @@ async function main() {
     const d3 = await dropOnRow(trayTwo, c2, true);
     check("a top-level item dropped on a child row lands right after that epic's block, the line on its last child", e2 >= 0 && c2 > e2 && c2 <= e2 + 6 && d3.indicator === e2 + 6 && d3.index === e2 + 7 && /Save · 3/.test(d3.save ?? ""), JSON.stringify({ e2, c2, ...d3 }));
     for (let i = 0; i < 3; i++) {
-      await session.eval(`(() => { document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true })); return true; })()`);
+      await session.eval(UNDO);
       await sleep(150);
     }
     const heightAfter = await session.eval(`document.querySelector("[data-roadmap-timeline]").parentElement.scrollHeight`);
@@ -294,7 +294,7 @@ async function main() {
     check("a 35 px drag at 3.5 px/day commits exactly 10 days (35 px) into the draft", before && after && Math.abs(after.x - before.x - 35) < 0.6 && /Save · 1/.test(save ?? ""), JSON.stringify(context.drag));
     // Undo the move before reloading: a dirty draft arms beforeunload, and headless Chrome's
     // "leave site?" dialog would block Page.navigate for ever.
-    await session.eval(`(() => { document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true })); return true; })()`);
+    await session.eval(UNDO);
     await sleep(300);
     const undone = await session.eval(SAVE);
     const restored = await session.eval(BAR_RECT(leaf.id));

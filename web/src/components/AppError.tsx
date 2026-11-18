@@ -1,6 +1,5 @@
-/** The app's own error and not-found screens (RADD-1528). Before these, a route
- *  that threw or a URL that matched nothing showed the router library's default
- *  output: unstyled, unexplained, and reported to nobody. */
+/** The app's own error and not-found screens (RADD-1528), in place of the router
+ *  library's default output: unstyled, unexplained, and reported to nobody. */
 
 import { useEffect } from "react";
 import type { ErrorComponentProps } from "@tanstack/react-router";

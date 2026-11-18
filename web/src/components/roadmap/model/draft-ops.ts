@@ -25,8 +25,7 @@ export type DraftLeafOp =
 
 /** A `compound` op is ONE user-sized step made of several leaf ops (a plan's
  *  date patches plus the rank chain that orders its rows, RADD-1510), so a
- *  single Undo reverts the whole verb — RADD-1433 found auto-schedule
- *  recording two steps, with one Undo reverting only the ordering. */
+ *  single Undo reverts the whole verb (RADD-1433). */
 export type DraftOp = DraftLeafOp | { kind: "compound"; label: string; ops: DraftLeafOp[] };
 
 /** The draftable field subset (what roadmap gestures may change). */

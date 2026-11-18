@@ -193,9 +193,8 @@ class S3Client:
             )
             return RedirectResponse(url, status_code=307)
         # Proxy: keeps the S3 endpoint invisible to browsers (headers match the fs
-        # path). STREAMED (RADD-1540): this used to read the whole object first,
-        # "bounded by the upload cap" — a cap of 5 GiB, so a handful of people
-        # downloading recordings at once was the pod's memory limit.
+        # path). STREAMED (RADD-1540): the upload cap is 5 GiB, so reading whole
+        # objects made a few concurrent downloads the pod's memory limit.
         disposition = "inline" if inline else "attachment"
         filename = "" if inline else f'; filename="{attachment.filename.replace(chr(34), "")}"'
         return StreamingResponse(

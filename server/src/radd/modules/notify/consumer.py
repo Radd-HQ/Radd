@@ -100,8 +100,7 @@ def _batch() -> int:
     return settings.notify_batch
 
 
-#: Retried (RADD-1538): a notification that failed because a lookup raised used
-#: to be skipped for good. A repeat is harmless — planning dedupes per recipient
+#: Retried (RADD-1538). A repeat is harmless — planning dedupes per recipient
 #: and event.
 CONSUMER = event_consumer.Consumer(
     name=CONSUMER_NAME, handle=_notify, batch_size=_batch, wants=_wanted

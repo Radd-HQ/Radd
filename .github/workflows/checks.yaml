@@ -120,11 +120,9 @@ jobs:
         working-directory: server
         run: uv run python scripts/drills.py upgrade
 
-  # RADD-1580: the proofs that need a REAL backend. `npm run check` drives a
-  # fixture API with no database; these log real worklogs and read them back,
-  # which is the only thing that shows the time-logging surfaces still work
-  # end to end. scripts/run-proofs.sh is the whole procedure, so the job and a
-  # laptop run the same commands.
+  # RADD-1580: the proofs that need a REAL backend (`npm run check` drives a
+  # fixture API with no database). scripts/run-proofs.sh is the whole
+  # procedure, so the job and a laptop run the same commands.
   proofs:
     name: proofs (real backend, Chromium)
     runs-on: ubuntu-latest

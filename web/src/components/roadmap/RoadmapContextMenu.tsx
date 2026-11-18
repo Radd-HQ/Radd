@@ -173,10 +173,9 @@ export function RoadmapContextMenu({
       onSelect: () => onImportChildren(row),
     });
 
-    // RADD-1510: the even spread Aurelien asked for, as what it is — a
-    // layout across the epic's window, not a schedule. Since RADD-1514 it is
-    // the ONLY layout verb: "Auto-schedule children" (estimate-sized bars
-    // packed from the epic's start) was the thread's "means nothing" and went.
+    // RADD-1510: an even spread across the epic's window — a layout, not a
+    // schedule, and the ONLY layout verb since RADD-1514 removed
+    // "Auto-schedule children".
     nodes.push({
       kind: "action",
       label: "Spread children across the epic",

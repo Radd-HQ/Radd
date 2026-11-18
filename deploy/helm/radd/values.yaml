@@ -26,9 +26,9 @@ replicas: 1
 # memory, so the Ingress routes /api/v1/collab to the single worker. If your
 # traffic does not come through this chart's Ingress, route that path to the
 # `<release>-worker` Service yourself, or two people editing one page can land
-# in two rooms. Each process holds its
-# own database pool (5 + 10 overflow by default), so size the database's
-# max_connections for processes x 15, plus 15 for the worker.
+# in two rooms. Each process holds its own database pool (5 + 10 overflow by
+# default), so size the database's max_connections for processes x 15, plus 15
+# for the worker.
 web:
   processes: 1
 

@@ -125,10 +125,9 @@ async def build(
             f"this timesheet holds more than {settings.timesheet_max_entries:,} time logs; "
             "narrow the dates, pick a team or a project, or add a filter"
         )
-    worklogs = rows
-    authors = await auth_service.users_by_ids(session, {w.author_id for w in worklogs})
+    authors = await auth_service.users_by_ids(session, {w.author_id for w in rows})
     cats = await categories.categories_by_ids(
-        session, {w.category_id for w in worklogs if w.category_id}
+        session, {w.category_id for w in rows if w.category_id}
     )
     # Itemless project labels ignore the project FILTER but stay bounded by
     # readability (RADD-839).
@@ -137,7 +136,7 @@ async def build(
     # unreadable project is dropped; EpicRef has no project id, so the key prefix joins.
     readable_prefixes = set(all_keys.values())
     epics = await items_service.epics_for_items(
-        session, {w.item_id for w in worklogs if w.item_id}
+        session, {w.item_id for w in rows if w.item_id}
     )
     epics = {
         item_id: epic

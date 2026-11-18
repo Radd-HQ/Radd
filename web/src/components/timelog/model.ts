@@ -10,7 +10,7 @@ export const STEP_SECONDS = 15 * 60;
 export const DROP_SECONDS = 60 * 60;
 /** Card height per logged hour, and the floor that keeps a 15-minute card legible. */
 export const HOUR_PX = 44;
-export const MIN_CARD_PX = 58;
+const MIN_CARD_PX = 58;
 
 const DAY_MS = 86_400_000;
 

@@ -26,16 +26,12 @@ const PERIODS: { value: TimesheetPeriodValue; label: string }[] = [
 /** The team choice that means "no roster": whoever logged time. */
 const EVERYONE = "";
 
-const hours = (seconds: number) => durationText(seconds) || "0m";
-
 /**
  * /timesheet → Team (RADD-1574): for a team and a period, one row per person —
  * logged against expected, and a flag with its reason on logging that is not
  * believable (a week booked on one day, days nobody works, nothing at all).
- *
- * It exists for the conversation that follows: a manager reads who to ask and
- * what to ask about, opens the row for the days and entries behind it, and
- * goes to the person. The arithmetic and the wording are `team.ts`.
+ * A row opens to the days and entries behind it. The arithmetic and the
+ * wording are `team.ts`.
  */
 export function TeamReport({
   everyone,
@@ -96,7 +92,7 @@ export function TeamReport({
       for (const day of daysInRange(from, to)) mine.set(day, (mine.get(day) ?? 0) + hoursOff);
       off.set(note.personId, mine);
     }
-    return teamRows(data.people ?? [], days, data.entries, off, {
+    return teamRows(data.people, days, data.entries, off, {
       workDays: data.work_days,
       hoursPerDay: data.hours_per_day,
       dayMaxHours: data.day_max_hours,
@@ -257,8 +253,8 @@ function PersonRow({ row, open, onToggle }: { row: TeamRow; open: boolean; onTog
           {row.name}
         </button>
       </Td>
-      <Td className="text-right tabular-nums" data-team-logged>{hours(row.loggedSeconds)}</Td>
-      <Td className="text-right tabular-nums text-fg-secondary" data-team-expected>{hours(row.expectedSeconds)}</Td>
+      <Td className="text-right tabular-nums" data-team-logged>{durationText(row.loggedSeconds)}</Td>
+      <Td className="text-right tabular-nums text-fg-secondary" data-team-expected>{durationText(row.expectedSeconds)}</Td>
       <Td className={`text-right tabular-nums ${has(TeamFlag.nothing, TeamFlag.under, TeamFlag.over) ? marked : ""}`}>
         {row.percent === null ? "–" : `${row.percent}%`}
       </Td>
@@ -295,7 +291,7 @@ function dayTitle(day: TeamDay): string {
   if (day.open) return "Not over yet: not judged";
   if (day.long) return "More than a day's maximum";
   if (!day.working) return "Not a working day";
-  const part = day.partial ? `Leave for part of the day: ${hours(day.expectedSeconds)} expected` : "";
+  const part = day.partial ? `Leave for part of the day: ${durationText(day.expectedSeconds)} expected` : "";
   if (day.seconds === 0) return part ? `${part}, nothing logged` : "A working day with nothing logged";
   return part;
 }
@@ -332,11 +328,11 @@ function PersonDays({
               {formatIso(day.day, { weekday: "short", day: "numeric" })}
             </span>
             <span className="text-row font-medium tabular-nums">
-              {day.exempt && day.seconds === 0 ? "off" : day.seconds ? hours(day.seconds) : "·"}
+              {day.exempt && day.seconds === 0 ? "off" : day.seconds ? durationText(day.seconds) : "·"}
             </span>
             {day.partial && (
               <span className="text-meta text-fg-muted" data-team-day-part>
-                of {hours(day.expectedSeconds)}
+                of {durationText(day.expectedSeconds)}
               </span>
             )}
           </li>
@@ -355,7 +351,7 @@ function PersonDays({
                 {list.map((entry) => (
                   <li key={entry.id} className="flex min-w-0 items-baseline gap-2">
                     <span className="w-16 shrink-0 text-right font-medium tabular-nums text-heading">
-                      {hours(entry.time_spent_seconds)}
+                      {durationText(entry.time_spent_seconds)}
                     </span>
                     {entry.item ? (
                       <button

@@ -86,11 +86,10 @@ async def _space_rows(session: AsyncSession, space_id: uuid.UUID) -> list[Page]:
 async def _tree_rows(session: AsyncSession, space_id: uuid.UUID):
     """The columns a tree is drawn from, and nothing else (RADD-1540).
 
-    The sidebar asks for this on every wiki visit, and `select(Page)` answered
-    with every document's BODY: opening the tree of a 2,000-page space read
-    megabytes of text to show titles. The rows are plain tuples with the same
-    attribute names, so the path, visibility and read-access helpers take them
-    as they took the ORM rows."""
+    The sidebar asks for this on every wiki visit, and `select(Page)` would
+    read every document's BODY to show titles. The rows are plain tuples with
+    the same attribute names, so the path, visibility and read-access helpers
+    take them like ORM rows."""
     result = await session.execute(
         select(
             Page.id, Page.space_id, Page.number, Page.parent_id, Page.title, Page.slug,

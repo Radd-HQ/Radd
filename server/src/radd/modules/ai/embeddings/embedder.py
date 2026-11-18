@@ -122,18 +122,14 @@ def last_error() -> str | None:
 class _IdleSweep:
     """When the reconcile sweep may run again (RADD-1550).
 
-    The sweep asks "which rows have no embedding under the active model" — an
-    anti-join over the whole index. With everything embedded it finds nothing,
-    and it took 1.5 s on 500k items to find it, every poll: half a database core
-    spent confirming there is no work. New work arrives as EVENTS, which the
-    consumer above handles; the sweep is the safety net for what an event missed
-    (a model swap, a failed batch). So an empty sweep doubles the wait before the
-    next, up to `ai_embed_idle_sweep_max_seconds`, and anything that suggests
-    there is work again — an event consumed, a sweep that found rows — resets it."""
+    The sweep is an anti-join over the whole index (1.5 s on 500k items to find
+    nothing), and only the safety net for what an event missed — a model swap, a
+    failed batch. So an empty sweep doubles the wait before the next, up to
+    `ai_embed_idle_sweep_max_seconds`; an event consumed or a sweep that found
+    rows resets it."""
 
     def __init__(self) -> None:
-        self.wait = 0.0
-        self.not_before = 0.0
+        self.reset()
 
     def due(self) -> bool:
         return time.monotonic() >= self.not_before

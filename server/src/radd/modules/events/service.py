@@ -402,11 +402,10 @@ async def entity_activity(
                 # RADD-922: the canonical ref, not the old bare `item_id`.
                 Event.payload["item"]["id"].astext == key,
                 # Events ABOUT something attached to the item, never the item's
-                # own (those are the direct branch). Written as a literal because
-                # it is the predicate of the partial index `ix_events_related_item`
-                # (RADD-1540): without it this branch read every comment, worklog
-                # and attachment event on the instance to find one item's — 1.5 s
-                # per History tab at 5M events.
+                # own (those are the direct branch). A literal because it is the
+                # predicate of the partial index `ix_events_related_item`
+                # (RADD-1540); without it this branch scans every comment, worklog
+                # and attachment event — 1.5 s per History tab at 5M events.
                 _NOT_AN_ITEM_EVENT,
             )
         )

@@ -5,7 +5,7 @@ import type { Dragged, Ticket } from "./types";
 
 /** Why a ticket is offered, in a word or two: what they last did on it when
  *  that is the newest reason, else the standing one (RADD-1572). */
-export function reasonText(ticket: Ticket): string {
+function reasonText(ticket: Ticket): string {
   const newest = ticket.reasons?.[0];
   if (newest === TicketReason.acted && ticket.activity) return ticket.activity;
   if (newest === TicketReason.logged) return "Logged on";
@@ -114,9 +114,7 @@ export function TicketRow({
           onDrag?.({ kind: "ticket", ticket });
         }}
         onDragEnd={() => onDrag?.(null)}
-        className={`flex min-w-0 flex-1 gap-x-1.5 rounded-md border border-subtle bg-base px-2 py-1 text-row ${
-          stacked ? "flex-wrap items-baseline" : "items-baseline"
-        } ${
+        className={`flex min-w-0 flex-1 gap-x-1.5 rounded-md border border-subtle bg-base px-2 py-1 text-row items-baseline ${stacked ? "flex-wrap" : ""} ${
           off ? "cursor-not-allowed opacity-60" : onDrag ? "cursor-grab active:cursor-grabbing" : ""
         }`}
         title={

@@ -26,22 +26,21 @@ export function roadmapAxisHeight(hasCycleStrip: boolean): number {
 }
 /** Bars at least this wide draw their FULL info (title + priority + assignee)
  *  inside the bar. */
-export const ROADMAP_BAR_INFO_MIN_PX = 90;
+const ROADMAP_BAR_INFO_MIN_PX = 90;
 /** Bars at least this wide (under the full tier) draw the COMPACT tier: the
- *  priority icon and the assignee avatar in their pill, centred, no title.
- *  At the default zoom a one-week bar is 63px, so a blank bar was the common
- *  case, not the edge (RADD-1509). The pill is 4+14+4+20+4 = 46px, hence 48.
- *  Narrower bars draw nothing — the hover card covers them; a title OUTSIDE
- *  the bar was considered and dropped: the sticky label gutter already names
- *  every row, and an outside title collides with the next bar. */
-export const ROADMAP_BAR_COMPACT_MIN_PX = 48;
+ *  priority icon and the assignee avatar in their pill, centred, no title
+ *  (RADD-1509: a one-week bar is 63px at the default zoom). The pill is
+ *  4+14+4+20+4 = 46px, hence 48. Narrower bars draw nothing — the hover card
+ *  covers them; a title OUTSIDE the bar was rejected: the label gutter already
+ *  names every row, and an outside title collides with the next bar. */
+const ROADMAP_BAR_COMPACT_MIN_PX = 48;
 /** Height gates (RADD-1520): bars shrink with the zoom, and chrome that cannot
  *  fit steps down rather than clipping. The title line (13px text) needs 22px;
  *  the icon pill (14px icon + its padding) 18px; the 20px avatar in its pill
  *  26px — below that the pill keeps the icon alone. */
-export const ROADMAP_BAR_INFO_MIN_H = 22;
-export const ROADMAP_BAR_PILL_MIN_H = 18;
-export const ROADMAP_BAR_AVATAR_MIN_H = 26;
+const ROADMAP_BAR_INFO_MIN_H = 22;
+const ROADMAP_BAR_PILL_MIN_H = 18;
+const ROADMAP_BAR_AVATAR_MIN_H = 26;
 
 export const RoadmapBarInfoTier = { full: "full", compact: "compact", none: "none" } as const;
 export type RoadmapBarInfoTierValue = (typeof RoadmapBarInfoTier)[keyof typeof RoadmapBarInfoTier];

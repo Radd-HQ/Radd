@@ -171,9 +171,8 @@ async def list_fields(
         return []
     restricted_ids = await service.restricted_field_ids(session)
     if project_id is not None:
-        # The fields in scope for ONE project (RADD-1551): an issue page drew its
-        # rail from the whole catalog, 150 KB on an instance with 319 fields, to
-        # show the 61 its project uses.
+        # The fields in scope for ONE project (RADD-1551): an issue page needs the
+        # 61 its project uses, not the whole 319-field, 150 KB catalog.
         from radd.modules.projects import service as projects_service
 
         project = await projects_service.get_project(session, project_id)

@@ -143,11 +143,10 @@ export const roadmapTrayItemsQuery = (
 
 /**
  * The rows a roadmap DRAFT inserted (tray drops, children a plan brought in), fetched LIVE by key
- * (RADD-1506). The draft carries each as a frozen snapshot taken at gesture time, so a dependency
- * drawn from one — or a title edited in the peek — never showed until Save + reload; tagged with
- * the item entity like every item query, this refetches on each item/link write and the surface
- * prefers it to the snapshot. One page at the API cap: a draft past 200 inserted rows keeps the
- * snapshot for the rest. `keys` arrive sorted so the key is stable across re-renders.
+ * (RADD-1506): the draft's own copy is a snapshot frozen at gesture time, so the surface prefers
+ * this, which refetches on each item/link write. One page at the API cap: a draft past 200
+ * inserted rows keeps the snapshot for the rest. `keys` arrive sorted so the key is stable across
+ * re-renders.
  */
 export const roadmapDraftedItemsQuery = (keys: readonly string[], projectId: string | null) =>
   queryOptions({

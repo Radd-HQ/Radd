@@ -1,7 +1,6 @@
 """Read-only analytics (spec 16), aggregated in SQL over `item_transitions`
 (RADD-1537): each report is one grouped query over the rows its own window
-covers, where it used to load a project's whole event history and fold it in
-Python. `bucket_start(s)`, `matching_ids` and `report_scope` are public so a
+covers. `bucket_start(s)`, `matching_ids` and `report_scope` are public so a
 plugin's own report (the SLA report in `slas`, RADD-1386) buckets the same way."""
 
 import uuid
@@ -104,8 +103,8 @@ async def _visible(
     session: AsyncSession, actor: User | None, q: str | None, project_id: uuid.UUID | None = None
 ):
     """The SELECT of item ids a report may range over, or None with no actor
-    (unfiltered). The reports hand it to the database as a subquery: the
-    intersection used to be a Python set of every visible id in the project."""
+    (unfiltered). Handed to the database as a subquery, so the intersection
+    never becomes a Python set of every visible id in the project."""
     if actor is None:
         return None
     return await items_bulk.visible_matching_select(

@@ -2,9 +2,7 @@
 
 One ranked list from three reads: what is assigned to them and still open, what
 they booked time on lately, and what they acted on lately — any item-scoped
-event they caused, read from the event log. The third is the one the entry
-calendar's trays could not show: the issue commented on or moved an hour ago is
-usually the one the hour belongs to.
+event they caused, read from the event log.
 
 The "acted" read names no event types. It asks the kernel registry which types
 are item-scoped, so a module that adds one is counted without this file

@@ -22,9 +22,7 @@ const TEAM_MODE = { value: Mode.team, label: "Team" };
  * /timesheet — two surfaces over the same worklogs (RADD-1541).
  *
  * **My week** is for ENTERING time: one person's week as a calendar of cards.
- * **Report** is for READING it: the grid across people, periods and groupings
- * the page has always been. They were one screen, built for reading, and people
- * logged time issue by issue; the split is what the pilot asked for.
+ * **Report** is for READING it: the grid across people, periods and groupings.
  *
  * Which one is open lives in the URL (`m`), so a link or a refresh lands where
  * it was sent. The calendar is the default: logging is the daily act, a report

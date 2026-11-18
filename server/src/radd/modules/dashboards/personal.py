@@ -90,15 +90,20 @@ def _personal_widget(raw) -> PluginWidget:
         raise RequestValidationError(exc.errors()) from exc
 
 
-async def save(session, user, data: WidgetLayoutSave):
-    from .widgets import _check_references, plugin_config
-
+async def _lock(session, user) -> None:
+    """Lock the person's row and re-read it: preferences are rewritten whole."""
     await session.execute(
         select(User)
         .where(User.id == user.id)
         .with_for_update()
         .execution_options(populate_existing=True)
     )
+
+
+async def save(session, user, data: WidgetLayoutSave):
+    from .widgets import _check_references, plugin_config
+
+    await _lock(session, user)
     stored = read(user)
     if LAYOUT_KEY in (user.preferences or {}) and [
         WidgetRead.model_validate(w).model_dump(mode="json") for w in stored
@@ -161,12 +166,7 @@ async def answer_offer(session, user, widget_type: str, *, accept: bool) -> list
     person's layout and leave everything else where they put it."""
     if widget_type not in OFFERED_KINDS:
         raise NotFoundError("widget offer", widget_type)
-    await session.execute(
-        select(User)
-        .where(User.id == user.id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
+    await _lock(session, user)
     layout = list(read(user))
     if accept and all(w["widget_type"] != widget_type for w in layout):
         offered = [w for w in await suggested_defaults(session, user) if w["widget_type"] == widget_type]

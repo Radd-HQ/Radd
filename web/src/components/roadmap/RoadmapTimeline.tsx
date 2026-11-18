@@ -170,6 +170,8 @@ export function RoadmapTimeline({
   // (regions, connectors, the rubber band, drop targets) multiplies rowH.
   const metrics = roadmapRowMetrics(dayWidth);
   const { rowH } = metrics;
+  /** The sticky header's height — rows start below it in the scroll content. */
+  const axisH = roadmapAxisHeight(bands.length > 0);
   const rootRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   /** The rows block — a tray drop's y is measured against ITS top (RADD-1522). */
@@ -178,12 +180,10 @@ export function RoadmapTimeline({
   // Virtualized rows (RADD-1521): the pane's scroll position and height, read
   // through one rAF-throttled scroll listener and a ResizeObserver; the row
   // window is a pure function of them, so a zoom (rowH) or a filter (count)
-  // re-derives it in the same render with nothing stale to reconcile.
+  // re-derives it in the same render.
   // A passive effect, not a layout one: the pane is this component's PARENT,
   // and React attaches a parent's ref after its children's layout effects
-  // have run — a layout effect here saw a null ref, registered nothing, and
-  // the window sat at rows 0–28 whatever the scroll position (the proof's
-  // "scroll to the bottom" check is what caught it).
+  // have run — a layout effect here sees a null ref and registers nothing.
   const [viewport, setViewport] = useState({ scrollTop: 0, clientHeight: 1000 });
   useEffect(() => {
     const pane = scrollRef.current;
@@ -223,14 +223,13 @@ export function RoadmapTimeline({
     setRevealId(null);
     const pane = scrollRef.current;
     if (!pane) return;
-    const header = roadmapAxisHeight(bands.length > 0);
-    const top = header + index * rowH;
-    const viewTop = pane.scrollTop + header;
+    const top = axisH + index * rowH;
+    const viewTop = pane.scrollTop + axisH;
     const viewBottom = pane.scrollTop + pane.clientHeight;
     if (top < viewTop || top + rowH > viewBottom) {
       pane.scrollTop = Math.max(0, top - pane.clientHeight / 2);
     }
-  }, [revealId, visibleRows, rowH, scrollRef, bands.length]);
+  }, [revealId, visibleRows, rowH, scrollRef, axisH]);
 
   // Row reorder (spec 82): the label-dragged row + the hovered sibling's drop
   // indicator. HTML5 drag like ViewList rows — separate from the pointer-event
@@ -470,7 +469,7 @@ export function RoadmapTimeline({
     const range = visibleRowRange(
       viewport.scrollTop,
       viewport.clientHeight,
-      roadmapAxisHeight(bands.length > 0),
+      axisH,
       rowH,
       visibleRows.length,
       ROADMAP_OVERSCAN_ROWS,
@@ -482,7 +481,7 @@ export function RoadmapTimeline({
       range.last = Math.max(range.last, index + 1);
     }
     return range;
-  }, [viewport, bands.length, rowH, visibleRows.length, rowDrag, drag.state, rowIndexById]);
+  }, [viewport, axisH, rowH, visibleRows.length, rowDrag, drag.state, rowIndexById]);
   const mountedRows = visibleRows.slice(rowRange.first, rowRange.last);
 
   const linkState = drag.state?.mode === BarDragMode.link && drag.state.started ? drag.state : null;
@@ -554,11 +553,9 @@ export function RoadmapTimeline({
 
   // Tray drag-in (RADD-1507): the WHOLE timeline is the lane — the axis
   // header, the rows and the open space below them all accept the drop, and
-  // only x picks the day. It used to be the rows block alone (rows + one
-  // spare lane), so with three rows most of the pane refused the drop and
-  // the user had to "drag high enough". A drop on the STICKY label gutter
-  // (which overlays real day columns once the pane is scrolled, so layout x
-  // alone can't tell those apart) lands on the first VISIBLE day.
+  // only x picks the day. A drop on the STICKY label gutter (which overlays
+  // real day columns once the pane is scrolled, so layout x alone can't tell
+  // those apart) lands on the first VISIBLE day.
   const dayAtEvent = (event: ReactDragEvent<HTMLElement>): number | null => {
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return null;
@@ -667,7 +664,7 @@ export function RoadmapTimeline({
           // at its left) would otherwise spill past the domain's end and widen
           // the scroll content, so Fit could never quite fit (RADD-1520).
           className="relative overflow-hidden"
-          style={{ width: innerWidth, height: roadmapAxisHeight(bands.length > 0) }}
+          style={{ width: innerWidth, height: axisH }}
         >
           {/* Cycle strip (RADD-1511): one labelled band per dated cycle, under
               the week ticks — the axis already IS the time, so cycles are
@@ -762,10 +759,9 @@ export function RoadmapTimeline({
                     width: region.rightX - region.startIndex * dayWidth,
                     top: region.rowIndex * rowH,
                     height: region.rowCount * rowH,
-                    // RADD-1515: 2px in the category's ink tier. A neutral border
-                    // was the day grid's grey — ~1.1:1 on the light page, and
-                    // invisible wherever it sat on a day line; the fill tier
-                    // is 2:1 there for yellow.
+                    // RADD-1515: 2px in the category's ink tier — a neutral
+                    // border vanished into the day grid, and the fill tier is
+                    // only 2:1 on the light page for yellow.
                     borderColor: region.ink,
                     backgroundColor: `color-mix(in srgb, ${region.color} ${ROADMAP_REGION_TINT_PERCENT}%, transparent)`,
                   }}

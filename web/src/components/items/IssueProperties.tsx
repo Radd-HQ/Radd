@@ -334,9 +334,8 @@ export function IssueProperties({
         );
       })}
 
-      {/* Who may see the issue, then what plugins add (RADD-1554). Both used to
-          sit ABOVE the fields: on a default project Assignee came after
-          Visibility, five plugin sections and the parent, below the fold. */}
+      {/* Who may see the issue, then what plugins add — BELOW the fields
+          (RADD-1554): above them they pushed Assignee under the fold. */}
       <div className="flex flex-col gap-3 p-4">
         <ChipSelect
           chip={

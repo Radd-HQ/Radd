@@ -34,8 +34,8 @@ export function ItemKeyLink({ itemKey, className }: { itemKey: string; className
       title={`Open ${itemKey}`}
       className={
         className ??
-        // Secondary ink, not muted (RADD-1519): the key sat in grey at 5:1 beside a
-        // 15:1 title and read as decoration; 7:1 now, one step under the title's size.
+        // Secondary ink, not muted (RADD-1519): 7:1, so the key does not read as
+        // decoration beside a 15:1 title.
         "shrink-0 font-mono text-meta text-fg-secondary hover:text-accent-text hover:underline"
       }
     >
@@ -194,8 +194,8 @@ export function PriorityIcon({
 }
 
 /** Row lead sizes (RADD-1519): the kind badge one step up from 13, the priority icon at 16 with a
- *  heavier stroke — Aurelien's "too small / shy" was the 13px signal bars. */
-export const ROW_LEAD_KIND_PX = 14;
+ *  heavier stroke — the 13px signal bars read as too small. */
+const ROW_LEAD_KIND_PX = 14;
 export const ROW_LEAD_PRIORITY_PX = 16;
 export const ROW_LEAD_PRIORITY_STROKE = 2.25;
 

@@ -20,7 +20,7 @@ interface PasswordChangeResult {
 }
 
 /** What is wrong with a new password before it is sent, or null. Pure. */
-export function newPasswordProblem(password: string, repeat: string): string | null {
+function newPasswordProblem(password: string, repeat: string): string | null {
   if (password.length < PASSWORD_MIN_LENGTH) return `Use at least ${PASSWORD_MIN_LENGTH} characters.`;
   if (password !== repeat) return "The two entries do not match.";
   return null;

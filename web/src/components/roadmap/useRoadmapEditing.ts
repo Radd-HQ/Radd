@@ -153,10 +153,9 @@ export function useRoadmapEditing(
   );
 
   /**
-   * Record a PLAN (spread, date order) as ONE draft op (RADD-1510, closing
-   * RADD-1433's box): the date patches and — when the view is rank-ordered
-   * and the caller passes the plan's order — the rank chain that makes the
-   * result read top-to-bottom, compounded so a single Undo reverts both.
+   * Record a PLAN as ONE draft op (RADD-1510, RADD-1433): the date patches
+   * and — when the caller passes the plan's order — the rank chain that makes
+   * the result read top-to-bottom, compounded so a single Undo reverts both.
    * `orderedIds` null = the view orders its rows itself (explicit ORDER BY),
    * so no chain is recorded.
    */
@@ -190,14 +189,12 @@ export function useRoadmapEditing(
    * `PATCH /items`, then the rank intents replayed in op order (anchors are
    * ids, so date patches and reorders never interact; rank writes are
    * idempotent, so a retry after a mid-chain failure is safe). The draft is
-   * cleared only AFTER the item refetch lands — clearing it first made every
-   * inserted row vanish until the paged stream completed, seconds on a big
-   * instance, which read as data loss. A refusal stays on the Save button
-   * (`saveError`) with the item named, and the draft stays intact to retry.
-   * Only the ops this Save captured are dropped afterwards (RADD-1542): a
-   * gesture made while the refetch settles stays in the draft. When the field
-   * PATCH landed and a rank write then failed, the message says so — the
-   * dates ARE saved, and Save again replays only the ordering.
+   * settled only AFTER the item refetch lands — clearing it first makes every
+   * inserted row vanish until the paged stream completes. Only the ops this
+   * Save captured are dropped (RADD-1542): a gesture made while the refetch
+   * settles stays in the draft. A refusal stays beside the Save button
+   * (`saveError`) with the draft intact; when the field PATCH landed and a
+   * rank write then failed, the message says the dates ARE saved.
    */
   const saveDraft = useCallback(async () => {
     if (!draft.dirty || saving) return;
@@ -320,11 +317,9 @@ export function useRoadmapEditing(
    * Schedule an unscheduled item dropped from the tray: start = the drop day
    * (today when the timeline is still empty), target = start + the kind's
    * default span. With a `placement` (the row and half under the pointer,
-   * RADD-1522) the item is also RANKED there, in the same compound op — the
-   * fold's reorder moves it to that row at once, one Undo reverts both, and
-   * Save replays the rank intent after the date patch exactly as a label
-   * drag does. Returns whether it was placed; an unplaceable drop (a sorted
-   * view, the axis header, a cross-scope target) appends as before and the
+   * RADD-1522) the item is also RANKED there, in the same compound op, so
+   * one Undo reverts both. Returns whether it was placed; an unplaceable drop
+   * (a sorted view, the axis header, a cross-scope target) appends and the
    * caller reveals the row.
    */
   const scheduleFromTray = useCallback(
@@ -509,7 +504,6 @@ export function useRoadmapEditing(
     commitSpan,
     scheduleFromTray,
     reorderRow,
-    applyRankChain,
     orderChildrenByDate,
     linkAnchor,
     beginLink,

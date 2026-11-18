@@ -1,10 +1,7 @@
 """Compress what the server sends (RADD-1549).
 
-Until this only `/items` and `/items/grouped` were compressed, on the assumption
-that a proxy in front handles the rest. Measured on the live instance, behind
-its proxy: the main script left as 270 KB of plain text, and a cold page load
-moved about 2.0 MB of JavaScript that compresses to a third. `/labels` was
-279 KB and `/fields` 150 KB on every issue page.
+Done here, not left to a proxy in front: measured on the live instance behind
+its proxy, a cold page load moved about 2.0 MB of JavaScript as plain text.
 
 A GET response is gzipped when the client accepts it, its content type is text
 (JSON, JavaScript, CSS, HTML, SVG), it is at least `MINIMUM_BYTES`, and nothing

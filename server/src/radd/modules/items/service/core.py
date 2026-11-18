@@ -212,11 +212,9 @@ async def update_items(
 ) -> list[ItemRead]:
     """`PATCH /items` (RADD-1505): every patch inside the request transaction,
     so a refusal on the Nth item leaves the first N-1 unwritten too — the
-    session rolls back as a whole. The roadmap's Save used to be one PATCH per
-    item that stopped at the first failure: some children saved, the epic
-    (patched last) never, and a reload showed one child and no epic dates.
-    A `RaddError` is re-raised as itself (its own status code) with the item's
-    key in front, so the client can say which row refused."""
+    session rolls back as a whole. A `RaddError` is re-raised as itself (its
+    own status code) with the item's key in front, so the client can say which
+    row refused."""
     # Every row first, in id order (RADD-1539): two Saves that overlap wait for
     # each other instead of deadlocking on rows taken in two different orders.
     await lock_items(session, (entry.item_id for entry in data.patches))

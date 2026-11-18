@@ -1,9 +1,7 @@
 """Security response headers (RADD-1531).
 
-The server sent none: no content-type sniffing guard outside attachments, no
-frame protection, no HSTS, no referrer policy, no Content-Security-Policy. The
-SPA renders no stored HTML, so this is a second line of defence, not a patch for
-a known hole — but an app that can be framed by any site can be clickjacked.
+The SPA renders no stored HTML, so this is a second line of defence, not a patch
+for a known hole — but an app that can be framed by any site can be clickjacked.
 
 The app sets these itself rather than leaving them to a reverse proxy because
 the policy depends on what the app loads (plugin bundles, presigned downloads),

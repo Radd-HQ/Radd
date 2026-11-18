@@ -82,10 +82,9 @@ async def ensure_schema(session: AsyncSession) -> bool:
     Returns availability, so the startup hook doubles as the gate check."""
     if not await vector_available(session):
         return False
-    # One process at a time (RADD-1544). Every web process and the worker run
-    # this at startup; two of them altering the same table at once deadlocked,
-    # and the loser failed its startup — found by starting four web processes
-    # and a worker together for the load test. Held until this transaction ends.
+    # One process at a time (RADD-1544): every web process and the worker run
+    # this at startup, and two altering the same table at once deadlocked — the
+    # loser failed its startup. Held until this transaction ends.
     await session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": _SCHEMA_LOCK})
     for statement in _SCHEMA_SQL.strip().split(";"):
         if statement.strip():

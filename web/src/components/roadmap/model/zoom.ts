@@ -12,8 +12,8 @@ import {
 import { ROADMAP_EPIC_BAR_H, ROADMAP_LEAF_BAR_H, ROADMAP_ROW_H } from "./geometry";
 import type { AxisTick } from "./rows";
 
-/** The smallest row pitch: a strip that still shows a bar. The 306-row BNS roadmap is 13.5k px
- *  tall at the comfortable pitch and 2.4k here — an overview, which is what zooming out is for. */
+/** The smallest row pitch: a strip that still shows a bar (306 rows are 13.5k px tall at the
+ *  comfortable pitch and 2.4k here). */
 export const ROADMAP_ROW_MIN_H = 8;
 
 export interface RoadmapRowMetrics {
@@ -24,10 +24,9 @@ export interface RoadmapRowMetrics {
 }
 
 /** Below the default day width the rows shrink by the SAME factor as the days — the board scales
- *  as one surface, the way browser zoom does, which is what Hussein had been using to see a whole
- *  epic group. Above the default the rows keep the comfortable pitch: zooming in is for day
- *  detail, not taller rows. Whole pixels, so `rowIndex * rowH` lands on device pixels at every
- *  level (RADD-1513 is a pitch bug; the metrics must never reintroduce one). */
+ *  as one surface, the way browser zoom does. Above the default the rows keep the comfortable
+ *  pitch: zooming in is for day detail, not taller rows. Whole pixels, so `rowIndex * rowH`
+ *  lands on device pixels at every level (RADD-1513 was a pitch bug). */
 export function roadmapRowMetrics(dayWidth: number): RoadmapRowMetrics {
   const rowH = Math.max(
     ROADMAP_ROW_MIN_H,
@@ -46,8 +45,8 @@ export function roadmapRowMetrics(dayWidth: number): RoadmapRowMetrics {
  *  that the cell draws nothing but keeps its selection tint and tree guide, which still read. */
 export const RoadmapLabelTier = { full: "full", mini: "mini", none: "none" } as const;
 export type RoadmapLabelTierValue = (typeof RoadmapLabelTier)[keyof typeof RoadmapLabelTier];
-export const ROADMAP_LABEL_FULL_MIN_H = 22;
-export const ROADMAP_LABEL_MINI_MIN_H = 14;
+const ROADMAP_LABEL_FULL_MIN_H = 22;
+const ROADMAP_LABEL_MINI_MIN_H = 14;
 
 export function roadmapLabelTier(rowH: number): RoadmapLabelTierValue {
   if (rowH >= ROADMAP_LABEL_FULL_MIN_H) return RoadmapLabelTier.full;
@@ -70,12 +69,12 @@ const SHORTEST_MONTH_DAYS = 28;
 const SHORTEST_QUARTER_DAYS = 90;
 const WEEK_DAYS = 7;
 /** Month labels ("Jan 2026" on January, the month alone otherwise) — ≈2.2 px/day. */
-export const ROADMAP_AXIS_MONTH_MIN_DAY_PX = ROADMAP_AXIS_LABEL_PX.month / SHORTEST_MONTH_DAYS;
+const ROADMAP_AXIS_MONTH_MIN_DAY_PX = ROADMAP_AXIS_LABEL_PX.month / SHORTEST_MONTH_DAYS;
 /** Quarter labels ("Q3 2026") — ≈0.64 px/day. Years always fit: a year is 91px at the floor. */
-export const ROADMAP_AXIS_QUARTER_MIN_DAY_PX = ROADMAP_AXIS_LABEL_PX.quarter / SHORTEST_QUARTER_DAYS;
+const ROADMAP_AXIS_QUARTER_MIN_DAY_PX = ROADMAP_AXIS_LABEL_PX.quarter / SHORTEST_QUARTER_DAYS;
 /** Weekly labels at 6 px/day, alternate weeks at 3. */
-export const ROADMAP_AXIS_WEEK_MIN_DAY_PX = ROADMAP_AXIS_LABEL_PX.week / WEEK_DAYS;
-export const ROADMAP_AXIS_ALT_WEEK_MIN_DAY_PX = ROADMAP_AXIS_LABEL_PX.week / (WEEK_DAYS * 2);
+const ROADMAP_AXIS_WEEK_MIN_DAY_PX = ROADMAP_AXIS_LABEL_PX.week / WEEK_DAYS;
+const ROADMAP_AXIS_ALT_WEEK_MIN_DAY_PX = ROADMAP_AXIS_LABEL_PX.week / (WEEK_DAYS * 2);
 
 export interface RoadmapAxisTiers {
   primary: RoadmapAxisTierValue;
@@ -154,7 +153,7 @@ export function fitDayWidth(timelineWidth: number, domainDays: number): number {
 }
 
 /** The zoom Select's label for a level that is not a preset: a percentage of the default day
- *  width reads as "how far out am I", where "2.0px" read as nothing. */
+ *  width, which reads as "how far out am I". */
 export function zoomPercentLabel(dayWidth: number): string {
   return `${Math.round((dayWidth / ROADMAP_DAY_WIDTH) * 100)}%`;
 }

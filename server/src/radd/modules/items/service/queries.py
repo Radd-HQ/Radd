@@ -26,9 +26,8 @@ async def require_item(
     """Fetch a raw item or 404 — the cheap existence check other modules build on.
 
     `lock=True` is for a WRITE (RADD-1539): the row is taken `FOR UPDATE` and
-    re-read, so two requests changing one item run one after the other and the
-    second works from what the first committed. Without it both read the same
-    row, both validated a transition from the same state, and both wrote back a
+    re-read, so two requests changing one item run one after the other. Without
+    it both validate a transition from the same state and both write back a
     whole `custom_fields` document — the later commit silently undoing the
     earlier one's field."""
     if lock:
@@ -364,11 +363,10 @@ async def _rebalance_ranks(session: AsyncSession) -> None:
 
 async def _respace_after(session: AsyncSession, after_id: uuid.UUID, moving_id: uuid.UUID) -> bool:
     """Open a gap right after `after_id` by spreading the rows that FOLLOW it
-    (RADD-1539). Rank is one instance-wide order, and two neighbours whose float
-    midpoint has collapsed used to be repaired by renumbering all of it inside
-    the drag. Only the neighbourhood is crowded: the next `window` rows are
-    spread evenly up to the rank of the row beyond them, and the window widens
-    while that stretch is itself too tight to hold them. True = a gap exists.
+    (RADD-1539), instead of renumbering the whole instance-wide order inside a
+    drag. Only the neighbourhood is crowded: the next `window` rows are spread
+    evenly up to the rank of the row beyond them, and the window widens while
+    that stretch is itself too tight to hold them. True = a gap exists.
 
     False = `after_id` shares its rank with more rows than the widest window
     (data seeded with one rank for everything): the caller falls back to the
@@ -428,9 +426,9 @@ async def project_stats(
     """`{project: (open issues, last activity)}` for a page of projects (RADD-1558).
 
     `visible` is the caller's own readable-items SELECT (ids), so both numbers
-    describe what THAT actor can see. The first version counted every
-    non-restricted item of a readable project: on a public project that told a
-    visitor how many internal issues exist and when one last moved."""
+    describe what THAT actor can see: counting every item of a readable project
+    would tell a public project's visitor how many internal issues exist and
+    when one last moved."""
     ids = list(dict.fromkeys(project_ids))
     if not ids:
         return {}

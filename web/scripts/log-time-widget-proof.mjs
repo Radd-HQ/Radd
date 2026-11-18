@@ -51,7 +51,7 @@ async function main() {
     const READ = `(() => { const w = document.querySelector("[data-log-time-widget]"); const row = w.querySelector("[data-tray-row='${item.key}']"); const title = row.querySelector("[data-tray-ticket] > span"); const why = row.querySelector("[data-ticket-why]"); return {
       title: { text: title.textContent, cut: Math.max(title.scrollWidth - title.clientWidth, title.scrollHeight - title.clientHeight), width: title.clientWidth, row: row.clientWidth, top: title.getBoundingClientRect().top },
       whyTop: why ? why.getBoundingClientRect().top : null, card: w.clientWidth,
-      today: w.querySelector("[data-log-time-today]").textContent, why: w.querySelector("[data-tray-row='${item.key}'] [data-ticket-why]")?.textContent ?? "",
+      today: w.querySelector("[data-log-time-today]").textContent, why: why?.textContent ?? "",
       overflow: w.scrollWidth - w.clientWidth, minFont: Math.min(...[...w.querySelectorAll("*")].filter((n) => n.childElementCount === 0 && n.textContent.trim()).map((n) => parseFloat(getComputedStyle(n).fontSize))) }; })()`;
     const before = await session.eval(READ);
     await session.eval(`(() => { const n = document.querySelector("[data-log-time-widget] [data-quick-log='${item.key}']"); n.scrollIntoView({ block: "center" }); n.focus(); return true; })()`);

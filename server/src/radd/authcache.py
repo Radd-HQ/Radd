@@ -1,9 +1,7 @@
 """Authorization answers reused across requests, while nothing has changed (RADD-1560).
 
-Every request resolved the same things from scratch before doing its own work:
-which groups and teams the person is in, which grants reach them, what each
-role holds. Eight statements on the cheapest request, the same answers as the
-request before it.
+Which groups and teams a person is in, which grants reach them, what each role
+holds: eight statements on the cheapest request, the same answers every time.
 
 **The epoch.** One row, `auth_epoch`. Database triggers on the tables those
 answers are read from (`global_role_grants`, `roles`, `team_members`,
@@ -26,8 +24,7 @@ request on every process, because that request reads a different epoch.
 - *A grant that expires.* Expiry is a comparison with the clock, not a change
   to a row, so cached grant rows carry `expires_at` and are filtered when read.
 
-`RADD_AUTH_CACHE=false` turns it off; every caller then asks the database, as
-before.
+`RADD_AUTH_CACHE=false` turns it off; every caller then asks the database.
 """
 
 from __future__ import annotations

@@ -33,11 +33,14 @@ const KEY = `TL${Date.now().toString(36).slice(-4).toUpperCase()}`;
 const COLLEAGUE = `timelog-colleague-${Date.now().toString(36)}@example.test`;
 const HOUR_PX = 44; // timelog/model.ts
 
+/** Today as a local calendar date. */
+const TODAY = (() => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+})();
 /** The Monday-based week the page shows for today, as the page computes it (UTC date math). */
 const week = (() => {
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const ms = Date.parse(`${today}T00:00:00Z`);
+  const ms = Date.parse(`${TODAY}T00:00:00Z`);
   const monday = ms - ((new Date(ms).getUTCDay() + 6) % 7) * 86_400_000;
   return Array.from({ length: 7 }, (_, i) => new Date(monday + i * 86_400_000).toISOString().slice(0, 10));
 })();
@@ -242,8 +245,6 @@ async function main() {
     check("the Add row finds an issue by its words and logs 1h on that day", Boolean(hit) && now.days[TUE].cards[0]?.key === b.key && sums(now), JSON.stringify({ hit, tue: now.days[TUE] }));
 
     // --- 8b. type a duration beside a ticket (RADD-1573) -----------------------------------------
-    const now0 = new Date();
-    const TODAY = `${now0.getFullYear()}-${String(now0.getMonth() + 1).padStart(2, "0")}-${String(now0.getDate()).padStart(2, "0")}`;
     const OTHER = week.find((day) => day !== TODAY && day !== MON && day !== TUE && day !== WED && day !== THU && day !== FRI) ?? week.find((day) => day !== TODAY);
     const targetOf = () => session.eval(`({ day: document.querySelector("[data-day-target]")?.dataset.day ?? null, label: document.querySelector("[data-log-target-label]")?.textContent ?? "" })`);
     const on = (value, day, key, seconds) => value.days[day].cards.filter((card) => card.key === key && card.seconds === seconds).length;

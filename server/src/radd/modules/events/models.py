@@ -28,10 +28,9 @@ class ConsumerOffset(Base):
 
 
 class ConsumerFailure(Base):
-    """An event a consumer's handler raised on (RADD-1538) — what used to be a
-    log line and a lost side effect. `pending` rows are retried by the consumer
-    itself at `next_attempt_at`; `dead` ones wait for an operator to replay or
-    discard them (Settings → Monitoring). See `consumer.py`."""
+    """An event a consumer's handler raised on (RADD-1538). `pending` rows are
+    retried by the consumer itself at `next_attempt_at`; `dead` ones wait for an
+    operator to replay or discard them (Settings → Monitoring). See `consumer.py`."""
 
     __tablename__ = "consumer_failures"
     __table_args__ = (

@@ -1,10 +1,5 @@
 """Seeing the running system from outside it (RADD-1530).
 
-Before this there was no request ID, no structured log and no metrics: logs were
-default uvicorn lines, and the only operational signal was a page inside the app
-that needed the app to be up and someone to be looking at it. Two outages of an
-internal instance were reported by its users in chat.
-
 Three small things, with no new dependency:
 
 - **A request ID** on every request: taken from `X-Request-ID` when a proxy sent a
@@ -39,6 +34,8 @@ from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from radd.config import settings
+
+logger = logging.getLogger(__name__)
 
 REQUEST_ID_HEADER = "X-Request-ID"
 #: What an incoming ID may look like. Anything else is replaced, not trusted: the
@@ -144,7 +141,7 @@ async def live_metrics() -> list[str]:
             f'radd_db_pool_connections{_labels(state="overflow")} {max(0, pool.overflow())}',
         ]
     except Exception:  # noqa: BLE001
-        logging.getLogger(__name__).debug("pool metrics unavailable", exc_info=True)
+        logger.debug("pool metrics unavailable", exc_info=True)
     try:
         from radd.db import SessionLocal
         from radd.modules.events import service as events
@@ -171,7 +168,7 @@ async def live_metrics() -> list[str]:
                     f"{_labels(consumer=row['name'], status=status)} {row[f'failed_{status}']}"
                 )
     except Exception:  # noqa: BLE001
-        logging.getLogger(__name__).debug("consumer metrics unavailable", exc_info=True)
+        logger.debug("consumer metrics unavailable", exc_info=True)
     try:
         from radd.backup import store
 
@@ -189,7 +186,7 @@ async def live_metrics() -> list[str]:
                 f"radd_backup_age_seconds {age:.0f}",
             ]
     except Exception:  # noqa: BLE001
-        logging.getLogger(__name__).debug("backup metrics unavailable", exc_info=True)
+        logger.debug("backup metrics unavailable", exc_info=True)
     return lines
 
 

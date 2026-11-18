@@ -1,10 +1,5 @@
 """Changing a local password (RADD-1529).
 
-`password_hash` used to be written twice in the whole codebase: when a user was
-created and by the seed CLI. Nothing changed it afterwards, so the seeded admin
-password stayed whatever was typed on a command line and a leaked password
-could not be rotated without shell access.
-
 Two paths, and only for accounts that HAVE a local password — a directory or
 SSO account's password is its provider's business:
 
@@ -34,14 +29,8 @@ NO_LOCAL_PASSWORD = (
 )
 
 
-def has_local_password(user: User) -> bool:
-    """Whether Radd itself holds this account's password. The UI offers the
-    change and the reset only when it does."""
-    return user.has_local_password
-
-
 def _require_local(user: User) -> None:
-    if not has_local_password(user):
+    if not user.has_local_password:
         raise ConflictError(AuthEntity.USER, reason=NO_LOCAL_PASSWORD)
 
 
@@ -108,4 +97,3 @@ async def admin_set(
 
 def token_hash_of(raw_cookie: str | None) -> str | None:
     return security.hash_token(raw_cookie) if raw_cookie else None
-

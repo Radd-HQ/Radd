@@ -286,10 +286,10 @@ def _mount_spa(app: FastAPI) -> None:
             # rebuild is picked up on reload.
             headers = _IMMUTABLE if path.startswith("assets/") else _REVALIDATE
             return FileResponse(candidate, headers=headers)
-        # A missing build asset is ABSENT, never the shell (RADD-1527). Every release
-        # replaces the bundle, so a tab opened before it asks for the old hash on its
-        # next lazy route: answered with index.html and a 200 it failed to parse as a
-        # module and stranded the user; a 404 is what lets the SPA notice and reload.
+        # A missing build asset is ABSENT, never the shell (RADD-1527). A tab opened
+        # before a release asks for the old hash on its next lazy route: index.html
+        # with a 200 fails to parse as a module and strands it; a 404 lets the SPA
+        # notice and reload.
         if path.startswith("assets/"):
             raise HTTPException(status_code=404)
         # index.html (the SPA shell) must always revalidate — it references the current asset hashes.

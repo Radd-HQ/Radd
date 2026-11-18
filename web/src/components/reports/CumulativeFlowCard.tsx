@@ -3,11 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { errorMessage } from "../../lib/api";
 import { CATEGORY_CHART_COLORS, CATEGORY_META, CATEGORY_ORDER } from "../../lib/meta";
 import { cumulativeFlowQuery } from "../../lib/queries";
-import type { ReportIntervalValue } from "../../lib/types";
+import { StateCategory, type ReportIntervalValue } from "../../lib/types";
 import { CardBody, ChartLegend, ReportCard, StackedBarChart, type StackedBar } from "@radd-plugin-ui/reporting/charts";
 import { shortDate } from "@radd/plugin-sdk";
 
-const DONE = "done";
+const DONE = StateCategory.done;
 /** Done starts hidden when it is more than this share of the newest bucket. */
 const DONE_DOMINATES = 0.8;
 const HIDDEN_KEY = "radd.reports.cumulativeFlow.hidden";
@@ -40,11 +40,9 @@ export function CumulativeFlowCard({
   const buckets = query.data ?? [];
 
   // Which categories are drawn (RADD-1557). A project's Done pile dwarfs the
-  // work in progress — 85,000 done against 15,000 open on the perf seed — and
-  // on a zero-based axis the open work, which is what the chart is read for,
-  // was a sliver along the bottom. Each legend entry toggles its series; the
-  // choice is remembered, and until someone makes one, Done starts hidden when
-  // it is most of what there is.
+  // open work the chart is read for (85,000 against 15,000 on the perf seed),
+  // so each legend entry toggles its series; the choice is remembered, and
+  // until someone makes one, Done starts hidden when it dominates.
   const [stored, setStored] = useState<string[] | null>(readHidden);
   const latest: Record<string, number> = buckets.at(-1)?.counts ?? {};
   const latestTotal = Object.values(latest).reduce((sum, count) => sum + count, 0);

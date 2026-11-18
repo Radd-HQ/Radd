@@ -533,8 +533,8 @@ def _consumer(session_factory) -> event_consumer.Consumer:
 
     At-most-once on purpose (RADD-1538): a graph that failed half-way may have
     posted to a chat or called a URL already, and those cannot be rolled back.
-    The failure is no longer dropped — it is recorded dead, with the error, and
-    replaying it is an operator's decision."""
+    The failure is recorded dead, with the error; replaying it is an operator's
+    decision."""
 
     async def apply(_runner_session: AsyncSession, event: Event) -> None:
         async with session_factory() as session:

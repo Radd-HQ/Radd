@@ -44,9 +44,9 @@ export function useTopBarSlotHost(): {
 
 /** Renders `children` INTO the top bar's query slot for this page's lifetime.
  *
- *  `scope` says what the bar filters while the page owns it (RADD-1562). The
+ *  `scope` says what the bar filters while the page owns it (RADD-1562): the
  *  same input, in the same place, is global search on pages that claim nothing
- *  and this page's filter on pages that do; nothing used to say which. */
+ *  and this page's filter on pages that do. */
 export function TopBarQuery({ children, scope = "This page" }: { children: ReactNode; scope?: string }) {
   const slot = useContext(TopBarSlotContext);
   const setOccupied = slot?.setOccupied;

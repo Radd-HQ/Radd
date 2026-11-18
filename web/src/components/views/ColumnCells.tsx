@@ -59,9 +59,7 @@ function cellStyle(column: ColumnDef, width: number): React.CSSProperties {
 export function itemZoneStyle(widths: Record<string, number>): React.CSSProperties {
   // The title is what the row is FOR (RADD-1553). It never gives up its width —
   // when the row is tight the other columns go to their minimums first — and it
-  // takes most of any room left over. It used to shrink in proportion with the
-  // rest, and since this zone also holds the checkbox, star, icons and key, a
-  // laptop left the title text about 130 px beside columns of dashes.
+  // takes most of any room left over.
   return { ...cellStyle(TITLE_COLUMN, columnWidth(TITLE_COLUMN, widths)), flexShrink: 0, flexGrow: 4, maxWidth: columnMaxWidth(TITLE_COLUMN_ID) };
 }
 

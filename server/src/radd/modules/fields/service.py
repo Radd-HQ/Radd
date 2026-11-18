@@ -492,9 +492,8 @@ def _field_access(definition: Any, ctx: FieldAccessContext, access: str) -> bool
     grants = _grants_for(definition, ctx)
     if not grants:
         # No grant names this field, so nothing restricts or denies it: the
-        # answer is the spec's default. Almost every field on almost every
-        # instance, and it used to walk the whole resolution for each one, for
-        # each row of a list (RADD-1544).
+        # answer is the spec's default. That is almost every field, so the full
+        # resolution is skipped for it (RADD-1544).
         return _FIELD_SPEC.default_open
     return access_res.has_access(grants, ctx.as_subject(), access, ctx.project_id, _FIELD_SPEC)
 

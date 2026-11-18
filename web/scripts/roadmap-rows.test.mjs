@@ -12,6 +12,7 @@ const { formatIso, todayIso } = await importTs("web/packages/plugin-sdk/src/date
 // Local-midnight ISO, as lib/timesheet's toISODate does it.
 const toISODate = (date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+const ItemKind = { epic: "epic", issue: "issue", subtask: "subtask" };
 const dates = evaluateTs(
   readFileSync("web/src/components/roadmap/model/dates.ts", "utf8"),
   { toISODate },
@@ -19,7 +20,7 @@ const dates = evaluateTs(
 );
 const { buildRoadmapModel } = evaluateTs(
   readFileSync("web/src/components/roadmap/model/rows.ts", "utf8"),
-  { toISODate, ItemKind: { epic: "epic", issue: "issue", subtask: "subtask" }, ...dates, formatIso, todayIso },
+  { toISODate, ItemKind, ...dates, formatIso, todayIso },
   ["buildRoadmapModel"],
 );
 const { cycleBands } = evaluateTs(
@@ -29,7 +30,7 @@ const { cycleBands } = evaluateTs(
 );
 const { trayDropPlacement } = evaluateTs(
   readFileSync("web/src/components/roadmap/model/reorder.ts", "utf8"),
-  { ItemKind: { epic: "epic", issue: "issue", subtask: "subtask" }, RoadmapRowKind: { epic: "epic", child: "child", standalone: "standalone" } },
+  { ItemKind, RoadmapRowKind: { epic: "epic", child: "child", standalone: "standalone" } },
   ["trayDropPlacement"],
 );
 const { applyOp } = await importTs("web/src/components/roadmap/model/draft-ops.ts");

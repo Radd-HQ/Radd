@@ -17,9 +17,9 @@ interface LabelsEditorProps {
  */
 export function LabelsEditor({ value, onChange, disabled, lockedReason }: LabelsEditorProps) {
   const id = useId();
-  // The catalog is the PICKER's data: the chips draw from the issue's own label
-  // names. It used to load with the page — every label on the instance, 279 KB
-  // on the perf seed — for a dropdown most visits never open (RADD-1551).
+  // The catalog is the PICKER's data (the chips draw from the issue's own label
+  // names), so it loads when the dropdown opens — it is every label on the
+  // instance, 279 KB on the perf seed (RADD-1551).
   const [opened, setOpened] = useState(false);
   const labels = useQuery({ ...labelsQuery(), enabled: opened });
   const options: TokenOption[] = (labels.data ?? []).map((label) => ({

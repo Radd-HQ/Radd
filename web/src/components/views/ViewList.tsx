@@ -105,16 +105,16 @@ function isTopHalf(event: ReactDragEvent): boolean {
   return event.clientY < rect.top + rect.height / 2;
 }
 
-/**
- * List rendering for a saved view (spec 09/23/24): collapsible grouped sections
- * of compact rows with a personal-star toggle. Cross-section drag sets the axis
- * field; within-section drag reorders (manual rank) when `onReorder` is set.
- */
 /** Rows mounted from the first render: more than a tall screen shows. */
 const EAGER_ROWS = 40;
 /** A row's height before it has ever been measured (py-2 + one line + border). */
 const ROW_ESTIMATE_PX = 41;
 
+/**
+ * List rendering for a saved view (spec 09/23/24): collapsible grouped sections
+ * of compact rows with a personal-star toggle. Cross-section drag sets the axis
+ * field; within-section drag reorders (manual rank) when `onReorder` is set.
+ */
 export function ViewList({
   loading,
   groups,

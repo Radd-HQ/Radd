@@ -24,7 +24,7 @@
  *
  *   node web/scripts/timesheet-team-proof.mjs http://127.0.0.1:8000 admin@example.com change-me
  *
- * Creates a project, a team and four users, and deletes them.
+ * Creates a project, a team and six users, and deletes them.
  */
 import { resolve } from "node:path";
 import { outputPath, PAGE_API, sleep } from "./lib/cdp.mjs";
@@ -121,11 +121,12 @@ async function main() {
     // 7 — the days behind a row
     await session.eval(`document.querySelector("[data-team-row='${of("Bulk").id}'] button").click()`);
     await sleep(300);
-    const days = await session.eval(`Object.fromEntries([...document.querySelectorAll("[data-team-detail='${of("Bulk").id}'] [data-team-day]")].map((n) => [n.dataset.teamDay, n.lastElementChild.textContent]))`);
+    const dayTiles = (id) => session.eval(`Object.fromEntries([...document.querySelectorAll("[data-team-detail='${id}'] [data-team-day]")].map((n) => [n.dataset.teamDay, n.lastElementChild.textContent]))`);
+    const days = await dayTiles(of("Bulk").id);
     check("opening a row shows each day: nothing Monday to Thursday, 40h on Friday", days[FRI] === "40h" && days[MON] === "·" && Object.keys(days).length === 7, JSON.stringify(days));
     await session.eval(`document.querySelector("[data-team-row='${of("Away").id}'] button").click()`);
     await sleep(300);
-    const away = await session.eval(`Object.fromEntries([...document.querySelectorAll("[data-team-detail='${of("Away").id}'] [data-team-day]")].map((n) => [n.dataset.teamDay, n.lastElementChild.textContent]))`);
+    const away = await dayTiles(of("Away").id);
     check("a day of leave reads as off, not as a gap", away[THU] === "off" && away[FRI] === "off" && away[MON] === "8h", JSON.stringify(away));
 
     check("an afternoon of leave lowers Friday to 4h expected (36h for the week), and the half day worked is not flagged", of("Half").expected === "36h" && of("Half").logged === "36h" && of("Half").flags === "", JSON.stringify(of("Half")));

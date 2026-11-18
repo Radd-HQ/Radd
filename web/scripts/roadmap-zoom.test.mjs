@@ -75,7 +75,7 @@ test("axis tiers follow the pixel pitch a label needs: the shortest month, quart
   assert.deepEqual(zoom.roadmapAxisTiers(1), { primary: "quarter", weeks: "none" });
   assert.deepEqual(zoom.roadmapAxisTiers(0.5), { primary: "year", weeks: "none" });
   assert.deepEqual(zoom.roadmapAxisTiers(0.25), { primary: "year", weeks: "none" });
-  assert.ok(28 * zoom.roadmapAxisTiers(2.5).primary.length >= 0 && 28 * 2.5 >= zoom.ROADMAP_AXIS_LABEL_PX.month, "a 28-day month clears the month label at the month tier's floor");
+  assert.ok(28 * 2.5 >= zoom.ROADMAP_AXIS_LABEL_PX.month, "a 28-day month clears the month label at the month tier's floor");
 });
 
 test("the opening tick is drawn only when the first real tick is a label's width away at this zoom", () => {

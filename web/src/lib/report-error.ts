@@ -1,9 +1,8 @@
 /** The browser's error reports (RADD-1528).
  *
- *  A crash used to be visible only to the person it happened to. Everything
- *  that catches one — the router's error screen, the plugin slot boundary,
- *  `window.onerror`, an unhandled rejection — hands it here, and it becomes one
- *  log line on the server.
+ *  Everything that catches a crash — the router's error screen, the plugin slot
+ *  boundary, `window.onerror`, an unhandled rejection — hands it here, and it
+ *  becomes one log line on the server.
  *
  *  Deliberately NOT the `api` client: a reporter has to work when the session
  *  is the thing that is broken, and must never redirect to /login or raise a
@@ -12,7 +11,7 @@
 import { API_BASE } from "./constants";
 
 /** The SDK's slot boundary announces a crashed contribution with this event (it cannot import the host). */
-export const CLIENT_ERROR_EVENT = "radd:client-error";
+const CLIENT_ERROR_EVENT = "radd:client-error";
 
 export const ClientErrorSource = {
   route: "route",

@@ -82,8 +82,8 @@ export async function openBrowser({ port: basePort, profile, width = 1440, heigh
 
   const consoleErrors = [];
   /** What the browser REFUSED under the Content-Security-Policy the proof server enforces
-   *  (RADD-1531). These arrive on the Log domain, not as console calls, so nothing saw them
-   *  before; `close()` fails the proof when there are any. */
+   *  (RADD-1531). They arrive on the Log domain, not as console calls; `close()` fails the
+   *  proof when there are any: the policy would break that screen for a real person. */
   const cspViolations = [];
   const pending = new Map();
   let nextId = 1;
@@ -164,8 +164,6 @@ export async function openBrowser({ port: basePort, profile, width = 1440, heigh
     session,
     // Wait for Chrome to exit before removing its profile, or it may still be writing into it.
     close: () => new Promise((done, fail) => {
-      // A proof that finished with the browser having refused something under the CSP did
-      // not pass: the policy would break that screen for a real person (RADD-1531).
       const settle = () => {
         dispose();
         if (cspViolations.length === 0) { done(); return; }

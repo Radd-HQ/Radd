@@ -230,11 +230,9 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
         continued_more = len(fetched) > data.item_limit
     else:
         # One bounded read per chosen cell, each riding whatever index serves the
-        # ranking (RADD-1545). This used to be ONE query numbering every row of
-        # the project by (column, lane) to keep the first few of each: 230 ms on
-        # a 100,864-item project, which is why the board asked for its columns
-        # one request at a time instead. A cell's read is the same statement a
-        # `rows_only` continuation runs, so the two cannot drift apart.
+        # ranking (RADD-1545) — one query numbering every row of the project by
+        # (column, lane) took 230 ms on a 100k-item project. A cell's read is the
+        # same statement a `rows_only` continuation runs, so the two cannot drift.
         rows = []
         for col, ln, _count, _points in chosen:
             cell_query = query.where(bucket_filter(data.axis, col, column, data.project_id))

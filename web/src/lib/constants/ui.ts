@@ -41,9 +41,9 @@ export const BOUND_SERIALIZE_MS = 150;
  * one page at the cap; beyond that pagination is a known gap (modules.md).
  */
 export const ITEMS_PAGE_LIMIT = 200;
-/** How many rows the list shows until a person picks a size (RADD-1553). The
- *  default used to be the cap: 200 rows is 10,961 DOM nodes and a 438 KB
- *  response on every list load, for a screen that shows about fifteen. */
+/** How many rows the list shows until a person picks a size (RADD-1553) — not
+ *  the cap: 200 rows is 10,961 DOM nodes and a 438 KB response on every list
+ *  load, for a screen that shows about fifteen. */
 export const ITEMS_PAGE_DEFAULT = 50;
 /** RADD-1154: a phone shows one card per screen, so a 200-item page reads as
  *  "everything" and the pager sits 200 cards away — page smaller there. */

@@ -41,10 +41,9 @@ const queryClient = new QueryClient({
   },
 });
 
-// The plugin SDK reads the signed-in person under its own cache key, so every
-// page asked /auth/me twice: once for the host, once for the first plugin that
-// wanted a permission (RADD-1551). The host's answer is the SDK's answer: copy
-// it across whenever it arrives, and no second request is made.
+// The plugin SDK reads the signed-in person under its own cache key (RADD-1551).
+// The host's /auth/me answer is the SDK's answer: copy it across whenever it
+// arrives, so the first plugin that wants a permission makes no second request.
 queryClient.getQueryCache().subscribe((event) => {
   if (event.type !== "updated" || event.action.type !== "success") return;
   if (JSON.stringify(event.query.queryKey) !== JSON.stringify(authStateQuery.queryKey)) return;

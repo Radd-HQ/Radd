@@ -22,8 +22,7 @@ export const ROADMAP_ZOOM_LEVELS: readonly { width: number; label: string }[] = 
 /** Continuous zoom bounds (viewport wave): ctrl+wheel / ± buttons move the
  *  day width anywhere in this range; the presets above are just landmarks.
  *  The floor is a quarter pixel per day (RADD-1520): a year is ~91px, so a
- *  multi-year domain fits one pane — the old floor of 2 left the six-year
- *  BNS roadmap 4.6 panes wide. The rows scale down with the day width
+ *  multi-year domain fits one pane. The rows scale down with the day width
  *  (model/zoom.ts), which is the other half of "zoom out". */
 export const ROADMAP_DAY_WIDTH_MIN = 0.25;
 export const ROADMAP_DAY_WIDTH_MAX = 40;

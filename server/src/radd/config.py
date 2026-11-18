@@ -645,12 +645,12 @@ class Settings(BaseSettings):
     backup_timeout_seconds: float = 3600.0
     backup_max_upload_bytes: int = 0  # 0 = unlimited (free-space guard still applies)
 
-    # Ordered module assembly — the plugin system's root configuration.
     # Browser error reports (radd/modules/diagnostics, RADD-1528): one log line each.
     # The route is open before sign-in, so both its size and its rate are capped.
     client_error_reports_per_minute: int = 20
     client_error_max_chars: int = 8000
 
+    # Ordered module assembly — the plugin system's root configuration.
     modules: tuple[str, ...] = (
         "radd.modules.events",
         "radd.modules.projects",

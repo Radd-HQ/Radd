@@ -90,8 +90,6 @@ export interface TeamRow {
   attention: TeamAttention[];
 }
 
-const hours = (seconds: number) => durationText(seconds) || "0m";
-
 function dayName(iso: string): string {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
     weekday: "short",
@@ -180,12 +178,12 @@ export function teamRow(
     if (percent < rules.lowPercent) {
       attention.push({
         flag: TeamFlag.under,
-        reason: `${hours(loggedSeconds)} logged of ${hours(expectedSeconds)} expected (${percent}%)`,
+        reason: `${durationText(loggedSeconds)} logged of ${durationText(expectedSeconds)} expected (${percent}%)`,
       });
     } else if (percent > rules.highPercent) {
       attention.push({
         flag: TeamFlag.over,
-        reason: `${hours(loggedSeconds)} logged against ${hours(expectedSeconds)} expected (${percent}%)`,
+        reason: `${durationText(loggedSeconds)} logged against ${durationText(expectedSeconds)} expected (${percent}%)`,
       });
     }
     // Booked in one go. Not judged on a single working day: one day of one is all of them.
@@ -197,7 +195,7 @@ export function teamRow(
       const biggest = judged.reduce((top, day) => (day.seconds > top.seconds ? day : top));
       attention.push({
         flag: TeamFlag.fewDays,
-        reason: `Time on ${daysLogged} of ${count(expectedOf.length, "working day")}; ${hours(biggest.seconds)} of it on ${dayName(biggest.day)}`,
+        reason: `Time on ${daysLogged} of ${count(expectedOf.length, "working day")}; ${durationText(biggest.seconds)} of it on ${dayName(biggest.day)}`,
       });
     }
   }
@@ -206,7 +204,7 @@ export function teamRow(
     attention.push({
       flag: TeamFlag.longDay,
       reason: `${count(long.length, "day")} over ${rules.dayMaxHours}h: ${long
-        .map((day) => `${dayName(day.day)} (${hours(day.seconds)})`)
+        .map((day) => `${dayName(day.day)} (${durationText(day.seconds)})`)
         .join(", ")}`,
     });
   }

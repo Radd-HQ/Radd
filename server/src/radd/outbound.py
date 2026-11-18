@@ -76,6 +76,10 @@ def _public(address: Address) -> bool:
     return address.is_global and not address.is_multicast
 
 
+def _reachable(address: Address, networks: list) -> bool:
+    return _public(address) or any(address in network for network in networks)
+
+
 def _refuse(host: str, address: Address | None = None) -> OutboundRefused:
     where = f"{host} ({address})" if address is not None and str(address) != host else host
     return OutboundRefused(
@@ -114,7 +118,7 @@ def check_url(url: str) -> None:
         if host == "localhost" or host.endswith(".localhost"):
             raise _refuse(host)
         return  # a name: judged when it is resolved, at send
-    if not _public(address) and not any(address in network for network in networks):
+    if not _reachable(address, networks):
         raise _refuse(host, address)
 
 
@@ -138,7 +142,7 @@ async def resolve(url: str) -> tuple[str, str, int, Address]:
             raise OutboundRefused(f"{host} does not resolve")
     if host not in hosts:
         for address in addresses:
-            if not _public(address) and not any(address in network for network in networks):
+            if not _reachable(address, networks):
                 raise _refuse(host, address)
     return scheme, host, port, addresses[0]
 

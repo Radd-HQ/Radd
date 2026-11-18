@@ -212,12 +212,10 @@ export function BarRow({
         (selected ? " bg-accent/10" : "")
       }
       // The ROW owns the height (RADD-1513): with border-box sizing the 1px
-      // separator is INSIDE these rowH px and the two cells stretch to fill,
-      // so consecutive rows are exactly rowH apart — which is what every
-      // `rowIndex * rowH` (group boxes, connectors, drop targets) assumes.
-      // Cells that carried the height themselves put the border outside and
-      // drifted a pixel per row (a DEVICE pixel when zoomed out: six rows
-      // over a 92-child epic at 30%).
+      // separator is INSIDE these rowH px, so consecutive rows are exactly
+      // rowH apart — which every `rowIndex * rowH` (group boxes, connectors,
+      // drop targets) assumes. Cells carrying the height put the border
+      // outside and drifted a pixel per row.
       style={{ height: metrics.rowH }}
       onContextMenu={
         canEdit
@@ -417,10 +415,8 @@ export function BarRow({
       </div>
 
       {/* overflow-x-clip (RADD-1520): a min-width bar on the domain's last days,
-          plus the ○ handle and chip that hang off its right edge, would poke
-          past the domain and widen the scroll content, so a fitted timeline
-          was always a few px wider than the pane. `clip` (not hidden) keeps
-          the cell out of the scroll-container business and leaves the y axis
+          plus the ○ handle and chip off its right edge, would widen the scroll
+          content past a fitted timeline. `clip` (not hidden) leaves the y axis
           alone, so the ghost date chip above the row still shows. */}
       <div className="relative overflow-x-clip" style={{ width: innerWidth }}>
         {/* Original position placeholder while the ghost is out. */}
@@ -466,9 +462,8 @@ export function BarRow({
             width,
             height: barHeight,
             // The category colours are `var(--chart-*)` tokens (RADD-900), so
-            // a hex-alpha suffix on them is invalid CSS: `${color}33` had left
-            // every epic bar with NO fill at all — found by the RADD-1508
-            // proof. color-mix is how a token takes an alpha.
+            // a hex-alpha suffix (`${color}33`) is invalid CSS and draws NO
+            // fill (RADD-1508); color-mix is how a token takes an alpha.
             backgroundColor: isEpic ? `color-mix(in srgb, ${color} 20%, transparent)` : color,
             border: isEpic ? `1.5px ${row.derived ? "dashed" : "solid"} ${color}` : undefined,
             touchAction: draggable ? "none" : undefined,

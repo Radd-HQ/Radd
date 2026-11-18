@@ -113,15 +113,13 @@ export function ProjectsIndexPage() {
   );
 }
 
-
 /** Right-hand side of a project row: how much is open, and when it last moved.
- *  A project nobody has touched says when it was created instead — labelled,
- *  where the row used to show that date alone with nothing saying what it was. */
+ *  A project nobody has touched says when it was created instead, labelled. */
 function ProjectRowStats({
   stats,
   createdAt,
 }: {
-  stats: { open_items: number; last_activity_at: string | null } | undefined;
+  stats: ProjectStats[string] | undefined;
   createdAt: string;
 }) {
   return (

@@ -24,11 +24,9 @@ function shown(iso: string): string {
 
 /**
  * THE date control (RADD-1563, RADD-1566): a text field that shows the date
- * with its month spelled, and the app's own calendar under it.
- *
- * It used to be the browser's native date input, whose text followed the
- * browser's locale in digits (09/22/2026 on one machine, 22/09/2026 on the
- * next) and whose popup was a different widget in each browser.
+ * with its month spelled, and the app's own calendar under it — the native
+ * date input reads 09/22/2026 on one machine and 22/09/2026 on the next, and
+ * its popup is a different widget in each browser.
  *
  * It keeps the native input's contract so nothing that used it changed:
  * `value` is an ISO date, and `onChange` receives an event whose

@@ -4,7 +4,7 @@
  * across a DST change or west of Greenwich, and a calendar date has no zone.
  */
 
-const DAY_MS = 86_400_000;
+import { shiftIsoDay } from "./dates";
 
 function utc(iso: string): number {
   return Date.parse(`${iso}T00:00:00Z`);
@@ -15,7 +15,7 @@ function isoOf(ms: number): string {
 }
 
 /** A real calendar date in ISO form, or null: 2026-02-30 is not a date. */
-export function isoFromParts(year: number, month: number, day: number): string | null {
+function isoFromParts(year: number, month: number, day: number): string | null {
   if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
   if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) return null;
   const iso = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -28,9 +28,8 @@ export function isIsoDate(text: string): boolean {
   return Boolean(match && isoFromParts(Number(match[1]), Number(match[2]), Number(match[3])));
 }
 
-export function addDays(iso: string, days: number): string {
-  return isoOf(utc(iso) + days * DAY_MS);
-}
+/** `shiftIsoDay`, under the name the calendar's arithmetic reads by. */
+export const addDays = shiftIsoDay;
 
 /** The same day of another month, pulled back to that month's last day when it
  *  has no such day (31 Jan + 1 month = 28 or 29 Feb). */

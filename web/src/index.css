@@ -515,10 +515,9 @@ html.compact body {
 
 
 .widget-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; align-items: start; }
-/* A widget is as tall as its content, up to the height it was given (RADD-1556):
-   an empty "Assigned to me" used to hold its full 360 px to say one line. While
-   the layout is being edited every widget shows its set height, so the resize
-   handles move what they appear to move. */
+/* A widget is as tall as its content, up to the height it was given (RADD-1556).
+   While the layout is being edited every widget shows its set height, so the
+   resize handles move what they appear to move. */
 .dashboard-widget { grid-column: span var(--widget-width); height: auto; max-height: var(--widget-height); }
 .dashboard-widget[data-editing] { height: var(--widget-height); }
 .dashboard-widget[data-collapsed] { height: auto; }

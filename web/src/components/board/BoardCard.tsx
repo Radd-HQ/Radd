@@ -66,15 +66,13 @@ function CardLane({
   const rendered = cells
     .map((cell) => ({ cell, node: renderCardCell(cell.attr, ctx) }))
     .filter((entry) => entry.node !== null);
-  // A card is as tall as what it holds (RADD-1555). Empty lanes used to reserve
-  // a row each and the title two lines, so every card was the height of the
-  // fullest possible one — about 155 px, three and a half to a column on a
-  // laptop — and most of a column was reserved space. Uniform height bought
-  // tidy rows across columns; it cost seeing the work.
+  // A card is as tall as what it holds (RADD-1555): reserving a row per empty
+  // lane made every card the height of the fullest possible one. Uniform
+  // height bought tidy rows across columns; it cost seeing the work.
   if (rendered.length === 0) return null;
 
   // A lane holding only the title renders the bare title paragraph, no flex
-  // wrapper; still clamped at two lines, no longer padded up to them.
+  // wrapper, clamped at two lines.
   if (rendered.length === 1 && rendered[0].cell.attr === CARD_TITLE_ATTR) {
     return (
       <p

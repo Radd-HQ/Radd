@@ -3,13 +3,13 @@ import { Link } from "@tanstack/react-router";
 import { Clock } from "lucide-react";
 import { ErrorText, errorMessage, todayIso } from "@radd/plugin-sdk";
 import { api } from "../../lib/api";
-import { RoutePath } from "../../lib/constants";
+import { RoutePath, apiItemWorklogsPath } from "../../lib/constants";
 import { useCurrentUser, usePeek } from "../../lib/hooks";
 import { myTicketsQuery, timesheetQuery } from "../../lib/queries";
 import { ToastKind, pushToast } from "../../lib/toast";
 import { durationText } from "./model";
 import { TicketRow } from "./TicketTray";
-import type { Ticket } from "./types";
+import { ticketOf, type Ticket } from "./types";
 
 /** How many tickets the widget offers; the week's tray has the rest. */
 const WIDGET_TICKETS = 8;
@@ -32,21 +32,13 @@ export function LogTimeWidget() {
   });
   const log = useMutation({
     mutationFn: ({ ticket, seconds }: { ticket: Ticket; seconds: number }) =>
-      api.post(`/items/${ticket.id}/worklogs`, { time_spent: durationText(seconds), worked_on: today }),
+      api.post(apiItemWorklogsPath(ticket.id), { time_spent: durationText(seconds), worked_on: today }),
     onSuccess: (_result, { ticket, seconds }) => pushToast(`Logged ${durationText(seconds)} on ${ticket.key}`, ToastKind.success),
     onError: (error) => pushToast(errorMessage(error)),
     onSettled: () => client.invalidateQueries({ queryKey: ["timesheet"] }),
   });
 
-  const tickets: Ticket[] = (mine.data ?? []).slice(0, WIDGET_TICKETS).map((ticket) => ({
-    id: ticket.id,
-    key: ticket.key,
-    title: ticket.title,
-    loggable: ticket.loggable,
-    reasons: ticket.reasons,
-    activity: ticket.activity,
-    mySeconds: ticket.my_seconds,
-  }));
+  const tickets: Ticket[] = (mine.data ?? []).slice(0, WIDGET_TICKETS).map(ticketOf);
   const todaySeconds = (day.data?.entries ?? [])
     .filter((entry) => entry.user.id === me?.id)
     .reduce((sum, entry) => sum + entry.time_spent_seconds, 0);
@@ -57,7 +49,7 @@ export function LogTimeWidget() {
         <Clock size={12} className="text-fg-muted" aria-hidden />
         <h2 className="text-meta font-semibold uppercase tracking-wide text-fg-muted">Log time</h2>
         <span className="text-meta text-fg-secondary" data-log-time-today>
-          Today: <span className="font-semibold tabular-nums text-heading">{durationText(todaySeconds) || "0m"}</span>
+          Today: <span className="font-semibold tabular-nums text-heading">{durationText(todaySeconds)}</span>
         </span>
         <Link to={RoutePath.timesheet} className="ml-auto text-xs text-accent-text hover:text-accent-text-strong">
           Open my week →

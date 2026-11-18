@@ -1,14 +1,8 @@
 """The event-consumer runner (RADD-1538): one loop body, one failure behaviour.
 
-The outbox is sound on the write side. The read side was four hand-rolled
-loops — notify, search, webhooks, automations — each of which read a batch,
-handled it and advanced a cursor, and each of which answered a handler that
-raised by logging it and moving on. A mail server down for a minute, or a
-plugin raising once, lost that event's side effect for good, and nobody was
-told. None of them locked its cursor, so a second worker process would have
-delivered everything twice.
-
-A consumer now DECLARES what it is (`Consumer`) and `run` owns the rest:
+A consumer DECLARES what it is (`Consumer`) and `run` owns the rest, so a
+handler that raises is never just logged and lost, and a second worker process
+never delivers a batch twice:
 
 - **the claim** — the cursor row is taken `FOR UPDATE SKIP LOCKED` for the
   tick. A worker that finds it taken does nothing this tick, so two processes
@@ -38,7 +32,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -275,8 +269,6 @@ async def list_failures(
 
 async def failure_counts(session: AsyncSession) -> dict[tuple[str, str], int]:
     """`{(consumer, status): n}` — the monitoring page and `/metrics` read this."""
-    from sqlalchemy import func
-
     rows = await session.execute(
         select(ConsumerFailure.consumer, ConsumerFailure.status, func.count()).group_by(
             ConsumerFailure.consumer, ConsumerFailure.status

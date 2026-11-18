@@ -5,7 +5,6 @@ index build (upserts are idempotent, item.created precedes an item's comments
 in the stream).
 """
 
-import logging
 import uuid
 
 from sqlalchemy import text
@@ -28,8 +27,6 @@ from radd.modules.teams.types import TeamEvent
 
 from .models import SearchIndexRow
 from .types import CONSUMER_NAME, SEARCH_TS_CONFIG
-
-logger = logging.getLogger(__name__)
 
 _ITEM_EVENTS = {ItemEvent.CREATED.value, ItemEvent.UPDATED.value}
 _ITEM_DELETED = ItemEvent.DELETED.value
