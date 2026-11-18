@@ -46,8 +46,8 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: server/uv.lock
@@ -96,8 +96,8 @@ jobs:
       # Each drill drops and re-creates its own `radd_drill` on this server.
       RADD_DRILL_DATABASE_URL: postgresql+psycopg://radd:radd@localhost:5432/radd_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: server/uv.lock
@@ -141,13 +141,13 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: server/uv.lock
@@ -172,8 +172,8 @@ jobs:
     name: frontend (tests, host + plugin builds, Chromium smoke)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -185,7 +185,7 @@ jobs:
       # second-review) derive their fixtures from the BACKEND's own contracts by
       # spawning server/.venv/bin/python, so the frontend job carries the server
       # venv too (RADD-1470). No database: the fixtures read registries only.
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: server/uv.lock
