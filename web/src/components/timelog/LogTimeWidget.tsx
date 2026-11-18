@@ -78,6 +78,7 @@ export function LogTimeWidget() {
               key={ticket.id}
               ticket={ticket}
               day="today"
+              stacked
               onLog={(target, seconds) => log.mutate({ ticket: target, seconds })}
               onPeek={openPeek}
             />

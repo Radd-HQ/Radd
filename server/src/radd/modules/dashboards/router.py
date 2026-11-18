@@ -20,6 +20,7 @@ from .schemas import (
     DashboardUpdate,
     WidgetUpdate,
     WidgetLayoutSave,
+    WidgetOfferAnswer,
     WidgetRead,
 )
 
@@ -83,6 +84,24 @@ async def my_work_defaults(session: Session, user: CurrentUser):
     from .personal import suggested_defaults
 
     return await suggested_defaults(session, user)
+
+
+@router.get("/my-work/offers", response_model=list[WidgetRead])
+async def my_work_offers(session: Session, user: CurrentUser):
+    """Widgets that became available after this person arranged My Work, each
+    offered once (RADD-1579). Empty for anyone on the suggested layout."""
+    from . import personal
+
+    return await personal.offers(session, user)
+
+
+@router.post("/my-work/offers/{widget_type}", response_model=list[WidgetRead])
+async def answer_my_work_offer(
+    widget_type: str, data: WidgetOfferAnswer, session: Session, user: CurrentUser
+):
+    from . import personal
+
+    return await personal.answer_offer(session, user, widget_type, accept=data.accept)
 
 
 @router.get("/my-work/activity")

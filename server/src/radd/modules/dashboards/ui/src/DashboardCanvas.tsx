@@ -12,9 +12,12 @@ import { WidgetModal } from "./WidgetModal";
  * started from, so a concurrent edit is a conflict rather than a silent overwrite. `defaults`
  * (My Work only) offers Reset to default and makes a collapse save straight away.
  */
-export function DashboardCanvas({ dashboard, save, defaults, render }: {
+export function DashboardCanvas({ dashboard, save, defaults, render, notice }: {
   dashboard: Dashboard; save: (widgets: DashboardWidget[], expected: DashboardWidget[]) => Promise<unknown>;
   defaults?: () => Promise<DashboardWidget[]>; render: (widget: DashboardWidget) => ReactNode;
+  /** Shown above the widgets while NOT customizing: anything that changes the stored layout
+   *  from outside the draft would make the draft's save a conflict. */
+  notice?: ReactNode;
 }) {
   const [draft, setDraft] = useState<DashboardWidget[] | null>(null);
   const [expected, setExpected] = useState<DashboardWidget[]>([]);
@@ -40,6 +43,7 @@ export function DashboardCanvas({ dashboard, save, defaults, render }: {
         <Button disabled={mutation.isPending} onClick={() => mutation.mutate({ rows: draft, original: expected, finish: true })}>{mutation.isPending ? "Saving…" : "Save"}</Button>
       </> : dashboard.can_edit && <Button disabled={mutation.isPending} onClick={() => { setExpected(structuredClone(dashboard.widgets)); setDraft(structuredClone(rows)); setLocalCollapsed({}); }}>Customize</Button>}
     </div>
+    {!editing && notice}
     {(mutation.isError || reset.isError) && <ErrorText error={mutation.error ?? reset.error} />}
     {!rows.length && <p className="p-6 text-sm text-fg-muted">No widgets. Choose Customize to add one.</p>}
     <div className={mutation.isPending ? "pointer-events-none opacity-70" : ""}>

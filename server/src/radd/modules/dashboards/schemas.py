@@ -293,6 +293,12 @@ class DashboardSave(BaseModel):
     expected_global_access: ShareLevel | None
 
 
+class WidgetOfferAnswer(BaseModel):
+    """Add the offered widget to My Work, or not; either way it is not asked again."""
+
+    accept: bool
+
+
 class WidgetLayoutSave(BaseModel):
     widgets: list[dict[str, Any]] = Field(max_length=60)
     expected: list[WidgetRead] = Field(max_length=60)

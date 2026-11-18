@@ -90,9 +90,13 @@ export function TicketRow({
   onLog,
   onDrag,
   onPeek,
+  stacked = false,
 }: Pick<TrayProps, "day" | "onLog" | "onPeek"> & {
   ticket: Ticket;
   onDrag?: TrayProps["onDrag"];
+  /** Two lines: the title gets the row's width and the reason goes under it.
+   *  For a narrow column (the My Work widget, RADD-1579). */
+  stacked?: boolean;
 }) {
   const off = ticket.loggable === false;
   const why = [reasonText(ticket), ticket.mySeconds ? durationText(ticket.mySeconds) : ""]
@@ -110,7 +114,9 @@ export function TicketRow({
           onDrag?.({ kind: "ticket", ticket });
         }}
         onDragEnd={() => onDrag?.(null)}
-        className={`flex min-w-0 flex-1 items-baseline gap-1.5 rounded-md border border-subtle bg-base px-2 py-1 text-row ${
+        className={`flex min-w-0 flex-1 gap-x-1.5 rounded-md border border-subtle bg-base px-2 py-1 text-row ${
+          stacked ? "flex-wrap items-baseline" : "items-baseline"
+        } ${
           off ? "cursor-not-allowed opacity-60" : onDrag ? "cursor-grab active:cursor-grabbing" : ""
         }`}
         title={
@@ -128,9 +134,11 @@ export function TicketRow({
         >
           {ticket.key}
         </button>
-        <span className="min-w-0 flex-1 truncate text-fg-secondary">{ticket.title}</span>
+        <span className={`min-w-0 flex-1 text-fg-secondary ${stacked ? "line-clamp-2" : "truncate"}`}>
+          {ticket.title}
+        </span>
         {why && (
-          <span className="shrink-0 text-meta text-fg-muted" data-ticket-why>
+          <span className={`text-meta text-fg-muted ${stacked ? "w-full truncate" : "shrink-0"}`} data-ticket-why>
             {why}
           </span>
         )}

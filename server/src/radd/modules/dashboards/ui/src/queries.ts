@@ -14,6 +14,7 @@ export const dashboardKeys = {
   summary: ["dashboards", "summary"] as const,
   definition: (id: string) => ["dashboards", "definition", id] as const,
   myWork: ["dashboards", "my-work", "widgets"] as const,
+  myWorkOffers: ["dashboards", "my-work", "offers"] as const,
   activity: (project: string, start: string, end: string) => ["dashboards", "my-work", "activity", { project, start, end }] as const,
 };
 

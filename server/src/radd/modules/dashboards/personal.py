@@ -8,13 +8,24 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from sqlalchemy import select
 
-from radd.exceptions import ConflictError
+from radd.exceptions import ConflictError, NotFoundError
 from radd.kernel import WidgetTypeSpec, registries
 from radd.modules.auth.models import User
 
 from .schemas import PluginWidget, WidgetLayoutSave, WidgetRead
 from .types import BUILTIN_WIDGET_TYPES
 from .widget_bodies import parse_widget_body
+
+LOG_TIME = "logtime"
+#: Suggested widget types that arrived after layouts could be stored (RADD-1579).
+#: The suggested layout only reaches people who never customised My Work, so a
+#: person with a layout of their own is OFFERED each of these once instead.
+OFFERED_KINDS = (LOG_TIME,)
+#: The preference that remembers which offers a person has had: answered, or
+#: made moot because their first layout started from one that included the type.
+OFFERS_SEEN_KEY = "my_work_offers_seen"
+LAYOUT_KEY = "my_work_widgets"
+
 
 TITLES = {
     "assigned": "Assigned to me",
@@ -26,7 +37,7 @@ TITLES = {
     "forms": "Request forms",
     "recent": "Recently viewed",
     # RADD-1575: the tickets a person is likely to log on, with a duration field.
-    "logtime": "Log time",
+    LOG_TIME: "Log time",
 }
 
 
@@ -69,7 +80,7 @@ def defaults(extras=()):
 
 
 def read(user):
-    return (user.preferences or {}).get("my_work_widgets", defaults())
+    return (user.preferences or {}).get(LAYOUT_KEY, defaults())
 
 
 def _personal_widget(raw) -> PluginWidget:
@@ -89,7 +100,7 @@ async def save(session, user, data: WidgetLayoutSave):
         .execution_options(populate_existing=True)
     )
     stored = read(user)
-    if "my_work_widgets" in (user.preferences or {}) and [
+    if LAYOUT_KEY in (user.preferences or {}) and [
         WidgetRead.model_validate(w).model_dump(mode="json") for w in stored
     ] != [w.model_dump(mode="json") for w in data.expected]:
         raise ConflictError("dashboard", reason="My Work changed elsewhere. Reload before editing.")
@@ -116,9 +127,57 @@ async def save(session, user, data: WidgetLayoutSave):
             raise ConflictError("dashboard", reason="Duplicate widget id")
         ids.add(row["id"])
         result.append(row)
-    user.preferences = {**(user.preferences or {}), "my_work_widgets": result}
+    # A FIRST save starts from the suggested layout, which already carried
+    # every offered type: dropping one there was their answer. A later save
+    # (a collapse is one) says nothing about an offer they have not answered.
+    first = LAYOUT_KEY not in (user.preferences or {})
+    user.preferences = {
+        **(user.preferences or {}),
+        LAYOUT_KEY: result,
+        OFFERS_SEEN_KEY: sorted({*_seen(user), *(OFFERED_KINDS if first else ())}),
+    }
     await session.flush()
     return result
+
+
+def _seen(user) -> set[str]:
+    return set((user.preferences or {}).get(OFFERS_SEEN_KEY, []))
+
+
+async def offers(session, user) -> list[dict]:
+    """The widgets to offer this person (RADD-1579): suggested for them, newer
+    than their stored layout, absent from it, and not offered before. Nobody
+    without a layout of their own is asked: the suggested one already has them."""
+    if LAYOUT_KEY not in (user.preferences or {}):
+        return []
+    open_kinds = set(OFFERED_KINDS) - _seen(user) - {w["widget_type"] for w in read(user)}
+    if not open_kinds:
+        return []
+    return [w for w in await suggested_defaults(session, user) if w["widget_type"] in open_kinds]
+
+
+async def answer_offer(session, user, widget_type: str, *, accept: bool) -> list[dict]:
+    """Record the answer so it is asked once; on yes, append the widget to the
+    person's layout and leave everything else where they put it."""
+    if widget_type not in OFFERED_KINDS:
+        raise NotFoundError("widget offer", widget_type)
+    await session.execute(
+        select(User)
+        .where(User.id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    layout = list(read(user))
+    if accept and all(w["widget_type"] != widget_type for w in layout):
+        offered = [w for w in await suggested_defaults(session, user) if w["widget_type"] == widget_type]
+        layout += [{**w, "position": len(layout)} for w in offered]
+    user.preferences = {
+        **(user.preferences or {}),
+        **({LAYOUT_KEY: layout} if LAYOUT_KEY in (user.preferences or {}) else {}),
+        OFFERS_SEEN_KEY: sorted({*_seen(user), widget_type}),
+    }
+    await session.flush()
+    return layout
 
 
 async def suggested_defaults(session, user):
@@ -132,7 +191,7 @@ async def suggested_defaults(session, user):
 
         # Offered to whoever the Timesheet is offered to (RADD-1575).
         if await timelogging.nav_timesheet_visible(session, user):
-            extras.append("logtime")
+            extras.append(LOG_TIME)
     if "forms" in registries.plugins:
         from radd.modules.forms.portal import list_portal_forms
         from radd.modules.forms.requests import list_my_requests
