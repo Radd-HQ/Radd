@@ -39,14 +39,16 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Debian trixie carries client 17 in the DEFAULT repos, which is why this image is
 # trixie and not bookworm — bookworm ships 15 (too old for a PG 16 server) and
 # would need the PGDG apt repo, a key, and a purge step to avoid shipping curl.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# `upgrade` first: a Debian security fix published since the base tag was built
+# is in the image now, not whenever the tag is next rebuilt (RADD-1584: zlib1g).
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
       postgresql-client-17 \
  && rm -rf /var/lib/apt/lists/*
 
-# The base image's pip is vestigial — uv installs everything — but it is still
-# an installed package that scanners read; keep it current rather than shipping
-# its known CVEs (RADD-1029).
-RUN python3 -m pip install --no-cache-dir --quiet --upgrade pip
+# The base image's pip and setuptools are vestigial — uv installs everything — but they are
+# still installed packages that scanners read; keep them current rather than
+# shipping their known CVEs (RADD-1029, RADD-1584).
+RUN python3 -m pip install --no-cache-dir --quiet --upgrade pip setuptools
 
 # Use the image's interpreter — a uv-managed Python would land under /root,
 # unreadable by the runtime user.
@@ -127,10 +129,16 @@ COPY --from=web /build/server/src/radd/modules /app/server/src/radd/modules
 # route hangs uv rather than refusing it; the image python is named because
 # PATH puts the pip-less venv first). Copying the source tree instead
 # would need uv_build AND httpx from PyPI at rebuild time.
+#
+# That was pip's last job. Nothing at run time calls it (the app and the scripts
+# plugin use uv), and it vendors an old setuptools that scanners report with no
+# upgrade to apply, so it leaves the image along with setuptools (RADD-1584).
 COPY sdk /tmp/sdk
 RUN /usr/local/bin/python3 -m pip wheel --no-cache-dir --quiet --wheel-dir /app/wheels /tmp/sdk \
  && rm -rf /tmp/sdk \
- && ls /app/wheels
+ && ls /app/wheels \
+ && /usr/local/bin/python3 -m pip uninstall --yes --quiet setuptools pip \
+ && rm -rf /usr/local/lib/python3.12/ensurepip/_bundled
 ENV RADD_SCRIPTS_FIND_LINKS=/app/wheels \
     RADD_SCRIPTS_DIR=/data/scripts
 USER radd
