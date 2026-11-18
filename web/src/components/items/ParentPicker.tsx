@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { EyeOff, Pencil, X } from "lucide-react";
 import { IconButton, useDebounced } from "@radd/plugin-sdk";
@@ -62,6 +62,15 @@ export function ParentSearchInput({
 }: ParentSearchInputProps) {
   const [term, setTerm] = useState("");
   const [open, setOpen] = useState(false);
+  // A blur closes the list a moment later, so a click on a candidate still lands. Focus coming
+  // back inside that moment (a modal re-focusing the field after a pick) must cancel the close,
+  // or the list opens and then shuts under a field that still has focus (RADD-1584).
+  const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const show = () => {
+    clearTimeout(closing.current);
+    setOpen(true);
+  };
+  useEffect(() => () => clearTimeout(closing.current), []);
   const query = useDebounced(term.trim(), PARENT_SEARCH_DEBOUNCE_MS);
   // A subtask's parent issue lives in the subtask's own project (RADD-1492), so a
   // search for ISSUES stays home; a search for epics spans every readable project.
@@ -92,13 +101,16 @@ export function ParentSearchInput({
         data-parent-search={kind}
         onChange={(event) => {
           setTerm(event.target.value);
-          setOpen(true);
+          show();
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={show}
         // A pick closes the list but keeps focus here, so a second pick (the multi-pick modal)
         // reopens it on click rather than waiting for a keystroke.
-        onClick={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), DROPDOWN_BLUR_CLOSE_MS)}
+        onClick={show}
+        onBlur={() => {
+          clearTimeout(closing.current);
+          closing.current = setTimeout(() => setOpen(false), DROPDOWN_BLUR_CLOSE_MS);
+        }}
         autoComplete="off"
         // A leading project key narrows the cross-project search (RADD-1500) — the first thing
         // anyone types to reach another project's epics, so the placeholder says it.
