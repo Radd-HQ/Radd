@@ -7,7 +7,7 @@
 # not depend on `web` at all, so a dev build never runs npm — the SPA arrives as
 # a bind mount instead (compose.dev.yaml).
 
-FROM docker.io/library/node:22-slim AS web
+FROM docker.io/library/node:26-slim AS web
 WORKDIR /build/web
 COPY web/package.json web/package-lock.json ./
 # The WORKSPACE manifests must exist before `npm ci` — web/package.json declares
