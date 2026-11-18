@@ -16,7 +16,7 @@ Moved here from the CLAUDE.md preamble on 2026-09-27 (RADD-1441): one entry per 
 preamble narrated it at the time, so the working agreement stays rules-only. The tracker's RADD project
 and `docs/specs/` are the primary record; these entries are the per-wave summary.
 
-### Logging time: my tickets, type-to-log, a Team view — epic RADD-1571 (2026-11-18), on main, unreleased
+### Logging time: my tickets, type-to-log, a Team view — epic RADD-1571 (2026-11-18), shipped v0.53.0
 
 Hussein pointed at the in-house time logger the pilot team uses and asked for a Radd approach to
 three things it does: a list of the tickets that matter to a person with a quick way to log on them,
@@ -51,7 +51,7 @@ lines. RADD-1580: `scripts/run-proofs.sh` and `npm run test:proofs` run the thre
 proofs (81 checks), and `checks.yaml` has a `proofs` job that calls the script. The job has not
 run on a runner yet; the script it calls passed locally on a fresh database.
 
-### Performance and usability, second pass — epic RADD-1548 (2026-11-17), on main, unreleased
+### Performance and usability, second pass — epic RADD-1548 (2026-11-17), shipped v0.53.0
 
 After the readiness wave Hussein asked for another pass, for a plan he could skim, then: "do all of
 them". Sixteen issues, one commit each.
@@ -94,7 +94,7 @@ sidebar was capped at 50, not unbounded; the rail order I saw was partly one pro
 An aggregate "optimisation" of the board summary measured slower and was reverted. A hook placed after
 an early return crashed the sidebar section and was caught only by loading the page.
 
-### Production readiness — epic RADD-1523 (2026-11-16/17), on main, unreleased
+### Production readiness — epic RADD-1523 (2026-11-16/17), shipped v0.53.0
 
 Hussein asked for a full review of quality, gaps and production readiness, including the pilot's
 evaluation channel, then: "fix everything and complete the plan before pushing". The review found nine
@@ -160,7 +160,7 @@ until differenced. `tsc -b` in `web/` does not type-check the plugin UIs; `node 
 does. The dev database's port forward dies silently; the suite ran against a throwaway Postgres
 (`RADD_TEST_DATABASE_URL`).
 
-### UI legibility round — epic RADD-1516 (2026-10-21), on main, unreleased
+### UI legibility round — epic RADD-1516 (2026-10-21), shipped v0.53.0
 
 Aurelien's second post, after the roadmap round: the UI is "hard to read and distinguish all the
 different parts", "especially true in dark mode"; he zooms Chrome to 110–115%; the cycle view's status
@@ -189,7 +189,7 @@ sizing is palette-independent and changes once across the board; the bump is glo
 Traps: Tailwind resolves the light panel token as `#fff`, three digits, which a six-digit-only parser
 reads as nothing — and a contrast of 0 then fails the "unchanged" check that was meant to pass.
 
-### Roadmap feedback round — epic RADD-1504 (2026-10-20), on main, unreleased
+### Roadmap feedback round — epic RADD-1504 (2026-10-20), shipped v0.53.0
 
 A colleague's first real session with the roadmap on the Cinesite instance came back as eight points: three
 bugs, three UX asks, two design debates. Read against the code, every one had a concrete mechanism, and

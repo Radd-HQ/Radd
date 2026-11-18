@@ -1,7 +1,7 @@
 # Performance: what was measured, and what to run
 
-The numbers behind `docs/deploy.md`'s sizing. Everything here was measured on
-2026-11-17 for RADD-1536; nothing is extrapolated. Re-run it with
+The numbers behind `docs/deploy.md`'s sizing. Everything here was measured for
+RADD-1536; nothing is extrapolated. Re-run it with
 `server/scripts/loadtest/` before trusting it on different hardware.
 
 ## The test
