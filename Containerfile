@@ -31,7 +31,7 @@ RUN node scripts/build-all.mjs \
  && find /build/server -type l -name node_modules -delete
 
 
-FROM docker.io/library/python:3.12-slim-trixie AS base
+FROM docker.io/library/python:3.15-slim-trixie AS base
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # postgresql-client is a RUNTIME REQUIREMENT (spec 99): the app refuses to start
