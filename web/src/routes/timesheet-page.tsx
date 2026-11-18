@@ -2,7 +2,7 @@ import { useState } from "react";
 import { todayIso } from "@radd/plugin-sdk";
 import { TeamReport } from "../components/timelog/TeamReport";
 import { TimeLogCalendar } from "../components/timelog/TimeLogCalendar";
-import { usePermissions } from "../lib/hooks";
+import { useCurrentUser, usePermissions } from "../lib/hooks";
 import { Permission } from "../lib/types";
 import { readUrlState, writeUrlState } from "../lib/url-state";
 import { TimesheetReport } from "./timesheet";
@@ -14,7 +14,8 @@ const MODES: { value: ModeValue; label: string }[] = [
   { value: Mode.log, label: "My week" },
   { value: Mode.report, label: "Report" },
 ];
-/** Offered to people who may see others' time (`timesheet.view`). */
+/** Offered to people who may see others' time: `timesheet.view`, or a team of
+ *  their own to lead (RADD-1576). */
 const TEAM_MODE = { value: Mode.team, label: "Team" };
 
 /**
@@ -30,12 +31,14 @@ const TEAM_MODE = { value: Mode.team, label: "Team" };
  * the weekly one.
  *
  * **Team** (RADD-1574) is the manager's question: who logged what against what
- * was expected, and whose logging is not believable. Only for people who may
- * see others' time.
+ * was expected, and whose logging is not believable. For people who may see
+ * others' time: everyone's with `timesheet.view`, their own team's for a
+ * team's owner or manager (RADD-1576).
  */
 export function TimesheetPage() {
   const url = readUrlState();
-  const canSeeOthers = usePermissions().global(Permission.timesheetView);
+  const seesEveryone = usePermissions().global(Permission.timesheetView);
+  const canSeeOthers = seesEveryone || Boolean(useCurrentUser()?.manages_teams);
   // A link that carries the report's own state — a grouping, a period, a
   // project, team or person filter, a query — was made on the report and opens
   // it, whether or not it says so: every timesheet link from before the split.
@@ -83,9 +86,16 @@ export function TimesheetPage() {
       {mode === Mode.team && canSeeOthers ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <TeamReport
-            onOpenPerson={(userId, day) => {
-              // The report reads its filters from the URL when it mounts.
-              writeUrlState({ u: userId, d: day, g: "person", tm: null });
+            everyone={seesEveryone}
+            onOpenPerson={(userId, day, teamId) => {
+              // The report reads its filters from the URL when it mounts. A
+              // team lead's report is filtered by team, not person: the people
+              // filter lists the whole instance, which is not theirs to see.
+              writeUrlState(
+                seesEveryone
+                  ? { u: userId, d: day, g: "person", tm: null }
+                  : { u: null, d: day, g: "person", tm: teamId || null },
+              );
               setMode(Mode.report);
             }}
           />

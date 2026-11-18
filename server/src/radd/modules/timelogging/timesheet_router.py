@@ -16,7 +16,7 @@ from radd.modules.teams import service as teams_service
 
 from . import enablement, mytickets, service, timesheet
 from .slq.suggest import suggest_worklog
-from .schemas import MyTicket, Timesheet, UserRef
+from .schemas import MyTicket, TeamRef, Timesheet, UserRef
 
 router = APIRouter(prefix="/timesheet", tags=["timelogging"])
 
@@ -76,6 +76,17 @@ async def get_timesheet(
     )
     return sheet
 
+
+@router.get("/teams", response_model=list[TeamRef])
+async def reviewable_teams(session: Session, user: CurrentUser) -> list[TeamRef]:
+    """The teams whose time the caller may review: every team with
+    `timesheet.view`, otherwise the ones they own or manage (RADD-1576). Empty
+    for anyone else, which is what keeps the Team view from being offered."""
+    await authz.require_member(session, user)
+    return [
+        TeamRef(id=team.id, name=team.name)
+        for team in await timesheet.reviewable_teams(session, user)
+    ]
 
 
 @router.get("/loggable-projects", response_model=list[uuid.UUID])

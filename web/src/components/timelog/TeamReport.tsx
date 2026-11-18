@@ -6,7 +6,7 @@ import {
 } from "@radd/plugin-sdk";
 import { TimesheetPeriod, type TimesheetPeriodValue } from "../../lib/constants";
 import { useCurrentUser, usePeek } from "../../lib/hooks";
-import { teamsQuery, timesheetQuery } from "../../lib/queries";
+import { reviewTeamsQuery, timesheetQuery } from "../../lib/queries";
 import {
   daysInRange, fromISODate, periodLabel, periodRange, shiftAnchor, toISODate,
 } from "../../lib/timesheet";
@@ -37,7 +37,15 @@ const hours = (seconds: number) => durationText(seconds) || "0m";
  * what to ask about, opens the row for the days and entries behind it, and
  * goes to the person. The arithmetic and the wording are `team.ts`.
  */
-export function TeamReport({ onOpenPerson }: { onOpenPerson: (userId: string, day: string) => void }) {
+export function TeamReport({
+  everyone,
+  onOpenPerson,
+}: {
+  /** May see the whole instance's time (`timesheet.view`); otherwise only the
+   *  teams they lead are offered (RADD-1576). */
+  everyone: boolean;
+  onOpenPerson: (userId: string, day: string, teamId: string) => void;
+}) {
   const me = useCurrentUser();
   const { open: openPeek } = usePeek();
   const url = readUrlState();
@@ -57,7 +65,7 @@ export function TeamReport({ onOpenPerson }: { onOpenPerson: (userId: string, da
     writeUrlState({ d: toISODate(value) });
   };
 
-  const teams = useQuery(teamsQuery());
+  const teams = useQuery(reviewTeamsQuery());
   // A roster is what lets the page list someone who logged nothing, so a team
   // is the default as soon as there is one.
   const teamId = picked ?? teams.data?.[0]?.id ?? EVERYONE;
@@ -65,7 +73,9 @@ export function TeamReport({ onOpenPerson }: { onOpenPerson: (userId: string, da
   const days = useMemo(() => daysInRange(start, end), [start, end]);
   const sheet = useQuery({
     ...timesheetQuery({ start, end, teamId: teamId || undefined }),
-    enabled: !teams.isPending,
+    // A team lead's sheet is always a team's: without one it would be the
+    // whole instance, which the server would narrow to themselves.
+    enabled: !teams.isPending && (everyone || Boolean(teamId)),
   });
   const annotations = usePluginData("timesheetAnnotations", { start, end }, me?.id);
 
@@ -98,7 +108,7 @@ export function TeamReport({ onOpenPerson }: { onOpenPerson: (userId: string, da
   const judged = days.some((day) => day < today);
   const teamOptions = [
     ...(teams.data ?? []).map((team) => ({ value: team.id, label: team.name })),
-    { value: EVERYONE, label: "Everyone who logged time" },
+    ...(everyone ? [{ value: EVERYONE, label: "Everyone who logged time" }] : []),
   ];
 
   return (
@@ -159,7 +169,9 @@ export function TeamReport({ onOpenPerson }: { onOpenPerson: (userId: string, da
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-        {sheet.isPending || teams.isPending ? (
+        {!everyone && !teams.isPending && !teamId ? (
+          <EmptyState message="You do not own or manage a team, so there is no team time to review." />
+        ) : sheet.isPending || teams.isPending ? (
           <Spinner />
         ) : sheet.isError ? (
           <QueryError label="the team's time" error={sheet.error} />
@@ -203,10 +215,11 @@ export function TeamReport({ onOpenPerson }: { onOpenPerson: (userId: string, da
                       <tr data-team-detail={row.id}>
                         <td colSpan={6} className="border-b border-subtle bg-surface px-4 py-3">
                           <PersonDays
+                            everyone={everyone}
                             row={row}
                             entries={sheet.data.entries.filter((entry) => entry.user.id === row.id)}
                             onPeek={openPeek}
-                            onOpen={() => onOpenPerson(row.id, start)}
+                            onOpen={() => onOpenPerson(row.id, start, teamId)}
                           />
                         </td>
                       </tr>
@@ -288,7 +301,9 @@ function PersonDays({
   entries,
   onPeek,
   onOpen,
+  everyone,
 }: {
+  everyone: boolean;
   row: TeamRow;
   entries: TimesheetEntry[];
   onPeek: (key: string) => void;
@@ -352,7 +367,7 @@ function PersonDays({
       )}
       <div>
         <Button size="sm" variant="secondary" onClick={onOpen} data-team-open-report>
-          Open {row.name}'s time in the report
+          {everyone ? `Open ${row.name}'s time in the report` : "Open the team's time in the report"}
         </Button>
       </div>
     </div>

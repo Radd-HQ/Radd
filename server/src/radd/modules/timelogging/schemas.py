@@ -15,6 +15,11 @@ class UserRef(BaseModel):
     name: str
 
 
+class TeamRef(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
 class CategoryRef(BaseModel):
     id: uuid.UUID
     name: str

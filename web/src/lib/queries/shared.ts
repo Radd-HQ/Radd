@@ -90,6 +90,7 @@ export const queryKeys = {
   /** Under `timesheet` on purpose: logging time invalidates that prefix, and
    *  each ticket's "you logged" figure has to follow. */
   myTickets: () => ["timesheet", "my-tickets"] as const,
+  reviewTeams: ["timesheet-teams"] as const,
   itemHistory: (itemId: string) => ["itemHistory", { itemId }] as const,
   itemWebLinks: (itemId: string) => ["itemWebLinks", { itemId }] as const,
   itemVcsLinks: (itemId: string) => ["itemVcsLinks", { itemId }] as const,

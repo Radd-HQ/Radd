@@ -15,6 +15,8 @@ from radd.modules.auth.models import User
 from radd.modules.items import service as items_service
 from radd.modules.items.models import WorkItem
 from radd.modules.projects import service as projects_service
+from radd.modules.teams import service as teams_service
+from radd.modules.teams.models import Team
 
 from . import categories
 from .models import ItemEstimate, Worklog
@@ -38,11 +40,29 @@ async def visible_user_ids(
     session: AsyncSession, actor: User, requested: set[uuid.UUID] | None
 ) -> set[uuid.UUID] | None:
     """Narrow `requested` authors (None = everyone) to whose time `actor` may see.
-    Without timesheet.view — held GLOBALLY: one project's grant must not expose the
-    instance's hours — that is only their own."""
+
+    With timesheet.view — held GLOBALLY: one project's grant must not expose the
+    instance's hours — that is whoever was asked for. Without it, their own, and
+    the members of the teams they own or manage WHEN THEY ASK for them
+    (RADD-1576): a sheet nobody narrowed stays their own time, so stewardship
+    never widens a default."""
     if authz.Permission.TIMESHEET_VIEW in await authz.effective_permissions(session, actor):
         return requested
-    return {actor.id} if requested is None else requested & {actor.id}
+    if requested is None:
+        return {actor.id}
+    allowed = {actor.id}
+    if requested - allowed:  # the team read is only paid for when others are asked for
+        led = await teams_service.stewarded_teams(session, actor.id)
+        allowed |= await teams_service.users_for_teams(session, [team.id for team in led])
+    return requested & allowed
+
+
+async def reviewable_teams(session: AsyncSession, actor: User) -> list[Team]:
+    """The teams whose time `actor` may review on the Team view: every team with
+    timesheet.view, otherwise the ones they own or manage (RADD-1576)."""
+    if authz.Permission.TIMESHEET_VIEW in await authz.effective_permissions(session, actor):
+        return await teams_service.list_teams(session)
+    return await teams_service.stewarded_teams(session, actor.id)
 
 
 async def build(

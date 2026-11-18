@@ -60,6 +60,7 @@ export const ApiPath = {
   workCategories: "/work-categories",
   timesheet: "/timesheet",
   timesheetMyTickets: "/timesheet/my-tickets",
+  timesheetTeams: "/timesheet/teams",
   backups: "/backups",
   notifications: "/notifications",
   notificationPrefs: "/notifications/preferences",

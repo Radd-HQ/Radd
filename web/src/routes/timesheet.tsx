@@ -16,7 +16,7 @@ import {
 } from "../lib/constants";
 import { formatDuration } from "../lib/duration";
 import { useDurationConfig, usePeek, usePermissions, useCurrentUser } from "../lib/hooks";
-import { instanceConfigQuery, teamsQuery, timesheetQuery, usersQuery, workCategoriesQuery } from "../lib/queries";
+import { instanceConfigQuery, reviewTeamsQuery, timesheetQuery, usersQuery, workCategoriesQuery } from "../lib/queries";
 import {
   Permission,
   type Timesheet,
@@ -59,6 +59,9 @@ export function TimesheetReport() {
   const perms = usePermissions();
   const durationConfig = useDurationConfig();
   const canViewOthers = perms.global(Permission.timesheetView);
+  // A team's owner or manager may read that team's time and no wider
+  // (RADD-1576): they get the team filter, over the teams they lead.
+  const leadsTeams = !canViewOthers && Boolean(useCurrentUser()?.manages_teams);
 
   // Everything that changes WHICH HOURS YOU SEE is URL state, so a refresh (or
   // a pasted link) lands on the same timesheet — same rule the view page
@@ -112,7 +115,7 @@ export function TimesheetReport() {
   const days = useMemo(() => daysInRange(start, end), [start, end]);
 
   const projects = useQuery(projectsQuery());
-  const teams = useQuery(teamsQuery());
+  const teams = useQuery({ ...reviewTeamsQuery(), enabled: canViewOthers || leadsTeams });
   const users = useQuery({ ...usersQuery, enabled: canViewOthers });
   const timesheet = useQuery(
     timesheetQuery({
@@ -120,7 +123,7 @@ export function TimesheetReport() {
       end,
       projectId: projectId || undefined,
       q: slqFilter.committed || undefined,
-      teamId: canViewOthers ? teamId || undefined : undefined,
+      teamId: canViewOthers || leadsTeams ? teamId || undefined : undefined,
       userId: canViewOthers ? userId || undefined : undefined,
     }),
   );
@@ -238,6 +241,17 @@ export function TimesheetReport() {
             })),
           ]}
         />
+        {leadsTeams ? (
+          <FilterSelect
+            label="Team"
+            value={teamId}
+            onChange={setTeamId}
+            options={[
+              { value: "", label: "Only me" },
+              ...(teams.data ?? []).map((team) => ({ value: team.id, label: team.name })),
+            ]}
+          />
+        ) : null}
         {canViewOthers ? (
           <>
             <FilterSelect
@@ -261,7 +275,7 @@ export function TimesheetReport() {
               ]}
             />
           </>
-        ) : (
+        ) : leadsTeams ? null : (
           <span className="rounded bg-elevated px-2 py-1 text-fg-secondary">Your timesheet</span>
         )}
       </div>

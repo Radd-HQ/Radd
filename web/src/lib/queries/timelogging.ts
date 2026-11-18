@@ -98,3 +98,12 @@ export const myTicketsQuery = () =>
     queryFn: ({ signal }) => api.get<MyTicket[]>(ApiPath.timesheetMyTickets, { signal }),
     staleTime: 60_000,
   });
+
+/** The teams whose time the caller may review (RADD-1576): every team with
+ *  `timesheet.view`, the ones they own or manage without it. */
+export const reviewTeamsQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.reviewTeams,
+    queryFn: ({ signal }) => api.get<{ id: string; name: string }[]>(ApiPath.timesheetTeams, { signal }),
+    staleTime: 60_000,
+  });

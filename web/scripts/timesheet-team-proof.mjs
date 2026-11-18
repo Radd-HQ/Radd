@@ -17,6 +17,8 @@
  *   7. opening a row shows the days behind it; the report opens filtered to that person
  *   8. the flag text is legible (4.5:1) and nothing scrolls sideways
  *   9. a member who may not see others' time gets no tab and no roster
+ *  10. the team's manager, who holds no timesheet.view, gets the tab, their team only, all four
+ *      rows with the same flags, and none of an outsider's time (RADD-1576)
  *
  *   node web/scripts/timesheet-team-proof.mjs http://127.0.0.1:8000 admin@example.com change-me
  *
@@ -64,13 +66,18 @@ async function main() {
         people[name] = user;
         await api("POST", "/teams/" + team.id + "/members", { user_id: user.id });
       }
+      const lead = (await api("POST", "/users", { email: "lead-${STAMP}@example.test", name: "Lead ${STAMP}", password: "change-me-too" })).body;
+      const managed = (await api("POST", "/teams/" + team.id + "/managers", { user_id: lead.id })).status;
       const statuses = [];
       const log = async (who, day, time) => statuses.push((await api("POST", "/items/" + item.id + "/worklogs", { time_spent: time, worked_on: day, author_id: people[who].id })).status);
       await log("Bulk", ${JSON.stringify(FRI)}, "40h");
       for (const day of ${JSON.stringify([MON, TUE, WED, THU, FRI])}) await log("Steady", day, "8h");
       for (const day of ${JSON.stringify([MON, TUE, WED])}) await log("Away", day, "8h");
       const leave = await api("POST", "/leave", { user_id: people.Away.id, label: "Holiday", start_date: ${JSON.stringify(THU)}, end_date: ${JSON.stringify(FRI)} });
-      return { project, team, people, statuses, leave: leave.status };
+      // An outsider's hour: the admin is on no team the lead manages.
+      const me = (await api("GET", "/auth/me")).body;
+      statuses.push((await api("POST", "/items/" + item.id + "/worklogs", { time_spent: "1h", worked_on: ${JSON.stringify(MON)} })).status);
+      return { project, team, people, lead, managed, me, statuses, leave: leave.status };
     })()`);
     check("setup: a team of four, their time and two days of leave", made.statuses.every((status) => status === 201) && made.leave === 201, JSON.stringify({ statuses: made.statuses, leave: made.leave }));
 
@@ -143,13 +150,42 @@ async function main() {
                people: (sheet.people ?? []).map((p) => p.name), authors: [...new Set((sheet.entries ?? []).map((e) => e.user.name))] };
     })()`);
     check("a member without timesheet.view gets no Team tab, and the sheet names only them", !member.tab && !member.screen && member.people.length === 1 && member.people[0].startsWith("Steady") && member.authors.length <= 1, JSON.stringify(member));
+
+    // 10 — the team's manager: no global permission, their own team
+    check("setup: the lead manages the team", made.managed === 204 || made.managed === 201 || made.managed === 200, String(made.managed));
+    await session.login(baseUrl, `lead-${STAMP}@example.test`, "change-me-too");
+    await session.navigate(`${baseUrl}/timesheet?m=team&d=${MON}`, 2500);
+    let led = [];
+    for (let i = 0; i < 80; i += 1) {
+      led = await session.eval(READ);
+      if (led.length === 4 && led.find((row) => row.name.startsWith("Away"))?.expected === "24h") break;
+      await sleep(150);
+    }
+    const lead = await session.eval(`(async () => { ${PAGE_API}
+      const me = (await api("GET", "/auth/me")).body;
+      const teams = (await api("GET", "/timesheet/teams")).body;
+      const outsider = (await api("GET", "/timesheet?start=${MON}&end=${FRI}&user_id=${made.me.id}")).body;
+      const unasked = (await api("GET", "/timesheet?start=${MON}&end=${FRI}")).body;
+      return { view: (me.permissions ?? []).includes("timesheet.view") || (me.permissions ?? []).includes("*"),
+               tab: Boolean(document.querySelector("[data-timesheet-mode='team']")), teams: teams.map((team) => team.id),
+               picker: document.querySelector("[data-team-report] [aria-label='Team']")?.textContent ?? "",
+               outsider: (outsider.entries ?? []).length, unasked: [...new Set((unasked.entries ?? []).map((e) => e.user.name))] };
+    })()`);
+    context.lead = { lead, led };
+    const ledOf = (name) => led.find((row) => row.name.startsWith(name)) ?? {};
+    check("the lead holds no timesheet.view", lead.view === false, JSON.stringify(lead.view));
+    check("the lead gets the Team tab and is offered their own team, and only it", lead.tab && lead.teams.length === 1 && lead.teams[0] === made.team.id && lead.picker.includes("Team proof"), JSON.stringify({ tab: lead.tab, teams: lead.teams, picker: lead.picker }));
+    check("the lead sees all four members with the same flags", led.length === 4 && ledOf("Bulk").flags === "few_days,long_day" && ledOf("Silent").flags === "nothing" && ledOf("Steady").logged === "40h", JSON.stringify(led.map((row) => `${row.name.split(" ")[0]}:${row.logged}:${row.flags}`)));
+    check("the lead gets none of an outsider's time, and an unfiltered sheet stays their own", lead.outsider === 0 && lead.unasked.length === 0, JSON.stringify({ outsider: lead.outsider, unasked: lead.unasked }));
     await session.login(baseUrl, email, password);
+    const admin = await session.eval(`(async () => { ${PAGE_API} return ((await api("GET", "/timesheet?start=${MON}&end=${FRI}&user_id=${made.me.id}")).body.entries ?? []).length; })()`);
+    check("…which is there: the admin reads it", admin >= 1, String(admin));
   } finally {
     if (made) {
       await session.eval(`(async () => { ${PAGE_API}
         await api("DELETE", "/projects/${made.project.id}");
         await api("DELETE", "/teams/${made.team.id}");
-        for (const id of ${JSON.stringify(Object.values(made.people).map((person) => person.id))}) await api("DELETE", "/users/" + id);
+        for (const id of ${JSON.stringify([...Object.values(made.people), made.lead].map((person) => person.id))}) await api("DELETE", "/users/" + id);
         return true;
       })()`).catch(() => null);
     }
