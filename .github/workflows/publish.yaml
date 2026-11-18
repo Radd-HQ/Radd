@@ -59,7 +59,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # the changelog walks previous tags
 
@@ -83,7 +83,7 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" \
             | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       # buildx pushes what it built instead of asking ghcr to mount layers that
       # came from other ghcr images (the plain `docker push` path fails with
